@@ -6,6 +6,7 @@ Use this document as the durable handoff for the next Claude session.
 
 - Repository: `jaustinanderson/cytogenetics-cg-course`
 - URL: <https://github.com/jaustinanderson/cytogenetics-cg-course>
+- Live course: <https://jaustinanderson.github.io/cytogenetics-cg-course/>
 - Default branch: `main`
 - Product status: beta; static client-only educational study aid
 - Canonical product artifact: `index.html`
@@ -92,6 +93,19 @@ Course validation passed.
 `html-validate` 10.4.0 also completed with zero findings after the hardening
 changes.
 
+The live GitHub Pages deployment was subsequently verified on 2026-07-30:
+
+- correct title, hero, and custom-CSS layout
+- 17 rendered quizzes
+- 6 rendered exercise sets
+- correct-answer feedback worked
+- module completion survived reload
+- no page-origin console warning or error
+
+The cloud test browser did not complete the two third-party image requests, so
+remote image delivery still requires confirmation in another environment or
+asset localization.
+
 ## Read these files first
 
 1. `README.md`
@@ -131,7 +145,7 @@ questions or images:
    - print
    - public API behavior and events
 2. Add representative keyboard and automated accessibility checks.
-3. Enable GitHub Pages only after CI is green, then test the deployed page.
+3. Run narrow-screen, touch, and mobile-navigation tests against the live page.
 4. Capture a clean screenshot of the course itself for the README.
 5. Record a documented scientific-review status rather than treating structural
    validation as content validation.

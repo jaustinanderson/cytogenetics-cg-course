@@ -54,10 +54,11 @@ the course.
 ### Remaining
 
 - [ ] Confirm the GitHub Actions run passes on the published commit
+- [x] Enable GitHub Pages and run an initial deployed desktop smoke test
 - [ ] Add browser smoke tests for navigation, quizzes, exercises, migration,
   persistence, import/export, Reset, print, and the public API
 - [ ] Add representative keyboard and automated accessibility checks
-- [ ] Enable GitHub Pages and run a deployed-site smoke test
+- [ ] Run deployed narrow-screen, touch, and mobile-navigation tests
 - [ ] Capture a clean course-only screenshot for the README
 - [ ] Decide whether to localize remote fonts and the two approved images
 - [ ] Record a question-by-question scientific review status before removing

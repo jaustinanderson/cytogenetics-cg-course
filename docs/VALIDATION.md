@@ -36,6 +36,28 @@ The validator checks:
 
 CI runs the same command on pushes to `main` and pull requests.
 
+## Deployed smoke test — 2026-07-30
+
+Verified URL:
+<https://jaustinanderson.github.io/cytogenetics-cg-course/>
+
+Observed:
+
+- page title and course hero rendered correctly
+- custom CSS rendered without Tailwind
+- all 17 quiz mounts rendered
+- all 6 exercise sets rendered
+- the hero correctly displayed 6 interactive exercises
+- a correct quiz answer produced the expected feedback
+- marking Module 1 complete updated the UI
+- Module 1 completion survived a full page reload
+- no page-origin console warning or error was recorded
+
+The cloud test browser did not complete either third-party image request, so
+successful delivery of the Wikimedia and CDC images was not established by this
+test. The page itself emitted no image error, and source links/fallback content
+remain present. Asset localization is still an open roadmap decision.
+
 ## Independently run HTML validation
 
 The initial repository hardening was also checked with:

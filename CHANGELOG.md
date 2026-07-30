@@ -10,6 +10,7 @@ All notable repository changes are recorded here.
 - Structural and content-contract validator
 - GitHub Actions validation workflow
 - Content, licensing, validation, architecture, and quality-governance records
+- Live GitHub Pages deployment and deployed-course validation record
 
 ### Changed
 

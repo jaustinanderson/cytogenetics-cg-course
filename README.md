@@ -11,6 +11,8 @@ local progress tracking, performance analytics, and automated validation.
 > validated. The full question bank has not yet completed a documented,
 > question-by-question scientific review for public release.
 
+**[Open the live course](https://jaustinanderson.github.io/cytogenetics-cg-course/)**
+
 ## Highlights
 
 - 17 instructional modules
@@ -38,8 +40,7 @@ python3 -m http.server 8000
 
 Then open `http://localhost:8000`.
 
-GitHub Pages deployment is planned as part of the repository-foundation
-milestone. Until it is enabled, `index.html` is the canonical course artifact.
+The live GitHub Pages deployment serves the canonical root-level `index.html`.
 
 ## Course coverage
 
