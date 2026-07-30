@@ -5,8 +5,9 @@
   "description": "Validation tooling for the Cytogenetics CG(ASCP) Study Course.",
   "type": "module",
   "scripts": {
-    "test": "node tests/validate-course.mjs",
-    "validate": "node tests/validate-course.mjs"
+    "test": "npm run validate && npm run test:behavior",
+    "validate": "node tests/validate-course.mjs",
+    "test:behavior": "node tests/dom-behavior.mjs"
   },
   "engines": {
     "node": ">=20"

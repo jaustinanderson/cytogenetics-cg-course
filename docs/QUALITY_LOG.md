@@ -46,14 +46,16 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
 
 ## QL-004 — Historical validation claim was not reproducible
 
-- **Status:** Partially corrected in v1.1.1
+- **Status:** Structural and DOM-behavior instruments committed; real-browser,
+  scientific, rights, and full accessibility layers remain open
 - **Finding:** The archived roadmap described a runtime harness that was not
   included with the supplied project.
 - **Impact:** Readers could not reproduce the evidence behind the claim.
 - **Cause:** Validation results were recorded without committing the instrument.
 - **Correct action:** Commit tests and distinguish structural, behavioral,
   scientific, accessibility, and rights validation.
-- **Correction:** Added a committed structural/content validator and CI.
+- **Correction:** Added a committed structural/content validator, a
+  dependency-free DOM behavior harness, mutation checks, and CI.
 - **Prevention:** No validation claim without the command, instrument, scope, and
   exact result in the repository.
 
@@ -81,3 +83,22 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
 - **Correct action:** Validate, normalize, and deep-clone imported state; define
   handling for stale IDs.
 - **Prevention:** Add hostile/malformed import fixtures and round-trip tests.
+
+## QL-007 — A test instrument produced a false defect report
+
+- **Status:** Corrected before any product change was made
+- **Finding:** The new DOM harness initially reported that dynamically created
+  exercise option buttons lacked `type="button"`. The course correctly sets
+  `button.type = "button"`; the harness did not yet reflect that property to the
+  underlying attribute as a browser does.
+- **Impact:** None shipped. Trusting the report would have produced a pointless
+  product edit and a changelog entry for a defect that did not exist.
+- **Cause:** A partial DOM fixture was briefly treated as an oracle before its
+  browser-model fidelity was checked.
+- **Correct action:** Confirm unexpected findings against product source and a
+  real browser before changing the product.
+- **Correction:** Added `type` property/attribute reflection and correct
+  text-to-`innerHTML` escaping to the harness; `index.html` was not modified.
+- **Prevention:** Keep harness scope limits explicit, mutation-check critical
+  paths, and add fixture-fidelity assertions when a product behavior depends on
+  a modeled browser contract.

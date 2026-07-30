@@ -145,7 +145,7 @@ Run:
 npm test
 ```
 
-The committed validator checks:
+The committed test suite checks:
 
 - document and embedded-script structure
 - absence of the development-only Tailwind CDN
@@ -159,10 +159,15 @@ The committed validator checks:
 - exercise, flashcard, and image-manifest counts
 - embedded-image license and redistribution metadata
 - atomic rejection of malformed or duplicate injected questions
+- DOM-level navigation, quiz, exercise, migration, persistence, Reset,
+  import/export, print, public API, event, and analytics behavior
+- implemented keyboard and accessibility affordances that can be evaluated
+  without layout or assistive technology
 
 Passing these tests does **not** establish scientific correctness. Scientific
-review, rights review, browser behavior, accessibility, and release readiness
-are separate gates documented in [Validation](./docs/VALIDATION.md).
+review, rights review, real-browser behavior, accessibility, and release
+readiness are separate gates documented in
+[Validation](./docs/VALIDATION.md).
 
 ## Repository map
 
@@ -176,7 +181,9 @@ are separate gates documented in [Validation](./docs/VALIDATION.md).
 ├── CLAUDE.md                     # Collaboration guardrails
 ├── package.json
 ├── tests/
-│   └── validate-course.mjs
+│   ├── validate-course.mjs       # Structural/content contracts
+│   ├── dom-behavior.mjs          # Dependency-free behavior checks
+│   └── dom-harness.mjs           # Minimal test-only DOM fixture
 ├── docs/
 │   ├── ROADMAP.md
 │   ├── ARCHITECTURE.md

@@ -2,11 +2,12 @@
 
 ## Current status
 
-The v1.1.1 repository baseline has passed local structural and content-contract
-validation. This is a reproducible software/content-structure result, not a
-claim that every scientific statement is correct.
+The v1.1.1 repository baseline has passed local structural, content-contract,
+and DOM-level behavior validation. This is a reproducible software result, not
+a claim that every scientific statement is correct or that a browser,
+accessibility, or rights review has passed.
 
-## Run the committed validator
+## Run all committed tests
 
 Requirements: Node.js 20 or newer.
 
@@ -14,7 +15,17 @@ Requirements: Node.js 20 or newer.
 npm test
 ```
 
-The validator checks:
+`npm test` runs the structural validator followed by the DOM behavior suite.
+Each can also be run independently:
+
+```bash
+npm run validate
+npm run test:behavior
+```
+
+### Structural and content-contract validator
+
+The structural validator checks:
 
 - document shell and required landmarks
 - embedded JavaScript syntax
@@ -34,7 +45,31 @@ The validator checks:
 - quiz and exercise mount resolution
 - atomic rejection of malformed and globally duplicate injected questions
 
-CI runs the same command on pushes to `main` and pull requests.
+### DOM behavior suite
+
+`tests/dom-behavior.mjs` boots the real inline course script inside the minimal,
+dependency-free fixture in `tests/dom-harness.mjs`. Its 36 checks cover:
+
+- rendering of all declared quiz, exercise, flashcard, and schematic mounts
+- generated sidebar/dashboard navigation and mobile open/close state
+- correct and incorrect quiz behavior, item locking, feedback, and stable IDs
+- exercise answering, scoring, advancing, and completion
+- module completion, v1-to-v2 migration, storage, and simulated reload
+- UI Reset from v1-only, migrated, and v2-only states
+- API Reset, import/export, print hooks, public API methods, events, and
+  analytics
+- runtime question injection and safe handling of markup characters as text
+- implemented accessibility affordances: landmarks, skip link, focus-visible
+  and reduced-motion CSS, `aria-expanded`, typed controls, and keyboard-
+  operable flashcards
+
+The suite was independently mutation-checked. Deliberately breaking migration,
+legacy Reset cleanup, answer recording, or import-version validation caused the
+expected checks to fail.
+
+The harness is not a browser. It cannot establish rendering, layout, color
+contrast, real focus behavior, touch input, networking, or screen-reader
+output. CI runs `npm test` on pushes to `main` and pull requests.
 
 ## Deployed smoke test — 2026-07-30
 
@@ -68,23 +103,24 @@ npm exec --yes --package=html-validate@10.4.0 -- html-validate index.html
 
 That tool is intentionally not a runtime or committed package dependency.
 
-## Gates not yet automated
+## Gates not yet automated in a real browser
 
 ### Browser behavior
 
-Still required:
+The DOM suite covers the core logic paths above. Still required in a real
+browser:
 
-- no unexpected console or page errors
-- navigation and active-state behavior
-- quiz and exercise interaction
-- progress persistence and v1 migration
-- Reset from v1-only, migrated, and v2-only states
-- import/export round trip and malformed-import rejection
-- print behavior
-- public API events
-- narrow-screen navigation
+- repeatable deployed-page tests with page-origin console assertions
+- scroll-driven active-section highlighting
+- real reload/storage behavior
+- print rendering
+- narrow-screen and touch navigation
+- confirmation that the two third-party images load or fall back
 
 ### Accessibility
+
+The DOM suite checks only the implemented static and keyboard affordances listed
+above.
 
 Still required:
 

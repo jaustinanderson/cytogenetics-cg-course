@@ -2,6 +2,24 @@
 
 All notable repository changes are recorded here.
 
+## [Unreleased]
+
+### Added
+
+- A dependency-free DOM behavior suite covering navigation, quizzes,
+  exercises, migration, persistence, Reset, import/export, print, the public
+  API, API events, analytics, and implemented keyboard/accessibility affordances
+- A minimal DOM harness so behavior checks run on stock Node without adding a
+  dependency or CI install step
+- Mutation checks proving that regressions in migration, legacy Reset cleanup,
+  answer recording, and import-version validation are detected
+
+### Changed
+
+- `npm test` now runs structural validation followed by 36 DOM behavior checks
+- Validation documentation now distinguishes the DOM harness from real-browser,
+  touch, layout, accessibility, and screen-reader testing
+
 ## [1.1.1] - 2026-07-30
 
 ### Added

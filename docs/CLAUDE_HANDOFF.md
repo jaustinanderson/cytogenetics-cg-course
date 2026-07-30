@@ -93,6 +93,19 @@ Course validation passed.
 `html-validate` 10.4.0 also completed with zero findings after the hardening
 changes.
 
+A dependency-free DOM behavior suite was added after the baseline:
+
+- `tests/dom-behavior.mjs` runs 36 behavior checks against the real inline
+  course script
+- `tests/dom-harness.mjs` provides only the browser surface the course uses
+- `npm test` runs both the structural validator and the behavior suite
+- migration, legacy Reset cleanup, answer recording, and import-version checks
+  were mutation-tested and each detected its injected regression
+
+This suite is deliberately described as DOM-level validation, not browser
+validation. It does not establish layout, color contrast, real focus behavior,
+touch input, networking, or screen-reader output.
+
 The live GitHub Pages deployment was subsequently verified on 2026-07-30:
 
 - correct title, hero, and custom-CSS layout
@@ -135,7 +148,7 @@ roadmap.
 Complete the remaining **Milestone 0 repository-foundation work** before adding
 questions or images:
 
-1. Add browser smoke tests for:
+1. Add real-browser automation for:
    - navigation
    - quizzes and exercises
    - v1-to-v2 migration
@@ -144,7 +157,9 @@ questions or images:
    - import/export
    - print
    - public API behavior and events
-2. Add representative keyboard and automated accessibility checks.
+   The committed DOM suite covers these logic paths but is not a browser
+   substitute.
+2. Add automated WCAG checks and representative keyboard/screen-reader review.
 3. Run narrow-screen, touch, and mobile-navigation tests against the live page.
 4. Capture a clean screenshot of the course itself for the README.
 5. Record a documented scientific-review status rather than treating structural
