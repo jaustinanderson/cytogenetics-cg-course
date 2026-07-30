@@ -1,0 +1,58 @@
+name: Content correction
+description: Propose a scientific, nomenclature, exam-guideline, or teaching correction.
+title: "[Content]: "
+labels: ["content", "needs-review"]
+body:
+  - type: input
+    id: location
+    attributes:
+      label: Affected location
+      description: Module, question ID, exercise ID, figure, or section.
+      placeholder: m15-q4
+    validations:
+      required: true
+
+  - type: textarea
+    id: current
+    attributes:
+      label: Current statement or behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: correction
+    attributes:
+      label: Proposed correction
+    validations:
+      required: true
+
+  - type: textarea
+    id: source
+    attributes:
+      label: Authoritative source
+      description: Include the exact source, edition or revision date, and link where available.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Impact
+      options:
+        - Correct answer may change
+        - Rationale or distractor may change
+        - Teaching prose may change
+        - Figure or attribution may change
+        - Guideline or edition reference may change
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: integrity
+    attributes:
+      label: Integrity check
+      options:
+        - label: This report does not reproduce or reconstruct a recalled certification-examination question.
+          required: true
+        - label: This report contains no PHI or employer-confidential material.
+          required: true

@@ -1,0 +1,121 @@
+# Architecture
+
+## Product boundary
+
+The course is a static browser application. Its canonical distributable is
+`index.html`, which contains:
+
+- semantic course markup
+- custom responsive and print CSS
+- structured JavaScript data
+- quiz, exercise, flashcard, navigation, and figure-rendering engines
+- local progress state and analytics
+- the `window.CytoCourse` integration API
+
+There is no application server, database, account system, telemetry, or cloud
+progress service.
+
+## Why a single file
+
+Single-file delivery currently provides meaningful product value:
+
+- download-and-open portability
+- easy sharing and archiving
+- no runtime build step
+- low deployment complexity
+- clear privacy boundary
+
+Repository tooling must not be confused with runtime dependencies. Node.js is
+used for validation and CI; the course itself does not require Node.js.
+
+## Data model
+
+The application currently uses four in-memory content collections:
+
+- `MODULES`
+- `QUIZZES`
+- `EXERCISES`
+- `FLASHCARDS`
+
+`IMAGES` is a manifest containing embedded and candidate imagery. Embedded
+records carry rights metadata; candidate records remain blocked until evidence
+is resolved.
+
+### Question schema
+
+Every question requires:
+
+| Field | Meaning |
+| --- | --- |
+| `id` | Globally unique stable identifier |
+| `d` | Domain |
+| `t` | Topic |
+| `x` | Difficulty: 1, 2, or 3 |
+| `q` | Prompt |
+| `o` | Answer options |
+| `a` | Zero-based correct-answer index |
+| `why` | Correct-answer rationale |
+| `w` | Optional distractor-specific feedback |
+
+Future release-qualified content also needs provenance and scientific-review
+metadata.
+
+## Progress
+
+Schema v2 stores:
+
+```js
+{
+  v: 2,
+  modules: { m1: true },
+  answers: { "m1-q1": { c: true, n: 1, ts: 0 } },
+  exercises: { "ex7-1": { c: false, n: 1, ts: 0 } },
+  started: 0
+}
+```
+
+`c` is the last recorded correctness state, `n` is attempt count, and `ts` is
+the latest timestamp. Current headline analytics use last-attempt mastery,
+not total-attempt accuracy.
+
+Known design debt:
+
+- exercise outcome IDs are still position-derived
+- imported nested state is not yet fully schema-validated
+- runtime-injected questions are session-only
+- storage failure is silently tolerated
+
+These are Milestone 1 work, not hidden behavior.
+
+## Public API
+
+`window.CytoCourse` provides read, analysis, write, and event methods. Read
+methods deep-clone results. Question injection now validates the complete core
+schema, globally deduplicates IDs, and rejects invalid batches atomically.
+
+API behavior must remain synchronized with tests and documentation. A comment
+or roadmap statement is not a contract unless a committed test proves it.
+
+## External resources
+
+The production page currently requests:
+
+- IBM Plex Sans and IBM Plex Mono from Google Fonts
+- one public-domain NHGRI image through Wikimedia Commons
+- one public-domain CDC PHIL image
+
+No external JavaScript is executed. The former Tailwind browser-CDN script was
+unused and removed in v1.1.1.
+
+The course runs without the remote images because each has an explanatory
+fallback. Font and asset localization remains an explicit roadmap decision.
+
+## Restructuring trigger
+
+Do not split the runtime into a framework merely for modernization. Reconsider
+source modularization only when a measured maintenance problem emerges—for
+example, after the planned question expansion and image set materially increase
+edit risk.
+
+If modular authoring is adopted, the build should continue to emit one portable
+`index.html` unless Austin approves a product-boundary change.
