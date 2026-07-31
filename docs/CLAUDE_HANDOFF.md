@@ -119,6 +119,34 @@ The cloud test browser did not complete the two third-party image requests, so
 remote image delivery still requires confirmation in another environment or
 asset localization.
 
+A real-browser Playwright/Chromium smoke suite was added on 2026-07-30
+(branch `claude/issue-1-playwright-smoke`, Issue #1):
+
+- `tests/e2e/` runs 18 checks per project (desktop 1280×900, narrow/mobile
+  390×844 with `hasTouch`), 35 total runs passing, against `index.html`
+  served by `python3 -m http.server` — the same local-serving approach the
+  README already documented
+- Covers page initialization, navigation and mobile-sidebar behavior
+  (including real `IntersectionObserver`-driven active-nav highlighting,
+  which the DOM harness only stubs), correct/incorrect quiz interaction,
+  exercise interaction, module-completion persistence across a real reload,
+  v1-to-v2 migration, Reset clearing both storage keys (accept and decline),
+  import/export, the public API and its events, print invocation, and
+  page-origin console cleanliness
+- `@playwright/test` is a devDependency only; `index.html` gained no runtime
+  dependency and no build step. `npm test` (structural + DOM behavior) still
+  installs nothing; `npm run test:e2e` requires `npm ci` plus one Chromium
+  download (`npm run test:e2e:install`)
+- CI (`.github/workflows/ci.yml`) now runs `npm ci`, `npm test`, installs
+  Chromium, and runs `npm run test:e2e`, uploading the HTML report on failure
+- No product defect was found or fixed. Three test-authoring bugs were found
+  and corrected in the suite itself before they could produce false claims —
+  see `docs/QUALITY_LOG.md` QL-008 (an `addInitScript` reseeding trap on
+  Reset's internal reload, and two narrow-viewport click-target overlaps)
+- This closes the "Add real-browser automation" item below; WCAG/screen-reader
+  automation, deployed-Pages-URL testing, true touch hardware, and the
+  third-party image-delivery confirmation remain open
+
 ## Read these files first
 
 1. `README.md`
@@ -148,17 +176,11 @@ roadmap.
 Complete the remaining **Milestone 0 repository-foundation work** before adding
 questions or images:
 
-1. Add real-browser automation for:
-   - navigation
-   - quizzes and exercises
-   - v1-to-v2 migration
-   - persistence after reload
-   - Reset from v1-only, migrated, and v2-only states
-   - import/export
-   - print
-   - public API behavior and events
-   The committed DOM suite covers these logic paths but is not a browser
-   substitute.
+1. ~~Add real-browser automation for navigation, quizzes/exercises, v1-to-v2
+   migration, persistence after reload, Reset, import/export, print, and
+   public API behavior/events.~~ Done 2026-07-30 via the Playwright suite
+   described above (`tests/e2e/`). Confirm the CI run on the draft PR is
+   green before closing Issue #1, since only local runs are verified so far.
 2. Add automated WCAG checks and representative keyboard/screen-reader review.
 3. Run narrow-screen, touch, and mobile-navigation tests against the live page.
 4. Capture a clean screenshot of the course itself for the README.

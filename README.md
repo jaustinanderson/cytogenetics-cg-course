@@ -164,10 +164,25 @@ The committed test suite checks:
 - implemented keyboard and accessibility affordances that can be evaluated
   without layout or assistive technology
 
+A separate real-browser suite runs in Chromium via Playwright:
+
+```bash
+npm run test:e2e:install   # one-time browser download
+npm run test:e2e
+```
+
+It exercises page initialization, navigation and mobile-sidebar behavior,
+correct/incorrect quiz interaction, exercise interaction, module-completion
+persistence across a real reload, v1-to-v2 migration, Reset clearing both
+storage keys, import/export, the public API and its events, print invocation,
+and page-origin console cleanliness, at both a desktop and a narrow/mobile
+viewport. Playwright is a development-only dependency; the shipped course
+has no runtime dependency on it.
+
 Passing these tests does **not** establish scientific correctness. Scientific
-review, rights review, real-browser behavior, accessibility, and release
-readiness are separate gates documented in
-[Validation](./docs/VALIDATION.md).
+review, rights review, accessibility, and release readiness are separate
+gates documented in [Validation](./docs/VALIDATION.md). Automated WCAG
+scanning, screen-reader review, and true touch-gesture testing remain open.
 
 ## Repository map
 
@@ -180,10 +195,12 @@ readiness are separate gates documented in
 ├── THIRD_PARTY_NOTICES.md
 ├── CLAUDE.md                     # Collaboration guardrails
 ├── package.json
+├── playwright.config.mjs         # Real-browser (Chromium) smoke-test config
 ├── tests/
 │   ├── validate-course.mjs       # Structural/content contracts
 │   ├── dom-behavior.mjs          # Dependency-free behavior checks
-│   └── dom-harness.mjs           # Minimal test-only DOM fixture
+│   ├── dom-harness.mjs           # Minimal test-only DOM fixture
+│   └── e2e/                      # Playwright real-browser smoke suite
 ├── docs/
 │   ├── ROADMAP.md
 │   ├── ARCHITECTURE.md

@@ -102,3 +102,40 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
 - **Prevention:** Keep harness scope limits explicit, mutation-check critical
   paths, and add fixture-fidelity assertions when a product behavior depends on
   a modeled browser contract.
+
+## QL-008 — Initial Playwright suite authoring produced false failures, not product defects
+
+- **Status:** Corrected before any product change was made
+- **Finding:** While authoring `tests/e2e/` (Playwright/Chromium), several
+  tests initially failed at the narrow/mobile viewport project. Causes:
+  (1) `page.addInitScript` re-seeds `localStorage` on every navigation in a
+  page, including the reload the Reset control itself triggers, which
+  silently re-wrote the very keys Reset had just cleared and made a working
+  Reset look broken; (2) at 390px width the open sidebar visually overlaps
+  most of the full-screen backdrop and the fixed topbar header overlaps its
+  top strip, so a default center-point click on the backdrop landed on
+  those elements instead; (3) a scroll-to-module test clicked a sidebar nav
+  link without first opening the mobile nav, and the link is off-canvas
+  (`transform: translateX(-105%)`) until opened.
+- **Impact:** None shipped; `index.html` was not modified. Trusting these
+  first-run failures would have produced an incorrect Reset regression claim
+  and pointless product edits for the backdrop/nav-link cases.
+- **Cause:** The test instrument itself was new and not yet proven; real
+  browser geometry, overlapping fixed-position layers, and reload-scoped
+  init scripts were not accounted for on the first pass.
+- **Correct action:** Reproduce unexpected failures with a minimal isolated
+  script before concluding the product regressed; fix the test's seeding and
+  targeting strategy rather than the product.
+- **Correction:** Reset/migration tests that need to trigger a subsequent
+  reload now seed `localStorage` via `page.evaluate` after one `goto` plus
+  one `reload`, not `addInitScript`, so nothing re-seeds on Reset's own
+  reload. Backdrop clicks target an explicit on-screen point clear of the
+  sidebar and header. Tests that click sidebar nav links open the mobile
+  toggle first when it is the visible affordance. All 18 Playwright checks
+  now pass at both the desktop and narrow/mobile viewport across repeated
+  runs.
+- **Prevention:** When a real-browser test seeds storage and the flow under
+  test reloads the page, seed with `evaluate` + one explicit `reload`, not
+  `addInitScript`, unless "first load" behavior is specifically what is
+  under test. At narrow viewports, expect fixed-position layers (headers,
+  open sidebars) to overlap default click targets and aim clicks explicitly.
