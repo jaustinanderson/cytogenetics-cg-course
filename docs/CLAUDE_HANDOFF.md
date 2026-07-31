@@ -145,15 +145,22 @@ A real-browser Playwright/Chromium smoke suite was added on 2026-07-30
   Reset's internal reload, and two narrow-viewport click-target overlaps)
 - GitHub Actions confirmed this on PR #5, not only local runs: workflow run
   `30600962632` passed (`npm ci` → `npm test` → Chromium install →
-  `npm run test:e2e`) in 1m16s on the pushed branch
+  `npm run test:e2e`) in 1m16s on the pushed branch, at commit `14d22e1`
 - An independent review pass before merge found that the export/import
   round-trip test opened its destination page via `context.newPage()`,
   which shares `localStorage` with the source page in the same
   `BrowserContext` — the test could pass without import doing anything. It
   now uses `browser.newContext()` (a genuinely separate storage partition)
   and asserts zero progress on that context before calling `importJSON()`.
-  See the QL-008 addendum. Re-verify locally and against CI after any future
-  change to this test.
+  The local static server also now binds explicitly to `127.0.0.1` rather
+  than all interfaces. See the QL-008 addendum for detail.
+- **The authoritative CI result for the current branch head, commit
+  `2eb20f2`, is workflow run `30602095883`** (passed, 1m3s) — it ran after
+  and specifically verifies the isolated-`BrowserContext` import test and the
+  loopback-bound server above. `30600962632` is retained above only as
+  historical context for the pre-correction commit `14d22e1`; do not treat it
+  as current. Re-verify locally and against CI after any future change to
+  this test.
 - This closes the "Add real-browser automation" item below; WCAG/screen-reader
   automation, deployed-Pages-URL testing, true touch hardware, and the
   third-party image-delivery confirmation remain open
@@ -190,9 +197,13 @@ questions or images:
 1. ~~Add real-browser automation for navigation, quizzes/exercises, v1-to-v2
    migration, persistence after reload, Reset, import/export, print, and
    public API behavior/events.~~ Done 2026-07-30 via the Playwright suite
-   described above (`tests/e2e/`), confirmed green on GitHub Actions run
-   `30600962632` on PR #5 — not only local runs. Issue #1 stays open for the
-   remaining Milestone 0 items below.
+   described above (`tests/e2e/`) on PR #5 — not only local runs. The
+   authoritative, current CI result is GitHub Actions run `30602095883`
+   (passed, commit `2eb20f2`), which verified the post-correction suite
+   (isolated `BrowserContext` import test, loopback-bound local server); the
+   earlier run `30600962632` (commit `14d22e1`) is superseded historical
+   context, not the current state. Issue #1 stays open for the remaining
+   Milestone 0 items below.
 2. Add automated WCAG checks and representative keyboard/screen-reader review.
 3. Run narrow-screen, touch, and mobile-navigation tests against the live page.
 4. Capture a clean screenshot of the course itself for the README.
