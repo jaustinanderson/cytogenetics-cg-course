@@ -184,11 +184,14 @@ The same Playwright run also includes automated WCAG scanning
 rendered course at both viewports and in several interaction states, and a
 representative keyboard-only interaction suite
 (`tests/e2e/keyboard-navigation.spec.mjs`) covering the visible sidebar nav,
-the mobile menu, quizzes, exercises, module completion, Print, and Reset,
-including focus visibility, accessible control names, keyboard activation,
-and the absence of keyboard traps on those controls. Automated scanning and
-keyboard testing are not a screen-reader review; a genuine review with real
-assistive technology has not been performed. See
+the mobile menu, quizzes, exercises, module completion, Print, and Reset.
+For each, the suite proves real Tab-order reachability by driving actual
+`Tab` key presses to the target (never programmatic `.focus()`, which would
+pass even on a control a keyboard user could never reach), asserts its
+computed accessible name, activates it with `Enter`/`Space`, and checks a
+visible focus outline and the absence of a keyboard trap. Automated scanning
+and keyboard testing are not a screen-reader review; a genuine review with
+real assistive technology has not been performed. See
 [Validation](./docs/VALIDATION.md) for scope and limits.
 
 Passing these tests does **not** establish scientific correctness. Scientific

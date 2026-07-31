@@ -299,3 +299,55 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   fixing any accessibility violation — re-scan, don't just re-check the one
   rule. Treat an assumption about DOM/tab order as a claim to verify against
   the real page, exactly like any other claimed product behavior.
+
+### Addendum — `locator.focus()` cannot prove Tab-order reachability
+
+- **Status:** Corrected in independent review of PR #6, before merge
+- **Finding:** Every test in the original `tests/e2e/keyboard-navigation.spec.mjs`
+  that claimed a control was "reachable by Tab" actually used Playwright's
+  `locator.focus()` to set focus, then asserted keyboard activation from
+  there. `locator.focus()` calls the DOM `HTMLElement.focus()` method
+  directly — it succeeds on any focusable element, including one with
+  `tabindex="-1"`, which is explicitly *removed* from the sequential
+  (Tab-key) focus order by spec. A test written this way would pass
+  identically whether or not a real keyboard user could ever reach that
+  control by pressing Tab, so it proved keyboard *activation* but not
+  keyboard *reachability* — despite test names and prior documentation
+  (this log, `docs/VALIDATION.md`) explicitly claiming the latter.
+- **Impact:** None shipped to `index.html`; this was a latent
+  false-confidence risk in the test suite itself, parallel in kind to the
+  QL-008 addendum's shared-storage false pass — a green suite that did not
+  prove what its names and the surrounding documentation claimed it proved.
+  A future `tabindex="-1"` regression on any of these controls would have
+  shipped with this suite still green.
+- **Cause:** `locator.focus()` reads, in isolation, like "give this element
+  keyboard focus" and is a reasonable-looking shortcut to skip a long,
+  fragile-seeming sequence of real Tab presses. The distinction between
+  "focusable" and "reachable via sequential Tab navigation" is easy to
+  elide when writing the assertion, especially once the test is passing.
+- **Correct action:** A test that claims Tab-reachability must drive actual
+  `page.keyboard.press("Tab")` input from wherever focus currently is and
+  assert the specific target element becomes `document.activeElement`,
+  never call `.focus()` to shortcut there. Verified with a mutation check
+  before closing this addendum: adding `tabindex="-1"` to the module-1
+  mark-complete button caused the corrected test to fail immediately with
+  a clear "not reached by natural Tab order" message; the same mutation
+  against the original `.focus()`-based test would have passed unchanged.
+- **Correction:** Every "reachable by Tab" test now calls a shared
+  `tabUntilFocused(page, locator, {max, label})` helper that presses real
+  `Tab` keys (bounded, with a descriptive error naming what focus landed on
+  instead) until the exact target element is `document.activeElement`,
+  before any keyboard activation is attempted. Bounds were set from
+  measured real Tab-press counts on the actual page (2–208 presses
+  depending on the control's DOM depth), not guessed. Accessible-name
+  assertions were also tightened from raw `textContent`/`aria-label`
+  presence checks to `toHaveAccessibleName()` against the computed
+  accessible name. No test in the corrected file retains programmatic
+  focus for any purpose.
+- **Prevention:** A test name or doc claim containing "Tab-reachable,"
+  "keyboard-reachable," or "keyboard-only" is a specific, checkable claim —
+  treat `locator.focus()` anywhere in that test as a sign the claim is not
+  actually being tested, and confirm reachability with real `Tab` input
+  instead. When in doubt whether a keyboard test proves what it claims,
+  mutation-test it: make the specific regression it claims to catch (e.g.
+  add `tabindex="-1"`) and confirm the test actually fails.

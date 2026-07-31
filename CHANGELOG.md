@@ -11,12 +11,15 @@ All notable repository changes are recorded here.
   desktop and narrow/mobile viewports in five states (fresh load, mobile
   nav open, quiz answered, exercise answered, module complete + flashcard
   flipped); zero violations after fixes
-- A representative real-browser keyboard-only interaction suite
+- A representative real-browser keyboard interaction suite
   (`tests/e2e/keyboard-navigation.spec.mjs`) covering the skip link, visible
   sidebar nav, mobile menu, quizzes, exercises, module completion, Print,
-  and Reset, with focus-visibility, accessible-name, and keyboard-trap checks
+  and Reset. Every claimed-reachable control is proven so via real `Tab`
+  key presses to the exact target element (never programmatic `.focus()`,
+  which would pass on an unreachable `tabindex="-1"` element), with
+  `toHaveAccessibleName()` checks, focus-visibility checks, and a
+  keyboard-trap check for the mobile menu
 - `@axe-core/playwright` as a development-only dependency
-
 - A dependency-free DOM behavior suite covering navigation, quizzes,
   exercises, migration, persistence, Reset, import/export, print, the public
   API, API events, analytics, and implemented keyboard/accessibility affordances

@@ -175,11 +175,17 @@ Automated WCAG scanning and representative keyboard testing were added on
   five states (fresh load, mobile nav open, quiz answered, exercise
   answered, module complete + flashcard flipped). `@axe-core/playwright` is
   a devDependency; `index.html` gained no runtime dependency.
-- `tests/e2e/keyboard-navigation.spec.mjs` adds representative keyboard-only
+- `tests/e2e/keyboard-navigation.spec.mjs` adds representative keyboard
   coverage of the skip link, the desktop sidebar nav, the mobile hamburger
-  menu, a quiz item, an exercise item, module completion, Print, and Reset,
-  checking accessible names, `Enter`/`Space` activation, visible focus, and
-  (for the mobile menu) the absence of a keyboard trap.
+  menu, a quiz item, an exercise item, module completion, Print, and Reset.
+  Every control claimed as Tab-reachable is proven so by a shared, bounded
+  `tabUntilFocused()` helper that drives real `Tab` key presses to the exact
+  target element — never `locator.focus()`, which would pass even on a
+  `tabindex="-1"` element a real keyboard user could never reach. Each
+  control's computed accessible name is asserted with `toHaveAccessibleName()`
+  against real expected content, then activated with `Enter`/`Space` with a
+  visible-focus check, plus (for the mobile menu) an absence-of-keyboard-trap
+  check.
 - The initial scan found six confirmed, independently verified defects —
   insufficient contrast on three CSS color variables, 22 heading-order
   violations, two unlabeled table corner cells, unlabeled instructional
@@ -188,8 +194,15 @@ Automated WCAG scanning and representative keyboard testing were added on
   values, heading levels with a same-size CSS override, an `.sr-only` label,
   an SVG accessible-name parameter, and two `tabindex` additions) that do
   not touch any scientific content. See `docs/QUALITY_LOG.md` QL-010.
-- Two mistakes in the new tests themselves were caught and corrected before
-  commit, not shipped — see QL-011.
+- Two mistakes in the tests themselves were caught and corrected during
+  authoring, not shipped (QL-011). A third, more consequential one was
+  caught in independent review of the draft PR: every original
+  "keyboard-reachable" test used `locator.focus()` instead of real `Tab`
+  input, so it could not have caught a `tabindex="-1"` regression on any of
+  those controls despite the test names and this document's earlier wording
+  claiming Tab-reachability. Rewritten to use `tabUntilFocused()` throughout
+  and mutation-verified (a deliberately added `tabindex="-1"` now fails the
+  test with a clear message). See the QL-011 addendum.
 - All 62 scheduled Playwright test runs (58 passed, 4 intentionally skipped
   per-viewport, 0 failed) and all 48 dependency-free checks (`npm test`:
   12 structural + 36 DOM behavior) passed locally after these changes.

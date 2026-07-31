@@ -173,21 +173,36 @@ in Issue #1 and below.
 ### Keyboard-navigation interaction — added 2026-07-31
 
 `tests/e2e/keyboard-navigation.spec.mjs` drives the same real Chromium
-instance with `page.keyboard` input only, covering the controls named in
-Issue #1: the skip link, the desktop sidebar nav, the mobile hamburger menu,
-a quiz item, an exercise item plus its Next control, a module-completion
-button, Print, and Reset. For each it checks keyboard reachability, a
-non-empty accessible name, correct behavior on `Enter`/`Space` activation,
-and a visible `:focus-visible` outline. The mobile-menu test also confirms
-repeated `Tab` presses keep moving focus forward and reach the sidebar's own
-links once it is open, rather than stalling — the absence-of-keyboard-trap
-check for that control.
+instance with `page.keyboard` input, covering the controls named in Issue #1:
+the skip link, the desktop sidebar nav, the mobile hamburger menu, a quiz
+item, an exercise item plus its Next control, a module-completion button,
+Print, and Reset. For every control claimed as Tab-reachable, the suite
+proves it by actually pressing `Tab` (via a shared, bounded
+`tabUntilFocused()` helper) and asserting the specific target element
+becomes `document.activeElement` — it does not call `locator.focus()`,
+because programmatic focus succeeds even on a `tabindex="-1"` element that a
+real keyboard user could never reach, which would silently defeat the claim
+being tested (see the QL-011 addendum below). Each control's computed
+accessible name is asserted with `toHaveAccessibleName()` against real
+expected content (a static string or a regex derived from the actual product
+data), not merely checked for presence. Each control is then activated with
+`Enter` or `Space` and checked for a visible `:focus-visible` outline while
+genuinely keyboard-focused. The mobile-menu test also confirms repeated
+`Tab` presses keep moving focus forward and reach the sidebar's own links
+once it is open, rather than stalling — the absence-of-keyboard-trap check
+for that control.
 
 This suite confirmed one real defect (the skip link did not move keyboard
-focus; see QL-010) and, in the course of authoring it, one false claim in the
-test itself (an incorrect assumption about mobile-menu tab order, corrected
-before merge — see QL-011), following the same confirm-before-trusting
-discipline as QL-007/QL-008.
+focus; see QL-010) and, in the course of authoring and then independently
+reviewing it, two false claims in the test file itself: an incorrect
+assumption about mobile-menu tab order, and — found in independent review of
+PR #6 — every "keyboard-reachable" test originally using `locator.focus()`
+instead of real `Tab` input, which cannot distinguish a genuinely reachable
+control from a `tabindex="-1"` one. Both were corrected before merge; see
+QL-011 and its addendum. The fix was mutation-verified: adding
+`tabindex="-1"` to the module-1 mark-complete button makes the corrected
+test fail with a clear message, which the original `.focus()`-based version
+did not.
 
 This is representative, not exhaustive, coverage: it does not tab through
 every one of the 153 questions or 30 exercise items, and it does not
