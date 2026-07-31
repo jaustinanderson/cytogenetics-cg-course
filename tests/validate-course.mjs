@@ -192,19 +192,90 @@ test("question injection rejects malformed and globally duplicate ids atomically
   assert.equal(api.getQuestions("m2").length, before);
 });
 
-test("the scientific-review status record covers every current module", () => {
+test("the scientific-review status record's per-module table matches the live course data exactly", () => {
   const reviewDocPath = path.join(root, "docs", "SCIENTIFIC_REVIEW.md");
   const reviewDoc = fs.readFileSync(reviewDocPath, "utf8");
-  const modules = api.getModules();
-  assert.ok(modules.length > 0, "expected at least one module from the live course data");
-  for (const module of modules) {
-    assert.match(
-      reviewDoc,
-      new RegExp(`\\|\\s*${module.id}\\s*\\|`),
-      `docs/SCIENTIFIC_REVIEW.md is missing a table row for module "${module.id}" — ` +
-        "add or update its status row when modules change",
-    );
+  const lines = reviewDoc.split("\n");
+
+  const headerIndex = lines.findIndex((line) =>
+    /^\|\s*Module\s*\|\s*Title\s*\|\s*Blueprint domain\s*\|\s*Quiz questions\s*\|\s*Scientific review status\s*\|/.test(
+      line.trim(),
+    ),
+  );
+  assert.notEqual(headerIndex, -1, "expected the per-module status table header in docs/SCIENTIFIC_REVIEW.md");
+
+  const rows = [];
+  for (let i = headerIndex + 2; i < lines.length; i += 1) {
+    const trimmed = lines[i].trim();
+    if (!trimmed.startsWith("|")) break;
+    const cells = trimmed.split("|").slice(1, -1).map((cell) => cell.trim());
+    assert.equal(cells.length, 5, `malformed table row in docs/SCIENTIFIC_REVIEW.md: "${trimmed}"`);
+    rows.push(cells);
   }
+  assert.ok(rows.length > 0, "expected at least one data row in the per-module status table");
+
+  // Column order: [Module, Title, Blueprint domain, Quiz questions, Scientific review status].
+  const moduleRows = rows.filter((row) => /^m\d+$/.test(row[0]));
+  const poolRows = rows.filter((row) => !/^m\d+$/.test(row[0]));
+
+  const modules = api.getModules();
+  const liveIds = new Set(modules.map((module) => module.id));
+  const tableIds = new Set(moduleRows.map((row) => row[0]));
+  assert.deepEqual(
+    [...tableIds].sort(),
+    [...liveIds].sort(),
+    "docs/SCIENTIFIC_REVIEW.md's module rows must exactly match the live module ID set from getModules() " +
+      "(no missing module and no stale extra row)",
+  );
+
+  const rowById = new Map(moduleRows.map((row) => [row[0], row]));
+  let moduleQuestionSum = 0;
+  for (const module of modules) {
+    const row = rowById.get(module.id);
+    assert.ok(row, `docs/SCIENTIFIC_REVIEW.md is missing a row for module "${module.id}"`);
+    assert.equal(
+      row[1],
+      module.short,
+      `docs/SCIENTIFIC_REVIEW.md title for "${module.id}" ("${row[1]}") must match the live module title ` +
+        `("${module.short}") from getModules()`,
+    );
+    const liveCount = api.getQuestions(module.id).length;
+    const countMatch = row[3].match(/^(\d+)/);
+    assert.ok(
+      countMatch,
+      `docs/SCIENTIFIC_REVIEW.md question count for "${module.id}" ("${row[3]}") must start with a number`,
+    );
+    const tableCount = Number(countMatch[1]);
+    assert.equal(
+      tableCount,
+      liveCount,
+      `docs/SCIENTIFIC_REVIEW.md question count for "${module.id}" (${tableCount}) must match ` +
+        `getQuestions("${module.id}").length (${liveCount})`,
+    );
+    moduleQuestionSum += liveCount;
+  }
+
+  assert.equal(
+    poolRows.length,
+    1,
+    'expected exactly one final-pool row (a Module cell not matching "m<number>") in the per-module status table',
+  );
+  const poolCountMatch = poolRows[0][3].match(/^(\d+)/);
+  assert.ok(poolCountMatch, `final-pool row question count ("${poolRows[0][3]}") must start with a number`);
+  const poolTableCount = Number(poolCountMatch[1]);
+  const poolLiveCount = api.getQuestions("final").length;
+  assert.equal(
+    poolTableCount,
+    poolLiveCount,
+    `final-pool row count (${poolTableCount}) must match getQuestions("final").length (${poolLiveCount})`,
+  );
+
+  assert.equal(
+    moduleQuestionSum + poolLiveCount,
+    questions.length,
+    `module question counts (${moduleQuestionSum}) plus the final-pool count (${poolLiveCount}) must reconcile ` +
+      `to the live total question count (${questions.length})`,
+  );
 });
 
 console.log("\nCourse validation passed.");

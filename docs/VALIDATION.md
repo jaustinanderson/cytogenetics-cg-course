@@ -677,8 +677,14 @@ Source-checked, what remains Draft, and what is explicitly unknown — is
 recorded in [`docs/SCIENTIFIC_REVIEW.md`](./SCIENTIFIC_REVIEW.md), added
 2026-07-31. As of that record: no question, exercise, flashcard, or case
 content has an independent scientific review recorded; only the exam
-blueprint/domain-weighting structure is source-checked against the dated
-ASCP BOC content guideline. That document also carries the reusable
+blueprint's domain names and published target ranges are source-checked
+against the dated ASCP BOC content guideline. The current question
+distribution against those ranges is a separate, mechanically measured
+fact — only the specimen domain currently falls within its published
+range (analysis, molecular, and operations do not; see `README.md`
+"Course coverage"). `docs/SCIENTIFIC_REVIEW.md` also reconciles its
+"SME-reviewed" usage with `docs/CONTENT_GOVERNANCE.md`'s existing
+definition (review by Austin specifically) and carries the reusable
 review-log format and per-item checklist to use once a real review begins.
 Passing the automated suites documented above establishes structural and
 behavioral consistency — it does not and cannot establish scientific
