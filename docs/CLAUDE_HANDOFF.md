@@ -243,17 +243,16 @@ A dedicated deployed-site Playwright smoke suite was added on 2026-07-31
   tapping a module link reaching that module and closing the menu; tapping
   the backdrop closing the menu; a touch-emulated quiz interaction; and
   module-completion persistence across a real reload in a dedicated
-  `browser.newContext()`. No smaller viewport was added — `index.html`'s
-  only breakpoints are 980px and 560px, both already crossed at 390px.
+  `browser.newContext({ baseURL })`, with an explicit assertion that
+  navigation reached the expected deployed origin/path. No smaller viewport
+  was added — `index.html`'s only breakpoints are 980px and 560px, both
+  already crossed at 390px.
 - `scripts/verify-deployed-revision.mjs` (`npm run
-  verify:deployed-revision`) polls the GitHub deployments API for the
-  `github-pages` environment (which records the exact commit SHA each
-  deployment was built from, plus its status) and waits, bounded, until the
-  live deployment matches the intended commit — guarding against testing a
-  stale deployment without sleeping for an arbitrary fixed period. Verified
-  against the real repository both ways: it correctly matched `main`'s then-
-  HEAD `033f8c5` with `state: success`, and correctly timed out and exited
-  non-zero for a SHA that was never deployed.
+  verify:deployed-revision`) requires **both** a matching GitHub deployments
+  API record (commit SHA + `state: success`) **and** a cache-busted SHA-256
+  hash match between the live `index.html` and the checked-out one — see the
+  2026-07-31 (later) entry below for why the API check alone was
+  strengthened.
 - `.github/workflows/deployed-smoke.yml` is a separate GitHub Actions
   workflow (`workflow_dispatch` for manual runs, `workflow_run` after
   GitHub's own `pages-build-deployment` completes on `main` for
@@ -284,6 +283,45 @@ A dedicated deployed-site Playwright smoke suite was added on 2026-07-31
   Screen-reader review and physical touch-hardware testing remain separate,
   unperformed, unchecked gates — this work does not and cannot establish
   either.
+
+An independent review of that work, on the same PR (#7) and branch, found
+and prompted correcting four issues, applied 2026-07-31:
+
+- `scripts/verify-deployed-revision.mjs` overclaimed what the GitHub
+  deployments API alone establishes (a registered build record for a SHA,
+  not proof of what bytes the live URL returns right now). It now requires
+  both that API record **and** a cache-busted SHA-256 comparison of the live
+  `index.html` against the checked-out one, with comments and log output
+  stating precisely what each check does and does not prove — including the
+  specific case where `index.html` is byte-identical across commits (true
+  here), where a hash match alone cannot identify which commit is live.
+- The workflow now requests `deployments: read` alongside `contents: read`,
+  and all three network calls in the verifier's poll loop (deployment list,
+  deployment status, live-hash fetch) share one bounded-retry path instead of
+  the deployment-status call being unguarded.
+- `DEPLOYED_BASE_URL` is now bound once at job level so the revision check
+  and the Playwright suite cannot silently target different URLs; the
+  verifier also warns if `DEPLOYED_BASE_URL` doesn't match the canonical
+  Pages URL derived from `GITHUB_REPOSITORY`.
+- The isolated persistence test in `quiz-and-persistence.spec.mjs` now passes
+  `{ baseURL }` explicitly to `browser.newContext()` and asserts the reached
+  origin/path. Investigating the review's stated cause first (per the
+  standing QL-007/QL-008/QL-011 discipline) found the general claim
+  ("manually created contexts don't inherit baseURL") is true for raw
+  Playwright but *not* for `@playwright/test`, which instruments every
+  `newContext()` call in a running test — confirmed by tracing
+  `@playwright/test`'s source and by a minimal reproduction. The recommended
+  fix was applied anyway: it removes reliance on that instrumentation being
+  understood or remaining unchanged, and the added origin assertion is a
+  real, independent hardening regardless of the original premise's accuracy.
+  See `docs/QUALITY_LOG.md` QL-013 for the full account, including why an
+  overclaim can go in either direction — the code's or the review's — and
+  both need the same verify-before-trusting discipline.
+- `tests/verify-deployed-revision.mjs` (part of `npm test`, loopback-only)
+  adds focused hash-match/mismatch checks for the new verifier logic,
+  mutation-verified (removing the cache-busting parameter made the
+  corresponding test fail, then was reverted).
+- No product change; `index.html` remains untouched.
 
 ## Read these files first
 

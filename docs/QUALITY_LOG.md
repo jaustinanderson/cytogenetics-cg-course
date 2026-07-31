@@ -491,3 +491,122 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   full non-claim. `tests/e2e-deployed/remote-images.spec.mjs` re-checks this
   on every run it is given network access to.
 
+## QL-013 — Independent review of QL-012's work: an overclaim corrected, a claim verified before acting on it
+
+- **Status:** Corrected; no product change
+- **Finding:** An independent review of the branch introduced in QL-012 found
+  four issues, three of which were real and are corrected here:
+  1. `scripts/verify-deployed-revision.mjs` claimed to verify "the deployed
+     revision" using only the GitHub deployments API. That API proves GitHub
+     *registered a successful build for a given commit SHA* — it does not by
+     itself prove the bytes `DEPLOYED_BASE_URL` returns *right now* are those
+     bytes (CDN caching, propagation delay, and a custom domain routed
+     elsewhere can all make the API record and the live response disagree).
+     The wording did not distinguish these.
+  2. The workflow (`.github/workflows/deployed-smoke.yml`) requested only
+     `contents: read`, with no explicit permission scoped to the deployments
+     API it actually calls, and only the deployment-list request's failures
+     were retried — a transient failure from the deployment-*status* request
+     was unhandled and would have crashed the whole script with a stack trace
+     instead of a bounded retry.
+  3. `DEPLOYED_BASE_URL` (used by the Playwright suite) and the URL implicitly
+     assumed by the revision verifier were never explicitly bound to each
+     other, so overriding one without the other could silently verify one
+     target while testing a different one.
+  4. (Reported, not confirmed as stated) That `tests/e2e-deployed/quiz-and-
+     persistence.spec.mjs`'s manually created `browser.newContext()` "does
+     not automatically inherit the project baseURL," and that this made
+     `page.goto("./")` inside it unreliable.
+- **Investigation before changing anything:** Per the standing rule already
+  established in this log (QL-007/QL-008/QL-011 — confirm an unexpected or
+  reported claim against real behavior before trusting it), finding 4 was
+  checked directly rather than assumed. A minimal standalone script
+  (`chromium.launch()` + `browser.newContext()` with no options + `page.goto
+  ("./")`, no `@playwright/test` runner involved) reproduced the *general*
+  claim: without a runner, a manually created context genuinely does not
+  know about any `baseURL` and the navigation fails outright
+  (`Cannot navigate to invalid URL`). But re-running the *actual* committed
+  test file, and a minimal reproduction added temporarily under
+  `tests/e2e-deployed/` and removed again immediately after, showed
+  `page.goto("./")` inside a manually created `browser.newContext()`
+  resolving correctly to the live deployed URL. Tracing
+  `@playwright/test`'s own source
+  (`node_modules/playwright/lib/index.js`, the `runBeforeCreateBrowserContext`
+  instrumentation hook wired to a test's `_combinedContextOptions`) confirmed
+  why: the Playwright Test runner installs a client instrumentation listener,
+  for the lifetime of each test, that merges the config's `use` options
+  (`baseURL`, `viewport`, `hasTouch`, etc.) into **any** `newContext()` call
+  made during that test — including a manual one — for any option the caller
+  did not already specify. So the specific claim as stated was not accurate
+  for this codebase's actual test runner; the general intuition behind it
+  (a raw, unmanaged `Browser.newContext()` has no implicit baseURL) is true,
+  but doesn't apply here because `@playwright/test` is managing the context.
+- **Impact:** None shipped incorrectly as a result of finding 4 — the
+  original test was not broken in the way described. Trusting the claim
+  without checking it would have added a misleading "fix" description (and,
+  worse, a misleading `docs/QUALITY_LOG.md`/`docs/VALIDATION.md` entry
+  asserting a defect that was never real) — exactly the kind of unverified
+  claim this log exists to catch, whichever direction it comes from.
+- **Correct action:** Verify a specific, checkable claim about tooling
+  behavior against that tooling's actual behavior and source before
+  recording it as a defect or changing code to "fix" it — the same
+  discipline already applied to claims about the product (QL-007, QL-008)
+  and about DOM/tab order (QL-011), extended here to a claim about the test
+  runner itself. Separately, apply the *recommended fix* anyway where it adds
+  real, independent value regardless of whether the stated cause was
+  accurate.
+- **Correction:**
+  1. `scripts/verify-deployed-revision.mjs` now requires **both** the
+     deployments-API match (commit SHA + `state: success`) **and** a
+     SHA-256 comparison of a cache-busted, no-cache fetch of
+     `DEPLOYED_BASE_URL`'s live `index.html` against the checked-out
+     `index.html`, and its comments/log output state precisely what each
+     check does and does not prove — including the explicit case where
+     `index.html` is byte-identical across commits (true for every commit in
+     this branch), where the hash alone cannot distinguish which commit is
+     live. See `docs/VALIDATION.md` "Protecting against a stale deployment"
+     for the full scope statement and real verification results (both checks
+     agreeing on `main`'s HEAD; a mismatched-SHA run correctly timing out; a
+     mismatched-URL run correctly warning and then failing).
+  2. `.github/workflows/deployed-smoke.yml` now requests `deployments: read`
+     alongside `contents: read`, and the verifier's per-attempt loop wraps
+     the deployment-list request, the deployment-status request, and the
+     live-hash fetch in one shared try/catch, so a transient failure from
+     any of the three triggers the same bounded retry instead of an
+     unhandled crash.
+  3. The workflow now binds `DEPLOYED_BASE_URL` once at job level so the
+     revision-verification step and the Playwright suite step are
+     guaranteed to target the same URL. The verifier also derives the
+     canonical `owner.github.io/repo/` URL from `GITHUB_REPOSITORY` and
+     prints an explicit warning when `DEPLOYED_BASE_URL` doesn't match it —
+     a custom domain/CNAME for the *same* repository is a legitimate,
+     expected mismatch; a different fork or repository being tested without
+     also overriding `GITHUB_REPOSITORY`/`TARGET_SHA` is not, and is now
+     surfaced rather than silently "verified."
+  4. `tests/e2e-deployed/quiz-and-persistence.spec.mjs`'s isolated-context
+     test now obtains the `baseURL` fixture and passes it explicitly —
+     `browser.newContext({ baseURL })` — and asserts, immediately after
+     `page.goto("./")`, that `page.url()`'s origin and path equal the
+     expected `baseURL`'s. This does not depend on whether a reader
+     understands or trusts the instrumentation behavior described above,
+     and it independently guards against the test silently passing against
+     the wrong target if that behavior ever changes, a config typo points
+     `baseURL` somewhere unintended, or a future Playwright version stops
+     merging context options into manually created contexts.
+  5. `tests/verify-deployed-revision.mjs` (part of `npm test`, loopback-only,
+     no external network) adds focused checks: identical content hashes
+     match, different content hashes differ, and a local HTTP server
+     standing in for "the live URL" is fetched with a distinct cache-busting
+     query parameter on every call. A deliberate mutation removing the
+     cache-busting parameter made the corresponding test fail with a clear
+     message; reverted before commit.
+- **Prevention:** When a review (or any source) reports "X does not work the
+  way you think," check X directly against real behavior before writing a
+  fix or a log entry — the same standing rule already in this file, now
+  explicitly extended to claims about the test framework's own behavior, not
+  only the product or the test's assumptions about DOM/tab order. Separately:
+  a verification script's job is to state exactly what it establishes: name
+  each distinct check, state what each one does and does not prove on its
+  own, and say so in both the code comments and the user-facing log output —
+  not only in a document a reader might not open.
+

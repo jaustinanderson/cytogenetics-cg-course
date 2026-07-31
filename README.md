@@ -167,6 +167,9 @@ The committed test suite checks:
   import/export, print, public API, event, and analytics behavior
 - implemented keyboard and accessibility affordances that can be evaluated
   without layout or assistive technology
+- the deployed-revision verifier's hashing/fetch logic, entirely over
+  loopback (a local HTTP server standing in for "the live URL"), so it needs
+  no external network access
 
 A separate real-browser suite runs in Chromium via Playwright:
 
@@ -219,11 +222,14 @@ target URL is configurable via `DEPLOYED_BASE_URL`. This suite is separate
 from `npm test` and `npm run test:e2e` on purpose — it requires outbound
 internet access and must never make an ordinary local or PR run depend on
 it. `scripts/verify-deployed-revision.mjs` guards against testing a stale
-deployment by polling GitHub's own deployments API for the commit the live
-Pages build was actually built from, instead of assuming a fixed wait was
-long enough. See [Validation](./docs/VALIDATION.md) for full scope,
-including the exact remote-image result observed and the distinction between
-touch *emulation* and physical touch hardware.
+deployment by combining two checks — GitHub's own deployments API record for
+the target commit, and a cache-busted SHA-256 comparison of the live
+`index.html` against the checked-out one — instead of assuming a fixed wait
+was long enough. Each check proves something narrower than "this is
+definitely the currently served commit" on its own; see
+[Validation](./docs/VALIDATION.md) for the precise scope of each, the exact
+remote-image result observed, and the distinction between touch *emulation*
+and physical touch hardware.
 
 Passing these tests does **not** establish scientific correctness. Scientific
 review, rights review, a representative screen-reader review, and release
@@ -246,11 +252,12 @@ input, it does not exercise real touch hardware or a mobile OS/browser.
 ├── playwright.config.mjs         # Real-browser (Chromium) smoke-test config
 ├── playwright.deployed.config.mjs # Deployed HTTPS Pages smoke-test config
 ├── scripts/
-│   └── verify-deployed-revision.mjs # Confirms live Pages SHA before testing
+│   └── verify-deployed-revision.mjs # Deployment-record + live-hash check before testing
 ├── tests/
 │   ├── validate-course.mjs       # Structural/content contracts
 │   ├── dom-behavior.mjs          # Dependency-free behavior checks
 │   ├── dom-harness.mjs           # Minimal test-only DOM fixture
+│   ├── verify-deployed-revision.mjs # Loopback-only hash-check tests (no external network)
 │   ├── e2e/                      # Playwright real-browser smoke suite (local server)
 │   └── e2e-deployed/             # Playwright smoke suite (real deployed Pages URL)
 ├── docs/

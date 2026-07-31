@@ -52,21 +52,38 @@ All notable repository changes are recorded here.
   mobile-navigation open/close/backdrop/module-link behavior with
   `aria-expanded` checked against the sidebar's actual on/off-canvas
   position, a touch-emulated quiz interaction, module-completion persistence
-  across a real reload in an isolated browser context, and the natural
-  decoded dimensions of the two approved remote images. Entirely separate
-  from `tests/e2e/`: it has no `webServer`, is never invoked by `npm test` or
-  `npm run test:e2e`, and requires outbound internet access only when
-  explicitly run
+  across a real reload in an isolated browser context (`browser.newContext({
+  baseURL })`, with an explicit assertion that navigation reached the
+  expected deployed origin/path), and the natural decoded dimensions of the
+  two approved remote images. Entirely separate from `tests/e2e/`: it has no
+  `webServer`, is never invoked by `npm test` or `npm run test:e2e`, and
+  requires outbound internet access only when explicitly run
 - `scripts/verify-deployed-revision.mjs` (`npm run
-  verify:deployed-revision`), which polls the GitHub deployments API for the
-  `github-pages` environment to confirm the live deployment's recorded commit
-  SHA and status match the intended revision before deployed tests are
-  trusted to say anything about it, instead of sleeping for a fixed period
+  verify:deployed-revision`), which requires **both** of two checks to agree
+  before treating a deployment as verified: GitHub's deployments API record
+  for the `github-pages` environment (commit SHA + status) for the target
+  commit, and a cache-busted, no-cache SHA-256 comparison of the live
+  `index.html` at the exact `DEPLOYED_BASE_URL` against the checked-out
+  `index.html`. Each check's precise, narrower scope — the API proves a
+  registered build record, the hash proves current live-artifact equivalence,
+  neither alone proves "the currently served commit" — is stated in the
+  script's own comments and log output, not only in documentation. Warns
+  explicitly if `DEPLOYED_BASE_URL` doesn't match the canonical Pages URL
+  derived from `GITHUB_REPOSITORY`, so overriding the target URL without
+  also binding the repository/commit it verifies cannot silently claim a
+  meaningless result
+- `tests/verify-deployed-revision.mjs` (part of `npm test`): focused,
+  loopback-only checks of the hashing/fetch logic (identical/differing
+  content hashes, and a local HTTP server standing in for "the live URL"
+  fetched with a distinct cache-busting query parameter each time), requiring
+  no external network access
 - `.github/workflows/deployed-smoke.yml`: a separate, network-dependent
   workflow (manual `workflow_dispatch`, plus automatic `workflow_run` after
   GitHub's own `pages-build-deployment` completes on `main`) that runs the
-  revision check and the deployed suite; `ci.yml` is unchanged and still
-  requires no external network access
+  revision check and the deployed suite against the same `DEPLOYED_BASE_URL`
+  (bound once at job level); requests `deployments: read` alongside
+  `contents: read`. `ci.yml` is unchanged and still requires no external
+  network access
 
 ### Changed
 

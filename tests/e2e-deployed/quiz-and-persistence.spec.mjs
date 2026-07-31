@@ -23,14 +23,36 @@ test.describe("deployed quiz interaction and reload persistence", () => {
     }
   });
 
-  test("module-completion persistence survives a live-page reload in an isolated context", async ({ browser }) => {
+  test("module-completion persistence survives a live-page reload in an isolated context", async ({
+    browser,
+    baseURL,
+  }) => {
     // A dedicated incognito-style context, not the ambient per-test context,
     // so this test cannot be affected by (or leak into) storage any other
     // test or concurrent run left on the live host's origin.
-    const context = await browser.newContext();
+    //
+    // Playwright Test's instrumentation merges `use`-configured context
+    // options (baseURL, viewport, hasTouch, etc.) into ANY context created
+    // during a test, including one created manually here via
+    // `browser.newContext()` — verified against this exact suite by tracing
+    // `runBeforeCreateBrowserContext` in @playwright/test and confirming
+    // empirically that an unqualified `browser.newContext()` still resolved
+    // `page.goto("./")` to the configured baseURL. `baseURL` is passed
+    // explicitly anyway so this test's correctness does not rely on that
+    // implicit merge being understood or remaining unchanged, and the
+    // assertion below independently confirms navigation actually reached the
+    // intended deployed origin/path rather than trusting either mechanism.
+    const context = await browser.newContext({ baseURL });
     const page = await context.newPage();
     try {
       await page.goto("./");
+
+      const expected = new URL(baseURL);
+      const actual = new URL(page.url());
+      expect(
+        actual.origin + actual.pathname,
+        `expected navigation to reach ${expected.origin}${expected.pathname}, got ${actual.origin}${actual.pathname}`,
+      ).toBe(expected.origin + expected.pathname);
 
       const initialLabel = await page.locator("#tpLabel").textContent();
       expect(initialLabel, "expected a freshly isolated context to start with zero completed modules").toBe(

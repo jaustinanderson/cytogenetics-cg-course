@@ -284,10 +284,13 @@ own skip convention) verify against the live page:
 - tapping the backdrop closes the mobile nav
 - a representative quiz answer, driven by `.tap()`, scores and locks the item
 - module-completion persistence across a real `page.reload()`, verified in a
-  dedicated `browser.newContext()` (an isolated storage partition asserted to
-  start at "0 of 17 modules complete" before anything is marked, the same
-  discipline the QL-008 addendum established for the local suite's
-  import/export test)
+  dedicated `browser.newContext({ baseURL })` (an isolated storage partition
+  asserted to start at "0 of 17 modules complete" before anything is marked,
+  the same discipline the QL-008 addendum established for the local suite's
+  import/export test). `baseURL` is passed explicitly and the test asserts
+  navigation actually reached the expected deployed origin/path — see
+  `docs/QUALITY_LOG.md` QL-013 for why this is asserted directly rather than
+  relying on it implicitly
 - the two approved remote images' actual decoded state: each is scrolled into
   view (both use `loading="lazy"`), then checked for `img.complete` **and**
   nonzero `naturalWidth`/`naturalHeight` — `complete` alone is not sufficient,
@@ -335,20 +338,78 @@ GitHub Pages deployment is asynchronous relative to a push to `main`; sleeping
 for a fixed period and assuming it finished cannot distinguish "still
 deploying" from "deployed" from "deploy failed." Instead,
 `scripts/verify-deployed-revision.mjs` (`npm run verify:deployed-revision`)
-polls GitHub's own deployments API
-(`GET /repos/{repo}/deployments?environment=github-pages`), which records the
-exact commit SHA each Pages deployment was built from, plus that
-deployment's status, and waits — bounded, not indefinitely — until the most
-recent one both matches the target commit and reports `state: success`. This
-was confirmed against the real repository: querying the live API for the
-commit that was `main`'s HEAD at authoring time (`033f8c5c8bfae2a0bdb394d4030c2f405f262068`)
-returned exactly that SHA with `state: success`, and deliberately querying for
-a SHA that has never been deployed (`000...000`) correctly timed out and
-exited non-zero rather than silently passing — a real regression check, not
-an assumption. `.github/workflows/deployed-smoke.yml` runs this check before
-the deployed Playwright suite; it requires network access to
-`api.github.com` (a `GITHUB_TOKEN` raises the unauthenticated rate limit but
-is not required for this public repository).
+combines two checks, polling — bounded, not indefinitely — until both agree:
+
+1. GitHub's own deployments API
+   (`GET /repos/{repo}/deployments?environment=github-pages`), which records
+   the exact commit SHA each Pages deployment was built from, plus that
+   deployment's status.
+2. A cache-busted (unique query parameter plus `Cache-Control: no-cache`),
+   no-cache fetch of the live `index.html` at the exact `DEPLOYED_BASE_URL`
+   Playwright's deployed suite is about to use, SHA-256-hashed and compared
+   byte-for-byte against the checked-out `index.html`.
+
+**Neither check alone proves "the currently served commit"; that is a
+deliberate, precise claim, not an oversight.** The deployments API proves
+GitHub *registered a successful build for the target commit SHA* — it says
+nothing about whether the bytes a request receives *right now* are those
+bytes (CDN caching, propagation delay, or a custom domain pointed elsewhere
+could all make the record and the live response disagree). The hash proves
+the *live artifact's current bytes* are identical to the checked-out file —
+it says nothing about *which commit* produced those bytes if `index.html`
+happens to be byte-identical across multiple commits, which it is across
+every commit in the branch that introduced this script (this change touches
+no product code). Only requiring both together — the deployment record
+names the target commit with `state: success`, and the live hash matches —
+gives complementary evidence strong enough to trust; the script's own log
+output states this scope explicitly on every successful run, not just here.
+
+This was confirmed against the real repository, both mechanisms combined and
+each independently:
+
+- Querying the live API for the commit that was `main`'s HEAD at authoring
+  time (`033f8c5c8bfae2a0bdb394d4030c2f405f262068`) returned exactly that SHA
+  with `state: success`, **and** a cache-busted fetch of
+  <https://jaustinanderson.github.io/cytogenetics-cg-course/> hashed to the
+  same SHA-256 as the checked-out `index.html`
+  (`1e2c0f882dc816aa66f42f2d7fcf4bed5d6e98f355134a12c7322ff106c80b35`) — the
+  combined check passed.
+- Deliberately querying for a SHA that has never been deployed (`000...000`)
+  correctly timed out and exited non-zero rather than silently passing.
+- Deliberately pointing `DEPLOYED_BASE_URL` at an unrelated URL
+  (`https://example.com/...`) while leaving `GITHUB_REPOSITORY` at its
+  default printed an explicit warning that the deployment record and the
+  fetch target may not describe the same thing, then correctly failed (the
+  unrelated URL 404'd) rather than reporting a false pass.
+- `tests/verify-deployed-revision.mjs` (part of `npm test`) adds focused,
+  loopback-only checks of the hashing/fetch logic itself — identical content
+  hashes match, different content hashes differ, and a local HTTP server
+  standing in for "the live URL" is fetched with a distinct cache-busting
+  query parameter on every call — without requiring any external network
+  access. A deliberate mutation removing the cache-busting query parameter
+  made the corresponding test fail with a clear message; reverted before
+  commit.
+
+`.github/workflows/deployed-smoke.yml` runs this check before the deployed
+Playwright suite, using the exact same `DEPLOYED_BASE_URL` the suite itself
+targets (bound once at job level so the two cannot silently diverge). It
+requires network access to `api.github.com` (a `GITHUB_TOKEN` raises the
+unauthenticated rate limit but is not required for this public repository,
+and the workflow's `deployments: read` permission scopes exactly what the
+check needs) and to `DEPLOYED_BASE_URL` itself.
+
+**On overriding `DEPLOYED_BASE_URL`:** the deployment-record check is scoped
+to `GITHUB_REPOSITORY` (default `jaustinanderson/cytogenetics-cg-course`), not
+to whatever URL `DEPLOYED_BASE_URL` happens to point at. If you override
+`DEPLOYED_BASE_URL` alone — to test a fork's Pages URL, for example — without
+also setting `GITHUB_REPOSITORY` and `TARGET_SHA` to match that fork, the
+script is verifying a deployment record for an unrelated repository while
+fetching bytes from somewhere else entirely, and it prints a warning saying
+so. A custom domain or CNAME that still serves *this* repository's Pages site
+is a legitimate reason for `DEPLOYED_BASE_URL` to differ from the canonical
+`owner.github.io/repo/` form and does not indicate a problem; a different
+fork or repository does, and only setting all three variables together
+against the same target produces a meaningful result.
 
 ## Deployed smoke test — 2026-07-30 (superseded by the suite above)
 
