@@ -323,6 +323,137 @@ and prompted correcting four issues, applied 2026-07-31:
   corresponding test fail, then was reverted).
 - No product change; `index.html` remains untouched.
 
+PR #7 was reviewed, approved, and squash-merged to `main` as `b83f8a8` on
+2026-07-31. Post-merge: `ci.yml` passed on `main`, the GitHub Pages build
+succeeded, and `.github/workflows/deployed-smoke.yml` fired automatically
+via its `workflow_run` trigger (no manual dispatch needed) and passed,
+confirming both the deployment-record match and the live/local `index.html`
+hash match for `b83f8a8`, 16/6 deployed Playwright results, and both remote
+images' natural dimensions — see the comment on Issue #1. Issue #1's
+"narrow-screen, touch, mobile-navigation" item is now checked for its
+automated/emulated scope only; screen-reader review and physical
+touch-hardware testing stay open.
+
+A README course screenshot was added on 2026-07-31 (branch
+`claude/issue-1-readme-screenshot`, Issue #1):
+
+- `docs/assets/course-overview.png` (1440x1500, ~280KB) embedded near the
+  top of `README.md`, linked to its full-size version, with descriptive alt
+  text. Shows the header (with progress bar and Print/Reset), the sidebar
+  module list, the hero section, the exam content-weighting chart, and the
+  complete 17-module progress dashboard grid, all in a fresh
+  "0 of 17 modules complete" state.
+- `scripts/capture-readme-screenshot.mjs` (`npm run
+  capture:readme-screenshot`) generates it deterministically: clears both
+  progress localStorage keys, uses a 1440x1500 viewport (1440 stays solidly
+  in the desktop CSS path; 1500 is the measured height needed to include the
+  full dashboard grid without cutting a card mid-row, chosen instead of a
+  `fullPage` capture — the real document is over 100,000px tall across all
+  17 modules), sets `reducedMotion: "reduce"` so the page's own
+  `prefers-reduced-motion` CSS rule disables transitions, waits for
+  `document.fonts.ready` plus `networkidle` so the Google Fonts webfonts
+  have swapped in, and explicitly scrolls to the top before capturing.
+- Deliberately **not** a test: no pixel-comparison assertion was added, since
+  a byte-identical screenshot claim can't be made reproducible across
+  font-hinting/Chromium-version/OS differences, and a brittle diff test
+  would fail for reasons unrelated to any real regression.
+- The raw capture (389,650 bytes) was losslessly re-encoded smaller
+  (286,140 bytes, ~27% reduction) using `sharp-cli` (fetched via `npx`, not
+  a project dependency) at a higher compression effort. A first attempt
+  using only `--compressionLevel`/`--effort` looked fine by file size alone
+  but was NOT actually lossless — `sharp-cli` defaults to palette
+  (color-quantized) PNG output; comparing raw decoded pixel buffers found
+  6% of bytes differed by up to 25/255. Adding `--palette=false` and
+  re-verifying byte-for-byte pixel identity before committing caught this
+  before a subtly degraded asset shipped. See `docs/QUALITY_LOG.md` QL-014.
+- Initially: no product change; `index.html` untouched. **This was revised**
+  — independent review of this screenshot found a real product defect it
+  exposed; see the correction entry immediately below. Scientific content
+  was never touched, in either version of this work.
+- This closes the "capture a clean course-only README screenshot" item in
+  `docs/ROADMAP.md` and Issue #1. Screen-reader review, physical
+  touch-hardware testing, and the scientific-review status record remain
+  open — this work does not and cannot establish any of them.
+
+Independent review of that screenshot found and prompted correcting three
+issues, applied 2026-07-31 on the same branch:
+
+1. **A confirmed product defect, found from the screenshot itself.** Every
+   one of the 17 dashboard cards ran its title directly into "Module N" on
+   one line, and the status text ("To do"/"Done") had no protection against
+   wrapping. Confirmed against `index.html` before changing anything (the
+   title/subtitle wrapper `<span>` had no class or layout rules; `.dc-t`/
+   `.dc-s` were plain inline spans with nothing to make them stack; `.dc-
+   state` lacked `flex:0 0 auto`/`white-space:nowrap`). Fixed with a scoped
+   CSS/markup change (`.dc-body` wrapper class with flex/column layout,
+   `display:block` on title/subtitle, the missing flex/nowrap on the
+   status), verified by real bounding-box measurement at both the desktop
+   and narrow/mobile viewports. **`index.html` is no longer unchanged for
+   this PR** — this is the one exception, a narrowly scoped, independently
+   confirmed layout fix; no scientific content changed. See
+   `docs/QUALITY_LOG.md` QL-016 for the full diagnosis, fix, and a
+   mutation-test proof (reverting the fix made 4 of 6 new test runs fail
+   immediately).
+2. **A new regression test** — `tests/e2e/dashboard-layout.spec.mjs` (6
+   runs across both Playwright projects) — asserts, via bounding boxes and
+   computed line-height (not pixel snapshots), that all 17 cards render
+   with title/subtitle on separate non-overlapping lines and non-wrapping
+   status text, at both viewports.
+3. **The reproducibility evidence was corrected.** The original entry above
+   claimed reproducibility from two runs producing the *same file size*,
+   which is not proof of identical content. Corrected to compare
+   `sha256sum` of the raw capture across two runs (both produced
+   `a81201a6...d63261a`) — real cryptographic evidence for this
+   environment, explicitly not a claim that the script (or the optional
+   `sharp-cli` optimization step) reproduces byte-identical output across
+   different OS/Chromium/font environments. See `docs/QUALITY_LOG.md`
+   QL-015.
+4. **The capture script was hardened**: an OS-assigned ephemeral local-
+   server port with conclusive early-exit failure detection (instead of a
+   fixed port and a generic timeout), explicit pre-capture assertions of
+   the page title/heading/17-dashboard-cards, a font-load check that
+   confirms each expected family reached `status: "loaded"` in
+   `document.fonts` rather than trusting `document.fonts.ready` alone
+   (which also resolves after a *failed* font request — verified by
+   deliberately blocking the Google Fonts requests and confirming
+   `.ready` still resolved while this stricter check correctly failed),
+   and a guaranteed-clean server shutdown in both the success and failure
+   paths (verified by checking for a leftover process after each induced
+   failure above).
+5. **The screenshot was regenerated** after the product fix, and its
+   capture height recalculated from a fresh measurement rather than
+   assumed unchanged — the fix actually made dashboard rows shorter on
+   average, and an intermediate 1500px-tall capture was visually inspected
+   and rejected because it cut into module 1's own header. Final:
+   `docs/assets/course-overview.png`, 1440x1430, 280,149 bytes, verified
+   pixel-identical to the raw capture before committing.
+
+All of `npm test`, `npm run test:e2e` (including the new layout test), and
+two capture-script runs (compared by `sha256sum`, not file size) passed
+locally after these corrections. Issue #1's screenshot checkbox and the
+issue itself remain open, pending independent review of this correction.
+
+A final documentation-only correction was applied 2026-07-31 on the same
+branch: the optional pixel-verification command documented in
+`scripts/capture-readme-screenshot.mjs`'s header comment invoked
+`node -e 'require("sharp")...'` as its own process, but `sharp` (the
+library) is not a project dependency and nothing made it resolvable there
+— reproduced directly (confirmed no global/local `sharp` was reachable,
+then ran the exact documented commands and got the same failure). A second
+portability bug was found while fixing the first: the re-encode command
+pointed `sharp-cli`'s `-o` flag at a fixed path that the documentation
+never created, and `sharp-cli` silently writes a single file at that exact
+path instead of a directory when it doesn't already exist. Both fixed by
+using `mktemp -d` for both temporary directories and installing `sharp`
+into the isolated one with `NODE_PATH` pointed at it — no dependency added
+(`git diff --stat package.json package-lock.json` confirmed empty). The
+full corrected sequence was executed end-to-end in one shell session from
+a clean state and produced `pixel-identical: true`; the resulting
+`docs/assets/course-overview.png` hash is unchanged from what was already
+committed, so no product, screenshot, or scientific content changed — only
+`scripts/capture-readme-screenshot.mjs`'s documentation. See
+`docs/QUALITY_LOG.md` QL-017.
+
 ## Read these files first
 
 1. `README.md`
@@ -375,7 +506,10 @@ questions or images:
    `docs/QUALITY_LOG.md` QL-012). True touch-hardware testing and the
    screen-reader review remain separate, unperformed gates; do not check
    those in Issue #1 or `docs/ROADMAP.md`.
-4. Capture a clean screenshot of the course itself for the README.
+4. ~~Capture a clean screenshot of the course itself for the README.~~ Done
+   2026-07-31 (branch `claude/issue-1-readme-screenshot`, Issue #1) —
+   `docs/assets/course-overview.png`, reproducible via `npm run
+   capture:readme-screenshot`. See below.
 5. Record a documented scientific-review status rather than treating structural
    validation as content validation.
 

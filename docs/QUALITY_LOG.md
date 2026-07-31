@@ -610,3 +610,274 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   own, and say so in both the code comments and the user-facing log output —
   not only in a document a reader might not open.
 
+## QL-014 — An image-optimization tool defaulted to lossy output; caught before committing the asset
+
+- **Status:** Corrected before commit; no degraded asset shipped
+- **Finding:** While generating `docs/assets/course-overview.png` for the
+  README (Issue #1), the raw Playwright capture (389,650 bytes) was passed
+  through `sharp-cli` (fetched on demand via `npx`, not a project dependency)
+  for lossless size reduction. The first attempt used
+  `--compressionLevel 9 --effort 6` with no other flags and produced a much
+  smaller file (122,166 bytes), but decoding both images to raw pixel
+  buffers and comparing them byte-for-byte showed they were **not**
+  identical: 6.08% of bytes differed, by up to 25 out of 255. Checking each
+  image's metadata explained why: the "optimized" output had
+  `isPalette: true` while the original did not — `sharp-cli`'s PNG encoder
+  defaults to quantizing to a 256-color indexed palette, which is a lossy
+  transformation (color reduction/dithering), not a size-only re-encode.
+- **Impact:** None shipped — the discrepancy was caught by comparing raw
+  decoded buffers before the optimized file was copied into `docs/assets/`.
+  Had it been trusted on file-size improvement alone, the committed
+  screenshot would have had subtly altered colors (most visible as banding
+  in the hero section's gradient background or softened anti-aliased text
+  edges), silently, with no error or warning from the tool.
+- **Cause:** A general-purpose image CLI's default behavior favors smaller
+  files over pixel fidelity unless told otherwise; "optimize this PNG"
+  without further qualification does not obviously imply "and quantize its
+  colors," but that's what happened. Trusting a size reduction as evidence
+  of a safe, lossless operation, without checking pixel content, would have
+  been the same category of mistake this log already warns against for
+  test-authoring claims (QL-007, QL-008, QL-013) — here applied to a build
+  tool's output instead of a test's assertion.
+- **Correct action:** Before trusting any transformation's output — a test
+  result, a tool's claim, or in this case an "optimized" asset — verify the
+  specific property being relied on (here: pixel-for-pixel equivalence)
+  directly, not by proxy (here: file size alone).
+- **Correction:** Re-ran with `--palette=false` added; the result
+  (286,140 bytes, still a genuine ~27% reduction from the raw capture) was
+  re-verified as byte-for-byte identical to the raw capture when both were
+  decoded to raw pixel buffers, before being committed. The verification
+  method and command are documented directly in
+  `scripts/capture-readme-screenshot.mjs`'s header comment and
+  `docs/VALIDATION.md`, so a future re-generation repeats the same check
+  rather than trusting file size as a proxy for losslessness.
+- **Prevention:** When optimizing any binary asset for size, verify losslessness
+  by comparing decoded content (raw pixel buffers for images), not by
+  file-size reduction alone or by assuming a tool's default settings are
+  safe; record the exact flags required to keep a given tool lossless so the
+  step is reproducible without rediscovering the same default.
+- **Update:** The screenshot was regenerated again after the dashboard-card
+  layout fix below (QL-016) and a recalculated, shorter capture height, so
+  the exact byte counts above describe an intermediate version that was
+  never committed. The same `--palette=false` verification was re-run
+  against the final image and again confirmed pixel-identical before commit
+  — see QL-016 for the current figures (raw 383,090 bytes; optimized
+  280,149 bytes, ~27% reduction). The methodology finding above (verify
+  losslessness directly, don't trust file size or tool defaults) is
+  unaffected by which specific capture it was first demonstrated against.
+
+## QL-015 — Reproducibility evidence used file-size equality, not a real comparison
+
+- **Status:** Corrected before commit
+- **Finding:** An earlier record of this screenshot work claimed the capture
+  script was reproducible because running it twice produced files of the
+  *same size* (389,650 bytes both times). Identical file size is not
+  evidence of identical content — two different PNGs (different pixels,
+  different metadata, different internal chunk ordering) can coincidentally
+  share a byte count, and nothing about the check actually inspected the
+  bytes themselves.
+- **Impact:** None shipped incorrectly — the underlying capture genuinely
+  was reproducible in this environment, so the conclusion happened to be
+  right, but the evidence offered for it was not actually proof. Recording
+  an unverified inference as if it were a checked fact is the same category
+  of mistake this log tracks elsewhere (QL-002, QL-004), regardless of
+  whether the conclusion turns out correct.
+- **Cause:** File size is an easy, cheap signal to compare and was
+  available immediately from `ls -la`; reaching for it instead of an actual
+  content comparison substitutes a proxy for the real property being
+  claimed.
+- **Correct action:** When claiming two artifacts are identical, compare
+  their actual content (a cryptographic hash of the bytes, or a decoded
+  pixel-buffer comparison for images), not a derived property like size
+  that merely correlates with content in the common case.
+- **Correction:** Re-ran `npm run capture:readme-screenshot` twice and
+  compared `sha256sum` output for the resulting file both times; both runs
+  produced the identical hash
+  (`a81201a670cf64f7457111a5df011e00e802ea568a5e562f3f362c510d63261a`),
+  which is a real, checkable claim. `docs/VALIDATION.md` and this log now
+  state plainly that this is same-environment reproducibility evidence
+  only — not a claim that the script (or the separate, optional
+  `sharp-cli` optimization step) produces byte-identical output across
+  different OS/Chromium/font environments, which font hinting and
+  rendering differences could legitimately change.
+- **Prevention:** Prefer a cryptographic hash or decoded-content comparison
+  over file size whenever "these two things are the same" is the actual
+  claim being made; word any reproducibility claim to name the exact scope
+  it was verified under (here: this environment, this Chromium build, this
+  font availability) rather than an unqualified "reproducible."
+
+## QL-016 — Confirmed dashboard-card layout defect, exposed by the committed screenshot
+
+- **Status:** Corrected on branch `claude/issue-1-readme-screenshot`
+  (Issue #1); no scientific content changed
+- **Finding:** Independent review of the committed `docs/assets/
+  course-overview.png` identified a real, visible layout defect in every
+  one of the 17 progress-dashboard cards: the module title ran directly
+  into "Module N" on one line (e.g. "How to use this courseModule 1"
+  instead of two separate lines), and the "To do"/"Done" status text had
+  no protection against wrapping.
+- **Confirmed against `index.html` before changing anything** (per the
+  standing discipline in this log): the title/subtitle wrapper `<span>`
+  generated at the dashboard-card template (`grid.innerHTML = MODULES.map
+  (...)`) had no class and no CSS applied to it, so its two children
+  (`.dc-t`, `.dc-s`), both plain inline `<span>`s with no layout rules of
+  their own, rendered on the same line by default. Separately, `.dc-state`
+  had `margin-left:auto` but neither `flex:0 0 auto` nor
+  `white-space:nowrap`, so at a narrow width it could shrink and wrap its
+  two words onto separate lines.
+- **Impact:** Every dashboard card was affected — this was the single most
+  visible element in the very screenshot meant to showcase the product,
+  not a rare edge case. Anyone viewing the README screenshot (or the real
+  page) would see concatenated, harder-to-read card text.
+- **Cause:** The wrapper span was written without a class at the time the
+  dashboard-card template was authored; nothing in the structural
+  validator, the DOM behavior suite, or the axe-core/keyboard suites checks
+  visual line arrangement, so this had no automated coverage in any
+  existing test.
+- **Correct action:** Fix the product with the narrowest change that
+  resolves the defect without touching scientific content or unrelated
+  styling, verify it with real bounding-box measurements at both desktop
+  and narrow viewports (not visual inspection alone), and add a committed
+  regression test.
+- **Correction:** `index.html`:
+  - `.dash-cell .dc-body{flex:1 1 auto;min-width:0;display:flex;
+    flex-direction:column;gap:.15rem}` added, and the dashboard-card
+    template's wrapper span now carries `class="dc-body"`
+  - `.dash-cell .dc-t`/`.dc-s` gained explicit `display:block`
+  - `.dc-state` gained `flex:0 0 auto;white-space:nowrap`
+  - Verified by real bounding-box measurement at 1440px and 390px: the
+    subtitle now starts at or below the title's bottom edge (on its own
+    line) and the status text's box stays within a single computed
+    line-height, at both widths, for the first card and (via the new test
+    below) all 17
+- **New test:** `tests/e2e/dashboard-layout.spec.mjs` (6 runs across both
+  Playwright projects, part of `npm run test:e2e`) asserts, via bounding
+  boxes and computed line-height — not pixel snapshots — that all 17 cards
+  render, that every card's title/subtitle are on separate non-overlapping
+  lines, and that the status text neither overlaps the title nor wraps, at
+  both viewports. Mutation-verified: temporarily reverting both the CSS
+  and the template's `class="dc-body"` back to the pre-fix state made 4 of
+  the 6 test runs fail immediately, each naming the specific overlap/line
+  violation it caught; reverted before commit.
+- **Screenshot regenerated and height recalculated:** the fix actually
+  made dashboard rows *shorter* on average (the pre-fix concatenated text
+  had wrapped across more lines than the corrected two-line layout), so
+  the previous capture height (1500px, chosen before this fix) was
+  re-measured rather than assumed still correct. An intermediate capture
+  at 1500px was visually inspected and found to cut into module 1's own
+  header — a real, avoidable defect in the capture itself, caught before
+  committing it. The final height (1430px) was chosen from a fresh
+  measurement: the dashboard now ends at ~1415.8px and module 1 begins at
+  ~1441.4px, so 1430 shows the complete dashboard with a small margin and
+  stops cleanly before any module content.
+- **Prevention:** A screenshot is also a review surface — visually
+  inspecting a generated artifact before committing it can surface real
+  product defects the automated suites don't check (here: line
+  arrangement/wrapping, which none of the structural, DOM-behavior,
+  axe-core, or keyboard suites evaluate). When a generated artifact's
+  dimensions depend on a product layout that changes, re-measure rather
+  than assume the previous constant is still correct.
+
+## QL-017 — The documented pixel-verification command was not portable to a clean clone
+
+- **Status:** Corrected before commit; no product/screenshot change
+- **Finding:** Independent review found that the optional lossless-PNG
+  verification command documented in
+  `scripts/capture-readme-screenshot.mjs`'s header comment invoked
+  `node -e 'const sharp = require("sharp"); ...'` as its own separate
+  process, entirely apart from the preceding `npx --yes --package=sharp-cli`
+  step. `sharp` (the library) is not a project dependency — only
+  `sharp-cli` (a different package, fetched ephemerally by that `npx` call
+  purely for its own CLI use) was ever available, and nothing makes the
+  `sharp` library resolvable to a plain `node -e` invoked afterward.
+- **Reproduced directly, in this environment, before changing anything**:
+  confirmed no global or local `sharp` was reachable
+  (`node -e 'console.log(require.resolve("sharp"))'` from the repo root
+  failed with `Error: Cannot find module 'sharp'`), then ran the exact
+  documented command block verbatim and got the identical failure at the
+  verification step, immediately after the `sharp-cli` re-encode step had
+  already completed successfully — confirming the bug was specifically in
+  the second command, not the first.
+- **A second bug found while fixing the first**: the natural first fix
+  attempt — have `sharp-cli` itself write a `--format raw` file so `cmp`
+  could compare it directly, avoiding `sharp`/Node entirely — turned out
+  not to be supported by the installed `sharp-cli` version's `-o`
+  file-output path (`Unsupported output format ...` for every extension
+  tried, including a literal `.raw` file path). While testing an
+  alternative, a second, unrelated portability bug surfaced: the
+  documented re-encode command pointed `sharp-cli`'s `-o` flag at a fixed
+  path (`/tmp/png-opt`) that the surrounding documentation never created.
+  `sharp-cli` only treats `-o` as "a directory to write
+  `<input-basename>` into" when that directory *already exists on disk*;
+  pointing it at a path that does not yet exist makes it write a single
+  literal *file* at that exact path instead, with no error — reproduced by
+  removing `/tmp/png-opt` first and observing a 280,149-byte PNG land at
+  the literal path `/tmp/png-opt` (a file, not a directory) instead of
+  `/tmp/png-opt/course-overview.png`.
+- **Impact:** None shipped — both were caught by literally executing the
+  documented commands end-to-end before trusting them, not by inspection
+  alone. Had either shipped uncorrected: the first would make the
+  documented optimization workflow fail outright for anyone without a
+  coincidentally-available global `sharp`, including on a genuinely clean
+  clone; the second would silently produce a same-sized but wrongly-placed
+  file that a copy-pasted next step (reading
+  `"$OPT_TMP/course-overview.png"`) would fail to find, or — worse, on a
+  machine where `/tmp/png-opt` happened to already exist as a directory
+  from unrelated prior state — would appear to work while being entirely
+  dependent on that undocumented precondition.
+- **Cause:** (1) The verification command was written and tested in a
+  session that happened to have `sharp` available from unrelated prior
+  work in that same environment (an ad hoc scratch install used earlier
+  while developing this feature), so the missing-dependency failure was
+  never actually observed before being documented as a command anyone could
+  run. (2) The re-encode command's `-o /tmp/png-opt` was copied from an
+  interactive session where that directory had already been created by an
+  earlier, unrelated `mkdir`/prior run — the command "worked" there for a
+  reason the documented text itself did not create or mention.
+- **Correct action:** Execute a documented command sequence exactly as
+  written, from a genuinely clean state (no assumed pre-existing
+  directories, no assumed pre-installed packages), before publishing it as
+  something a reader can copy-paste — the same discipline this log already
+  applies to test claims and tool defaults (QL-007, QL-008, QL-013,
+  QL-014), extended here to documentation itself.
+- **Correction:** Rewrote the documented block in
+  `scripts/capture-readme-screenshot.mjs`:
+  - `export OPT_TMP=$(mktemp -d)` replaces the fixed `/tmp/png-opt`, so the
+    `sharp-cli` re-encode always writes into a directory guaranteed to
+    exist, regardless of the machine's prior `/tmp` state
+  - the verification step installs `sharp` into its own isolated temporary
+    directory (`SHARP_TMP=$(mktemp -d); npm install --no-save --prefix
+    "$SHARP_TMP" sharp`) and points `NODE_PATH` at
+    `"$SHARP_TMP/node_modules"`, so `require("sharp")` resolves without
+    ever adding `sharp` to this repository's `package.json` — confirmed by
+    checking `git diff --stat package.json package-lock.json` showed no
+    change after running the full sequence
+  - both temporary directories are removed at the end
+    (`rm -rf "$SHARP_TMP" "$OPT_TMP"`)
+  - the full, corrected sequence was then executed end-to-end, in one
+    shell session (so the `export`ed `OPT_TMP` was actually visible to the
+    child `node` process — a separate detail worth naming, since shell
+    state does not carry across independently-invoked shells), from a
+    clean state: the re-encode succeeded, the isolated install succeeded
+    (`added 11 packages`), the verification printed
+    `pixel-identical: true`, the committed asset was replaced, and both
+    temporary directories were confirmed gone afterward. The resulting
+    `docs/assets/course-overview.png` hash
+    (`c5f9bf8162e1376bce957b2d11f53f7cfa9a25fa5dcabeead6994135661523a7`)
+    is identical to the asset already committed — this correction changed
+    only the documentation/tooling, not the product, the screenshot, or
+    any scientific content
+- **Prevention:** A one-off "fetched via npx, not a dependency" tool and
+  the *library* underlying it are not automatically the same thing —
+  `npx --package=X` only makes `X`'s own CLI available, not an arbitrary
+  library of the same name or from the same publisher, for a separately
+  invoked process. When a documented command needs a Node library
+  specifically (not a CLI), and that library is intentionally not a
+  project dependency, resolve it through an isolated, explicitly-scoped
+  install (`npm install --no-save --prefix <tmpdir>` plus `NODE_PATH`),
+  not an unqualified `require()` that depends on whatever happens to be
+  globally or ambiently available in the environment where it was
+  authored. Separately: any command that depends on a directory already
+  existing should create that directory itself (`mktemp -d`), not assume
+  the reader's environment happens to have it.
+

@@ -12,7 +12,8 @@
     "test:e2e": "playwright test",
     "test:e2e:install": "playwright install --with-deps chromium",
     "test:deployed": "playwright test --config=playwright.deployed.config.mjs",
-    "verify:deployed-revision": "node scripts/verify-deployed-revision.mjs"
+    "verify:deployed-revision": "node scripts/verify-deployed-revision.mjs",
+    "capture:readme-screenshot": "node scripts/capture-readme-screenshot.mjs"
   },
   "engines": {
     "node": ">=20"

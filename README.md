@@ -13,6 +13,10 @@ local progress tracking, performance analytics, and automated validation.
 
 **[Open the live course](https://jaustinanderson.github.io/cytogenetics-cg-course/)**
 
+[![Screenshot of the Cytogenetics CG(ASCP) course homepage in a fresh, no-progress state: the header with progress bar and module sidebar, the hero section, the exam content-weighting chart, and the full 17-module progress dashboard grid.](./docs/assets/course-overview.png)](./docs/assets/course-overview.png)
+
+<sub>Click the screenshot to view it full-size. Regenerate it with `npm run capture:readme-screenshot` (see [Validation](./docs/VALIDATION.md)).</sub>
+
 ## Highlights
 
 - 17 instructional modules
@@ -252,7 +256,8 @@ input, it does not exercise real touch hardware or a mobile OS/browser.
 ├── playwright.config.mjs         # Real-browser (Chromium) smoke-test config
 ├── playwright.deployed.config.mjs # Deployed HTTPS Pages smoke-test config
 ├── scripts/
-│   └── verify-deployed-revision.mjs # Deployment-record + live-hash check before testing
+│   ├── verify-deployed-revision.mjs # Deployment-record + live-hash check before testing
+│   └── capture-readme-screenshot.mjs # Regenerates docs/assets/course-overview.png
 ├── tests/
 │   ├── validate-course.mjs       # Structural/content contracts
 │   ├── dom-behavior.mjs          # Dependency-free behavior checks
@@ -268,6 +273,8 @@ input, it does not exercise real touch hardware or a mobile OS/browser.
 │   ├── QUALITY_LOG.md
 │   ├── LICENSING.md
 │   ├── CLAUDE_HANDOFF.md
+│   ├── assets/
+│   │   └── course-overview.png   # README screenshot (regenerate via the script above)
 │   └── archive/
 │       └── claude-roadmap-v1.md
 └── .github/

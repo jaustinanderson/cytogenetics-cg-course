@@ -102,11 +102,11 @@ output. CI runs `npm test` on pushes to `main` and pull requests.
 
 ### Real-browser smoke suite (Playwright)
 
-`tests/e2e/` runs 31 checks per project against `index.html` in a real
+`tests/e2e/` runs 34 checks per project against `index.html` in a real
 Chromium instance, served locally over HTTP (`python3 -m http.server`, the
 same approach the README documents for manual local development), across a
 1280×900 desktop viewport and a 390×844 narrow/mobile viewport
-(`isMobile`/`hasTouch` enabled). Of 62 total scheduled test runs, 58
+(`isMobile`/`hasTouch` enabled). Of 68 total scheduled test runs, 64
 currently pass and 4 are intentionally skipped where a check only applies to
 one viewport (the mobile-only sidebar/hamburger tests skip on desktop, where
 the hamburger control is CSS-hidden; the desktop-only sidebar-link keyboard
@@ -135,6 +135,10 @@ opened). Coverage:
   toggling `body.printmode`
 - page-origin console errors/warnings staying empty through load and through
   a representative navigation/quiz/exercise interaction pass
+- dashboard-card layout (`dashboard-layout.spec.mjs`): all 17 cards render,
+  title/"Module N" on separate non-overlapping lines, status text does not
+  overlap or wrap, at both viewports — added after a confirmed defect; see
+  "README screenshot" below and `docs/QUALITY_LOG.md`
 
 Playwright (`@playwright/test`) is a devDependency used only for this suite;
 it adds no production runtime dependency and `index.html` requires no build
@@ -452,6 +456,164 @@ npm exec --yes --package=html-validate@10.4.0 -- html-validate index.html
 ```
 
 That tool is intentionally not a runtime or committed package dependency.
+
+## README screenshot — added 2026-07-31, corrected 2026-07-31
+
+`docs/assets/course-overview.png` is a course-only screenshot embedded near
+the top of `README.md`. It is regenerated with:
+
+```bash
+npm run capture:readme-screenshot
+```
+
+### A confirmed product defect, found from the screenshot itself
+
+Independent review of the first version of this screenshot found a real
+layout defect in the dashboard cards it exposed: every card's title ran
+directly into "Module N" on one line (e.g. "How to use this
+courseModule 1"), and the "To do"/"Done" status text had no protection
+against wrapping. Confirmed against `index.html` before changing anything:
+the title/subtitle wrapper `<span>` had no class and no layout rules, so the
+two plain inline spans (`.dc-t`, `.dc-s`) rendered on the same line instead
+of stacking, and `.dc-state` lacked `flex:0 0 auto`/`white-space:nowrap`.
+
+Fixed with a narrowly scoped CSS/markup change: the wrapper span now has a
+`dc-body` class (`flex:1 1 auto;min-width:0;display:flex;flex-direction:
+column`), `.dc-t`/`.dc-s` are explicitly `display:block`, and `.dc-state`
+gained `flex:0 0 auto;white-space:nowrap`. No scientific content changed.
+Verified at both the desktop and narrow/mobile (390px) viewports, by real
+bounding-box measurement (not visual inspection alone) and by a new
+committed test — see below and `docs/QUALITY_LOG.md`.
+
+### Dashboard-layout regression test
+
+`tests/e2e/dashboard-layout.spec.mjs` (part of `npm run test:e2e`, both
+projects) checks, via bounding-box and computed-line-height assertions —
+**not** pixel snapshots:
+
+- all 17 dashboard cards render
+- for every card, the subtitle ("Module N") starts at or below the title's
+  bottom edge (i.e. on its own line, not overlapping it)
+- for every card, the status text starts at or after the title's right
+  edge (i.e. does not overlap it horizontally)
+- the status text's rendered height stays within one computed line-height
+  (i.e. it did not wrap)
+- the same checks hold at the narrow/mobile viewport, plus a check that no
+  card forces the grid wider than the viewport
+
+Mutation-tested: temporarily reverting both the CSS and markup to the
+pre-fix state made 4 of the 6 test runs fail immediately, with messages
+naming the exact overlap/line-order violation; reverified passing and
+reverted before commit.
+
+### Capture script
+
+`scripts/capture-readme-screenshot.mjs` produces the screenshot
+deterministically and defensively:
+
+- an OS-assigned ephemeral port (`python3 -m http.server 0`) rather than a
+  fixed port that could collide with another process; the server's own
+  stdout announces the assigned port, and an early process exit (bind
+  failure, missing interpreter, etc.) is treated as a conclusive startup
+  failure and reported with the captured stderr, not silently retried into
+  a generic timeout
+- fresh `localStorage` (both progress keys cleared, so the course always
+  renders its pristine "0 of 17 modules complete" state)
+- a 1440×1430 viewport: 1440px keeps the layout solidly in the desktop CSS
+  path (the product's only breakpoints are 980px and 560px); 1430px is not
+  guessed, it is measured — the topbar, hero, weighting chart, and the
+  full 17-card dashboard grid end at ~1415.8px at this width (re-measured
+  after the layout fix above; the pre-fix concatenated/wrapped text had
+  actually made rows *taller*, at ~1477.4px, so the fix left more headroom,
+  not less), and module 1's own section begins only ~25.6px after that
+  (~1441.4px) — 1430 includes the full dashboard with a small margin and
+  stops cleanly before any module content, avoiding both an overly short
+  crop and the ~100,000px-tall document a `fullPage` capture would produce.
+  (An intermediate 1500px capture was visually inspected and rejected
+  during this correction: it cut into module 1's header mid-way, which
+  reads as an accidental cut-off rather than an intentional edge.)
+- `reducedMotion: "reduce"`, which the page's own
+  `prefers-reduced-motion` CSS rule responds to, disabling transitions
+  with no extra injected styling
+- after `networkidle` on reload, explicit assertions — **before**
+  capturing — that the page title, the hero heading, and the dashboard
+  card count (exactly 17) all match expected values, so a broken boot or a
+  future regression fails the script loudly instead of silently capturing
+  broken content
+- a font-load check that goes beyond `document.fonts.ready`:
+  `document.fonts.ready` resolves once font loading has *settled*,
+  including a **failed** request, so on its own it cannot distinguish "the
+  IBM Plex webfont loaded" from "the request failed and the browser gave
+  up." The script additionally inspects each `FontFace` in `document.fonts`
+  and requires at least one entry per expected family
+  (`status: "loaded"`), failing clearly if the family was never registered
+  at all or never reached that status — verified by deliberately blocking
+  the Google Fonts requests and confirming `document.fonts.ready` still
+  resolved (with `document.fonts` empty) while this check correctly failed
+- the local server is terminated and its exit awaited in both the success
+  and failure paths (`finally`), confirmed by checking for a leftover
+  process after both a normal run and each induced-failure run above
+
+This is a **generation script, not a test**: it is not part of `npm test` or
+`npm run test:e2e`, and deliberately does not add a pixel-comparison
+assertion. A screenshot that "looks the same" pixel-for-pixel across font
+hinting, Chromium versions, or OS font substitution is not a claim this
+repository can make, and a brittle pixel-diff test would fail for reasons
+unrelated to any real regression. The script produces an artifact for a
+human to look at and commit; nothing automatically re-runs it or asserts
+against its output. (The dashboard-layout *content* is separately covered
+by the real committed test above — that is a layout-correctness claim, not
+a visual-identity claim.)
+
+### Reproducibility evidence — corrected
+
+An earlier version of this record claimed reproducibility because two runs
+produced the *same file size*. That is not evidence of identical output —
+two different images can happen to share a byte count. This was corrected:
+running `npm run capture:readme-screenshot` twice in this same environment
+and comparing `sha256sum` of the resulting file both times produced the
+identical hash
+(`a81201a670cf64f7457111a5df011e00e802ea568a5e562f3f362c510d63261a` for the
+raw, pre-optimization capture) — a real cryptographic proof for *this*
+environment, not a file-size inference. This is **not** a claim that
+`npm run capture:readme-screenshot` alone reproduces the *optimized*
+(`sharp-cli`-processed) PNG byte-for-byte across different OS/Chromium/font
+environments — font hinting, subpixel rendering, and Chromium build
+differences can legitimately change rendered output on another machine, and
+the optional optimization step is a separate, manual, explicitly-verified
+action (below), not part of what the capture script itself guarantees.
+
+The PNG is optionally, losslessly re-encoded after capture with `sharp-cli`
+(fetched on demand via `npx`, not a committed dependency, the same pattern
+as `html-validate` above) at a higher compression effort than Playwright's
+default encoder uses. This step is **not** trusted by file size or by
+"looks the same" — it is verified by decoding both the raw capture and the
+re-encoded file to raw pixel buffers and comparing them byte-for-byte
+(`Buffer.compare(...) === 0`) before the committed asset is replaced.
+`sharp-cli`'s default PNG output quantizes to a 256-color palette (lossy; a
+first attempt measured a 6% pixel byte difference with values up to 25/255
+off), so `--palette=false` is required.
+
+The pixel-buffer comparison needs the `sharp` *library*, which is a
+different thing from the `sharp-cli` binary used for the re-encode itself —
+`sharp` is not a project dependency, so a plain `node -e
+'...require("sharp")...'` fails on a clean clone with "Cannot find module
+'sharp'" (this was an actual bug in an earlier version of this
+documentation, reproduced and corrected — see `docs/QUALITY_LOG.md` QL-017).
+The corrected, portable form installs `sharp` into an isolated temporary
+directory (`npm install --no-save --prefix "$SHARP_TMP" sharp`) and points
+`NODE_PATH` at it, so the comparison works on any clean clone without ever
+adding `sharp` to `package.json`. Both temporary directories involved (the
+`sharp-cli` output directory and the `sharp` install directory) are created
+with `mktemp -d`, not a fixed path — pointing `sharp-cli`'s `-o` flag at a
+path that does not already exist as a directory silently makes it write a
+single file at that exact path instead of a directory, a second real
+portability bug caught while fixing the first one (also QL-017). The exact,
+verified-working command sequence is documented directly in
+`scripts/capture-readme-screenshot.mjs`'s header comment, so regenerating
+the optimization step repeats the same check rather than trusting it by
+inference. See `docs/QUALITY_LOG.md` for the full account of all three
+corrections to this record.
 
 ## Gates still open
 
