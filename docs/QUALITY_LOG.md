@@ -610,3 +610,50 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   own, and say so in both the code comments and the user-facing log output —
   not only in a document a reader might not open.
 
+## QL-014 — An image-optimization tool defaulted to lossy output; caught before committing the asset
+
+- **Status:** Corrected before commit; no degraded asset shipped
+- **Finding:** While generating `docs/assets/course-overview.png` for the
+  README (Issue #1), the raw Playwright capture (389,650 bytes) was passed
+  through `sharp-cli` (fetched on demand via `npx`, not a project dependency)
+  for lossless size reduction. The first attempt used
+  `--compressionLevel 9 --effort 6` with no other flags and produced a much
+  smaller file (122,166 bytes), but decoding both images to raw pixel
+  buffers and comparing them byte-for-byte showed they were **not**
+  identical: 6.08% of bytes differed, by up to 25 out of 255. Checking each
+  image's metadata explained why: the "optimized" output had
+  `isPalette: true` while the original did not — `sharp-cli`'s PNG encoder
+  defaults to quantizing to a 256-color indexed palette, which is a lossy
+  transformation (color reduction/dithering), not a size-only re-encode.
+- **Impact:** None shipped — the discrepancy was caught by comparing raw
+  decoded buffers before the optimized file was copied into `docs/assets/`.
+  Had it been trusted on file-size improvement alone, the committed
+  screenshot would have had subtly altered colors (most visible as banding
+  in the hero section's gradient background or softened anti-aliased text
+  edges), silently, with no error or warning from the tool.
+- **Cause:** A general-purpose image CLI's default behavior favors smaller
+  files over pixel fidelity unless told otherwise; "optimize this PNG"
+  without further qualification does not obviously imply "and quantize its
+  colors," but that's what happened. Trusting a size reduction as evidence
+  of a safe, lossless operation, without checking pixel content, would have
+  been the same category of mistake this log already warns against for
+  test-authoring claims (QL-007, QL-008, QL-013) — here applied to a build
+  tool's output instead of a test's assertion.
+- **Correct action:** Before trusting any transformation's output — a test
+  result, a tool's claim, or in this case an "optimized" asset — verify the
+  specific property being relied on (here: pixel-for-pixel equivalence)
+  directly, not by proxy (here: file size alone).
+- **Correction:** Re-ran with `--palette=false` added; the result
+  (286,140 bytes, still a genuine ~27% reduction from the raw capture) was
+  re-verified as byte-for-byte identical to the raw capture when both were
+  decoded to raw pixel buffers, before being committed. The verification
+  method and command are documented directly in
+  `scripts/capture-readme-screenshot.mjs`'s header comment and
+  `docs/VALIDATION.md`, so a future re-generation repeats the same check
+  rather than trusting file size as a proxy for losslessness.
+- **Prevention:** When optimizing any binary asset for size, verify losslessness
+  by comparing decoded content (raw pixel buffers for images), not by
+  file-size reduction alone or by assuming a tool's default settings are
+  safe; record the exact flags required to keep a given tool lossless so the
+  step is reproducible without rediscovering the same default.
+

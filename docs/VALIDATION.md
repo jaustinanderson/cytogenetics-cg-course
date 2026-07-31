@@ -453,6 +453,49 @@ npm exec --yes --package=html-validate@10.4.0 -- html-validate index.html
 
 That tool is intentionally not a runtime or committed package dependency.
 
+## README screenshot — added 2026-07-31
+
+`docs/assets/course-overview.png` is a course-only screenshot embedded near
+the top of `README.md`. It is regenerated with:
+
+```bash
+npm run capture:readme-screenshot
+```
+
+`scripts/capture-readme-screenshot.mjs` produces it deterministically: a
+fresh `localStorage` (both progress keys cleared, so the course always
+renders its pristine "0 of 17 modules complete" state), a 1440×1500
+viewport (1440px keeps the layout solidly in the desktop CSS path — the
+product's only breakpoints are 980px and 560px; 1500px is not guessed, it is
+the measured height at which the topbar, hero, weighting chart, and the
+full 17-card progress dashboard grid all end, so the capture includes all of
+it without cutting a card mid-row and without the full ~100,000px document
+height a `fullPage` capture would produce), `reducedMotion: "reduce"` (which
+the page's own `prefers-reduced-motion` CSS rule responds to, disabling
+transitions with no extra injected styling), a wait for
+`document.fonts.ready` plus Playwright's `networkidle` after a reload (the
+IBM Plex Sans/Mono webfonts load from Google Fonts and need a moment to
+swap in), and an explicit `scrollTo(0, 0)` so it is always captured from the
+top of the page.
+
+This is a **generation script, not a test**: it is not part of `npm test` or
+`npm run test:e2e`, and deliberately does not add a pixel-comparison
+assertion. A screenshot that "looks the same" pixel-for-pixel across font
+hinting, Chromium versions, or OS font substitution is not a claim this
+repository can make reproducibly, and a brittle pixel-diff test would fail
+for reasons unrelated to any real regression. The script produces an
+artifact for a human to look at and commit; nothing automatically re-runs it
+or asserts against its output.
+
+The PNG is losslessly re-encoded after capture with `sharp-cli` (fetched
+on demand via `npx`, not a committed dependency, the same pattern as
+`html-validate` above) at a higher compression effort than Playwright's
+default encoder uses, verified byte-for-byte pixel-identical against the raw
+capture before being committed — `sharp-cli`'s default PNG output quantizes
+to a 256-color palette (lossy; a first attempt measured a 6% pixel byte
+difference with values up to 25/255 off), so `--palette=false` is required.
+See `docs/QUALITY_LOG.md` for the full account.
+
 ## Gates still open
 
 ### Browser behavior

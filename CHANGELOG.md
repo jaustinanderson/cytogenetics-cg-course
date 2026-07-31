@@ -6,6 +6,16 @@ All notable repository changes are recorded here.
 
 ### Added
 
+- `docs/assets/course-overview.png`: a course-only README screenshot (1440x1500,
+  ~280KB), embedded near the top of `README.md` with alt text and a link to
+  the full-size image. Reproducible via `npm run capture:readme-screenshot`
+  (`scripts/capture-readme-screenshot.mjs`), which captures a fresh
+  ("0 of 17 modules complete") localStorage state at the top of the page with
+  transitions disabled (`reducedMotion: "reduce"`) and fonts settled
+  (`document.fonts.ready`), at a viewport sized to include the header, hero,
+  weighting chart, and the full 17-module progress dashboard grid without an
+  excessively tall full-page capture. This is a generation script, not a
+  test — no pixel-comparison assertion was added
 - Automated WCAG scanning via `@axe-core/playwright`
   (`tests/e2e/accessibility.spec.mjs`), run against the real course at
   desktop and narrow/mobile viewports in five states (fresh load, mobile

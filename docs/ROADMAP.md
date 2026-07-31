@@ -90,7 +90,10 @@ the course.
   context. This is touch *emulation*, not physical touch hardware — true
   touch-gesture testing on real hardware stays an explicit, separate open
   item (see `docs/VALIDATION.md` "Gates still open")
-- [ ] Capture a clean course-only screenshot for the README
+- [x] Capture a clean course-only screenshot for the README —
+  `docs/assets/course-overview.png` (1440×1500, reproducible via
+  `npm run capture:readme-screenshot`, `scripts/capture-readme-screenshot.mjs`),
+  added near the top of `README.md`
 - [ ] Decide whether to localize remote fonts and the two approved images
 - [ ] Record a question-by-question scientific review status before removing
   the beta warning
