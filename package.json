@@ -9,7 +9,9 @@
     "validate": "node tests/validate-course.mjs",
     "test:behavior": "node tests/dom-behavior.mjs",
     "test:e2e": "playwright test",
-    "test:e2e:install": "playwright install --with-deps chromium"
+    "test:e2e:install": "playwright install --with-deps chromium",
+    "test:deployed": "playwright test --config=playwright.deployed.config.mjs",
+    "verify:deployed-revision": "node scripts/verify-deployed-revision.mjs"
   },
   "engines": {
     "node": ">=20"

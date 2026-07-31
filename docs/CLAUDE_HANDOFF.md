@@ -223,6 +223,68 @@ Automated WCAG scanning and representative keyboard testing were added on
   one. Deployed-Pages-URL testing, true touch hardware, and the third-party
   image-delivery confirmation also remain open.
 
+A dedicated deployed-site Playwright smoke suite was added on 2026-07-31
+(branch `claude/issue-1-deployed-pages-smoke`, Issue #1):
+
+- `tests/e2e-deployed/` (`npm run test:deployed`,
+  `playwright.deployed.config.mjs`, its own small `fixtures.mjs`) runs 22
+  scheduled test runs against the real deployed HTTPS URL
+  (`https://jaustinanderson.github.io/cytogenetics-cg-course/`, configurable
+  via `DEPLOYED_BASE_URL`) at the same 1280x900 and 390x844 viewports as
+  `tests/e2e/`. It is a fully separate suite/config/directory with no
+  `webServer`, never invoked by `npm test` or `npm run test:e2e`, so ordinary
+  local and PR validation still requires no outbound network access.
+- Covers: a successful HTTPS response with the expected title/heading; the
+  17 quiz mounts / 17 modules / 6 exercise sets; page-origin console
+  cleanliness on load and after interaction; absence of horizontal overflow
+  at the narrow viewport; the mobile menu opening via Playwright's
+  touch-emulated `.tap()` with `aria-expanded` checked against the sidebar's
+  actual bounding-box position (not just its class name) in both states;
+  tapping a module link reaching that module and closing the menu; tapping
+  the backdrop closing the menu; a touch-emulated quiz interaction; and
+  module-completion persistence across a real reload in a dedicated
+  `browser.newContext()`. No smaller viewport was added — `index.html`'s
+  only breakpoints are 980px and 560px, both already crossed at 390px.
+- `scripts/verify-deployed-revision.mjs` (`npm run
+  verify:deployed-revision`) polls the GitHub deployments API for the
+  `github-pages` environment (which records the exact commit SHA each
+  deployment was built from, plus its status) and waits, bounded, until the
+  live deployment matches the intended commit — guarding against testing a
+  stale deployment without sleeping for an arbitrary fixed period. Verified
+  against the real repository both ways: it correctly matched `main`'s then-
+  HEAD `033f8c5` with `state: success`, and correctly timed out and exited
+  non-zero for a SHA that was never deployed.
+- `.github/workflows/deployed-smoke.yml` is a separate GitHub Actions
+  workflow (`workflow_dispatch` for manual runs, `workflow_run` after
+  GitHub's own `pages-build-deployment` completes on `main` for
+  post-deployment verification) that runs the revision check then the
+  deployed suite. `ci.yml` is unchanged.
+- Two test-authoring mistakes were self-caught on the first real run against
+  the live page, before either was committed: a `page.goto("/")` relative-URL
+  bug that dropped the repository path against a `baseURL` with an existing
+  path (every test 404'd; a raw `curl` and a minimal standalone Playwright
+  script both confirmed the real deployment itself was fine), and a
+  backwards bounding-box comparison in the mobile-nav test. See
+  `docs/QUALITY_LOG.md` QL-012 for the full diagnosis, a mutation-test
+  demonstration for the horizontal-overflow assertion (injecting an
+  artificially wide element into the live page's loaded DOM in an ephemeral
+  tab), and the exact remote-image result.
+- Remote-image result from this environment's network: both approved images
+  completed loading with nonzero natural dimensions — Wikimedia 1280x1003,
+  CDC PHIL 700x563. This is one observation from one network, not a
+  guarantee for GitHub Actions runners or any other network; see
+  `docs/VALIDATION.md`.
+- No product defect was found in `index.html`; nothing there was changed.
+- All 22 deployed-suite runs (16 applicable, 6 intentionally skipped
+  per-viewport/per-project), all 62 local Playwright runs, and all 48
+  dependency-free checks (`npm test`) passed locally. See the completion
+  report on the branch's pull request for exact commands and results.
+- This closes the "run deployed narrow-screen/touch/mobile-navigation tests"
+  item in `docs/ROADMAP.md` and Issue #1 for its automated/emulated scope.
+  Screen-reader review and physical touch-hardware testing remain separate,
+  unperformed, unchecked gates — this work does not and cannot establish
+  either.
+
 ## Read these files first
 
 1. `README.md`
@@ -268,7 +330,13 @@ questions or images:
    `docs/QUALITY_LOG.md` QL-010/QL-011). A genuine screen-reader review has
    **not** been performed and stays open; do not check this item in Issue #1
    or `docs/ROADMAP.md` until one is.
-3. Run narrow-screen, touch, and mobile-navigation tests against the live page.
+3. ~~Run narrow-screen, touch, and mobile-navigation tests against the live
+   page.~~ Done 2026-07-31 via `tests/e2e-deployed/` (`npm run
+   test:deployed`, branch `claude/issue-1-deployed-pages-smoke`, Issue #1)
+   for its automated/touch-emulated scope (see above,
+   `docs/QUALITY_LOG.md` QL-012). True touch-hardware testing and the
+   screen-reader review remain separate, unperformed gates; do not check
+   those in Issue #1 or `docs/ROADMAP.md`.
 4. Capture a clean screenshot of the course itself for the README.
 5. Record a documented scientific-review status rather than treating structural
    validation as content validation.

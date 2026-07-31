@@ -5,10 +5,14 @@
 The v1.1.1 repository baseline has passed local structural, content-contract,
 DOM-level behavior, and real-browser (Playwright/Chromium) smoke validation,
 including automated WCAG scanning (axe-core) and representative
-keyboard-only interaction testing. This is a reproducible software result,
-not a claim that every scientific statement is correct or that a full
-accessibility review — which still requires a representative screen-reader
-pass — or a rights review has passed.
+keyboard-only interaction testing, plus a dedicated smoke suite run against
+the actual deployed HTTPS GitHub Pages URL (narrow-viewport overflow,
+touch-emulated mobile navigation, a touch-emulated quiz interaction, and
+reload persistence). This is a reproducible software result, not a claim that
+every scientific statement is correct, that touch emulation is equivalent to
+physical touch hardware, or that a full accessibility review — which still
+requires a representative screen-reader pass — or a rights review has
+passed.
 
 ## Run all committed tests
 
@@ -35,6 +39,18 @@ npm ci
 npm run test:e2e:install   # one-time Chromium download (devDependency only)
 npm run test:e2e
 ```
+
+The deployed-site suite is separate again, for a different reason: it targets
+the real HTTPS GitHub Pages URL over the open internet rather than a local
+static server, so it is never run as part of `npm test` or `npm run test:e2e`
+and requires outbound network access:
+
+```bash
+npm run test:deployed                          # defaults to the live course URL
+DEPLOYED_BASE_URL="https://…/" npm run test:deployed   # or target another URL
+```
+
+See "Deployed-site smoke suite" below for scope and limits.
 
 ### Structural and content-contract validator
 
@@ -220,13 +236,127 @@ implement or test Escape-to-close, focus trapping, or inert background
 content for the mobile sidebar, because the product does not implement those
 either — see "Gates still open" below.
 
-## Deployed smoke test — 2026-07-30
+### Deployed-site smoke suite (Playwright, real HTTPS Pages) — added 2026-07-31
+
+`tests/e2e-deployed/` is a dedicated, repeatable Playwright suite that runs
+against the real deployed GitHub Pages URL over the open internet, not a
+local static server:
+
+```bash
+npm run test:deployed
+```
+
+The target URL is configurable via `DEPLOYED_BASE_URL`; the documented
+default is:
+
+<https://jaustinanderson.github.io/cytogenetics-cg-course/>
+
+This suite is entirely separate from `tests/e2e/`: it lives in its own test
+directory with its own Playwright config (`playwright.deployed.config.mjs`,
+no `webServer` block) and its own small fixtures file (a deliberate,
+independent copy of `tests/e2e/fixtures.mjs`'s console-collecting fixture, not
+a shared import), specifically so it can never be pulled into `npm test` or
+`npm run test:e2e` and never makes an ordinary local or PR run depend on
+outbound internet access. `.github/workflows/deployed-smoke.yml` is a
+separate GitHub Actions workflow for the same reason; `ci.yml` is unchanged.
+
+At the same 1280x900 desktop and 390x844 narrow/mobile (`isMobile`/`hasTouch`)
+viewports as the local suite, 22 scheduled test runs (16 applicable, 6
+intentionally skipped per-viewport/per-project, matching the local suite's
+own skip convention) verify against the live page:
+
+- a successful (`response.ok()`), HTTPS `page.goto()` response, the exact
+  document title, and the exact hero heading text
+- 17 `.mark-complete` module-completion controls, 17 `.quiz-mount` elements,
+  6 `.exer` exercise sets, and the public API's reported module/question
+  counts
+- no page-origin console error or warning, both on load and after a
+  representative navigation/quiz/exercise interaction pass
+- no horizontal page overflow at the narrow viewport
+  (`document.documentElement.scrollWidth <= clientWidth`, narrow project only)
+- the mobile hamburger opens via a touch-emulated `.tap()`, with
+  `aria-expanded` checked against the sidebar's actual on-canvas/off-canvas
+  bounding-box position (not just its CSS class name) in both the closed and
+  open state
+- tapping a module link scrolls to that module (`window.location.hash`
+  updates, the target section's bounding rect reaches the top of the
+  viewport), and closes the mobile nav
+- tapping the backdrop closes the mobile nav
+- a representative quiz answer, driven by `.tap()`, scores and locks the item
+- module-completion persistence across a real `page.reload()`, verified in a
+  dedicated `browser.newContext()` (an isolated storage partition asserted to
+  start at "0 of 17 modules complete" before anything is marked, the same
+  discipline the QL-008 addendum established for the local suite's
+  import/export test)
+- the two approved remote images' actual decoded state: each is scrolled into
+  view (both use `loading="lazy"`), then checked for `img.complete` **and**
+  nonzero `naturalWidth`/`naturalHeight` — `complete` alone is not sufficient,
+  because it becomes `true` once loading finishes whether it succeeded or
+  failed, so it does not by itself prove delivery
+
+No smaller viewport was added: the product's only two responsive breakpoints
+are `max-width:980px` and `max-width:560px` (`index.html`'s `@media` rules),
+and 390px already crosses both, so a third, smaller viewport would not
+exercise any additional CSS path.
+
+Authoring this suite against the real live page caught two mistakes in the
+suite itself before either was committed — a relative-URL bug
+(`page.goto("/")` against a `baseURL` with a path segment drops that path,
+copied unexamined from the local suite's convention) and a backwards
+bounding-box comparison — see `docs/QUALITY_LOG.md` QL-012 for the full
+diagnosis. QL-012 also records a mutation-test demonstration (injecting an
+artificially wide element into the live page's loaded DOM, in an ephemeral
+browser tab, to confirm the horizontal-overflow assertion actually fails when
+overflow is genuinely present) and the exact remote-image result observed
+from this environment: both images completed loading with nonzero natural
+dimensions (Wikimedia 1280x1003, CDC PHIL 700x563).
+
+**Explicit scope limits, none of which this suite establishes:**
+
+- Playwright's `hasTouch` context option and `.tap()` emulate touch input
+  (dispatching `touch*` events plus a synthesized `click`, as real touch
+  browsers do) inside a desktop Chromium engine. They are not physical touch
+  hardware, a mobile OS, or a mobile browser build, and this suite does not
+  claim otherwise.
+- A result from this development environment, from a GitHub Actions runner,
+  or from any other single network is a result from that network. It is not
+  a claim about every visitor's network path to GitHub Pages, particularly
+  for the two third-party image hosts.
+- Testing the deployed `main` URL exercises only that URL. It does not create
+  or exercise a per-pull-request preview environment; no such environment
+  exists for this repository.
+- None of the above substitutes for the still-required representative
+  screen-reader review (see "Gates still open" below), which remains
+  unperformed and is tracked separately in Issue #1.
+
+### Protecting against a stale deployment
+
+GitHub Pages deployment is asynchronous relative to a push to `main`; sleeping
+for a fixed period and assuming it finished cannot distinguish "still
+deploying" from "deployed" from "deploy failed." Instead,
+`scripts/verify-deployed-revision.mjs` (`npm run verify:deployed-revision`)
+polls GitHub's own deployments API
+(`GET /repos/{repo}/deployments?environment=github-pages`), which records the
+exact commit SHA each Pages deployment was built from, plus that
+deployment's status, and waits — bounded, not indefinitely — until the most
+recent one both matches the target commit and reports `state: success`. This
+was confirmed against the real repository: querying the live API for the
+commit that was `main`'s HEAD at authoring time (`033f8c5c8bfae2a0bdb394d4030c2f405f262068`)
+returned exactly that SHA with `state: success`, and deliberately querying for
+a SHA that has never been deployed (`000...000`) correctly timed out and
+exited non-zero rather than silently passing — a real regression check, not
+an assumption. `.github/workflows/deployed-smoke.yml` runs this check before
+the deployed Playwright suite; it requires network access to
+`api.github.com` (a `GITHUB_TOKEN` raises the unauthenticated rate limit but
+is not required for this public repository).
+
+## Deployed smoke test — 2026-07-30 (superseded by the suite above)
 
 This was a one-off manual check of the live deployment, not a repeatable
-instrument. The committed Playwright suite above now provides repeatable
-equivalents for its navigation, quiz, module-completion, and console-cleanliness
-observations, run locally and in CI against the same `index.html`; it does not
-itself verify the deployed GitHub Pages URL.
+instrument. `tests/e2e-deployed/` above now provides a repeatable, committed
+instrument for its navigation, quiz, module-completion, and
+console-cleanliness observations, run against the real deployed URL, not only
+`index.html` served locally.
 
 Verified URL:
 <https://jaustinanderson.github.io/cytogenetics-cg-course/>
@@ -243,10 +373,14 @@ Observed:
 - Module 1 completion survived a full page reload
 - no page-origin console warning or error was recorded
 
-The cloud test browser did not complete either third-party image request, so
-successful delivery of the Wikimedia and CDC images was not established by this
-test. The page itself emitted no image error, and source links/fallback content
-remain present. Asset localization is still an open roadmap decision.
+The cloud test browser did not complete either third-party image request at
+the time, so successful delivery of the Wikimedia and CDC images was not
+established by this one-off test. The page itself emitted no image error, and
+source links/fallback content remain present. The repeatable suite above has
+since observed both images completing successfully from a different
+environment; see QL-012. Asset localization is still an open roadmap
+decision, now informed by that mixed evidence rather than a single failed
+observation.
 
 ## Independently run HTML validation
 
@@ -266,14 +400,22 @@ The DOM suite and the Playwright real-browser suite together cover the core
 logic paths, real scrolling/highlighting, real reload/storage behavior,
 print invocation, and console cleanliness described above. Still required:
 
-- running the same repeatable browser assertions against the deployed
-  GitHub Pages URL, not only a local static server
+- ~~running the same repeatable browser assertions against the deployed
+  GitHub Pages URL, not only a local static server~~ done 2026-07-31 via
+  `tests/e2e-deployed/` (see above) for navigation, mobile-nav
+  open/close/backdrop/module-link, a quiz interaction, and reload
+  persistence, all against the real HTTPS URL
 - pixel/visual print-rendering review (the suite verifies the print hook and
   class toggling, not print layout)
-- true touch-gesture testing (the suite emulates a narrow viewport with
-  `hasTouch`, not real touch hardware)
-- confirmation, in an environment with normal network access, that the two
-  third-party images load or fall back as expected
+- true touch-gesture testing (both suites emulate touch input via
+  `hasTouch`/`.tap()`, which is Playwright's touch emulation, not real touch
+  hardware, a mobile OS, or a mobile browser build)
+- ~~confirmation, in an environment with normal network access, that the two
+  third-party images load or fall back as expected~~ done 2026-07-31 for
+  *this* environment: both images completed loading with nonzero natural
+  dimensions (see QL-012). This is one observation from one network, not a
+  claim about every visitor's or every CI runner's network path; re-checked
+  automatically whenever `npm run test:deployed` has network access
 
 ### Accessibility
 

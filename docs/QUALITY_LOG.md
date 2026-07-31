@@ -352,7 +352,6 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   mutation-test it: make the specific regression it claims to catch (e.g.
   add `tabindex="-1"`) and confirm the test actually fails.
 
-### Second addendum — documentation claimed assertion coverage the tests did not yet have
 
 - **Status:** Corrected in a second independent review of PR #6, before merge
 - **Finding:** After the first addendum's fix, the PR body and
@@ -402,3 +401,93 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   include the check when it was first written. Word documentation to match
   exactly what the shared helper checks, not what the feature could
   plausibly be assumed to check.
+
+## QL-012 — Deployed-suite authoring: a relative-URL bug and a backwards assertion, both self-caught before commit
+
+- **Status:** Corrected before any commit; no product change
+- **Finding:** While authoring `tests/e2e-deployed/` (Issue #1, deployed-Pages
+  testing), two mistakes were found and corrected during the first live run
+  against `https://jaustinanderson.github.io/cytogenetics-cg-course/`:
+  1. Every test called `page.goto("/")`, copied from the local suite's
+     convention. Against a `baseURL` that itself has a path segment (a
+     GitHub Pages *project* site, not a user/org site), `new URL("/",
+     baseURL)` resolves to the origin root and drops the repository path —
+     `https://jaustinanderson.github.io/` instead of
+     `https://jaustinanderson.github.io/cytogenetics-cg-course/`. Every test
+     in the suite failed with a 404 on the first real run, which at first
+     read like the deployment itself was broken; a direct `curl` and a raw
+     Playwright script against the real URL both returned 200, isolating the
+     bug to the relative-URL resolution in the tests, not the product or the
+     network. `page.goto("/")` is correct for the local suite only because
+     its `baseURL` (`http://127.0.0.1:4173`) has no path component to lose.
+  2. A mobile-navigation test asserted
+     `expect(openBox.x).toBeLessThan(closedBox.x + 5)` intending to confirm
+     the sidebar moved on-canvas after opening. Because `closedBox.x` is a
+     large negative off-canvas coordinate, this compared the open position
+     against a large negative number and was logically backwards — it failed
+     against the real, correctly-behaving page on the very first live run.
+- **Impact:** None shipped; both were caught by the deployed suite's own
+  first execution against the real live page, before either was committed.
+  Trusting either failure without investigating would have produced a false
+  "the live deployment is broken" or "mobile nav is broken" report about a
+  page that was working correctly.
+- **Cause:** (1) Relative-URL resolution against a `baseURL` with an existing
+  path is a easy-to-miss WHATWG URL semantics difference from resolving
+  against an origin-only `baseURL`, and the local suite's convention was
+  copied without re-deriving it for a different kind of base. (2) The
+  assertion's direction was written without checking the actual sign/scale of
+  the values involved.
+- **Correct action:** Run a new test suite against the real target at least
+  once before trusting any of its assertions, exactly as required elsewhere
+  in this log (QL-007/QL-008); when a brand-new suite fails everywhere on
+  first run, suspect the suite before suspecting the product, and confirm
+  independently (here, `curl` plus a minimal standalone Playwright script)
+  before concluding the deployment itself is at fault.
+- **Correction:** All `page.goto("/")` calls in `tests/e2e-deployed/` changed
+  to `page.goto("./")`, which resolves against the existing base path instead
+  of the origin root (verified with `new URL(...)` directly before editing).
+  The backwards comparison was replaced with
+  `expect(openBox.x).toBeGreaterThan(closedBox.x)`, i.e. "the open position
+  is to the right of the closed position," which is the actual claim being
+  made. All 22 scheduled deployed-suite test runs (16 run, 6 intentionally
+  skipped per-viewport/per-project) passed after both fixes.
+- **Prevention:** When a `baseURL` includes a path (a GitHub Pages project
+  site, a subpath deployment, etc.), verify relative-navigation strings with
+  `new URL(candidate, baseURL)` before relying on them, rather than reusing a
+  root-site convention unchanged. Word boundary-direction assertions
+  (`toBeLessThan`/`toBeGreaterThan`) by first writing out the actual expected
+  values, not just the comparison operator that "sounds right."
+
+### Mutation-test evidence for the horizontal-overflow assertion
+
+- **Method:** Rather than modify the shipped test file, a standalone
+  Playwright script loaded the real live page at the 390x844 project's
+  configuration, then used `page.evaluate()` to append a 2000px-wide element
+  to `document.body` — simulating an actual CSS regression that would make
+  content wider than the viewport — and re-read
+  `document.documentElement.scrollWidth` / `clientWidth`.
+- **Result:** Before the injected element: not applicable (real page has no
+  overflow). After: `scrollWidth` 2000 vs `clientWidth` 390, which the
+  committed assertion in `tests/e2e-deployed/mobile-touch-navigation.spec.mjs`
+  (`scrollWidth <= clientWidth + 1`) would fail. This confirms the assertion
+  actually detects the specific regression it claims to catch, using a
+  transient change to the loaded page in an ephemeral browser tab — nothing
+  in the repository or the live deployment was modified to run this check.
+
+### Remote-image delivery — observed 2026-07-31, this environment
+
+- **Result:** Both approved remote images completed loading with nonzero
+  natural dimensions when tested from this development environment's network:
+  Wikimedia Commons NHGRI karyotype 1280x1003, CDC PHIL trisomy-21 karyotype
+  700x563. `img.complete` was `true` and `naturalWidth`/`naturalHeight` were
+  both nonzero for each — the stronger check this suite specifically added
+  because `complete` alone becomes `true` on a failed load too, not only a
+  successful one.
+- **Scope:** This is one successful observation, from one network, at one
+  point in time. It supersedes the earlier "cloud test browser did not
+  complete either request" note in `docs/VALIDATION.md`'s 2026-07-30 entry
+  for *this* environment, but does not establish delivery from GitHub
+  Actions' runners or any other network — see `docs/VALIDATION.md` for the
+  full non-claim. `tests/e2e-deployed/remote-images.spec.mjs` re-checks this
+  on every run it is given network access to.
+

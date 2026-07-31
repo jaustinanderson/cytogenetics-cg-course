@@ -1,6 +1,7 @@
 # Dependencies and test output
 node_modules/
 playwright-report/
+playwright-deployed-report/
 test-results/
 coverage/
 
