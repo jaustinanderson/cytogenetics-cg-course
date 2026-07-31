@@ -183,9 +183,11 @@ Automated WCAG scanning and representative keyboard testing were added on
   target element — never `locator.focus()`, which would pass even on a
   `tabindex="-1"` element a real keyboard user could never reach. Each
   control's computed accessible name is asserted with `toHaveAccessibleName()`
-  against real expected content, then activated with `Enter`/`Space` with a
-  visible-focus check, plus (for the mobile menu) an absence-of-keyboard-trap
-  check.
+  against real expected content, a shared `assertVisibleFocus()` helper then
+  confirms a genuinely visible `:focus-visible` outline (non-`none` style,
+  non-zero width, non-transparent color) before the control is activated
+  with `Enter`/`Space`, plus (for the mobile menu) an
+  absence-of-keyboard-trap check.
 - The initial scan found six confirmed, independently verified defects —
   insufficient contrast on three CSS color variables, 22 heading-order
   violations, two unlabeled table corner cells, unlabeled instructional
@@ -202,7 +204,16 @@ Automated WCAG scanning and representative keyboard testing were added on
   those controls despite the test names and this document's earlier wording
   claiming Tab-reachability. Rewritten to use `tabUntilFocused()` throughout
   and mutation-verified (a deliberately added `tabindex="-1"` now fails the
-  test with a clear message). See the QL-011 addendum.
+  test with a clear message). See the first QL-011 addendum.
+- A second independent review found the documentation itself had then
+  overclaimed: it described every control's accessible name and visible
+  focus as asserted, but the skip link had no accessible-name assertion and
+  four controls (the exercise option, exercise Next, Print, and Reset)
+  never received a visible-focus check. Added the missing skip-link
+  assertion and a shared `assertVisibleFocus()` helper applied to all nine
+  controls uniformly; mutation-verified with a second, independent mutation
+  (`#printBtn:focus-visible{outline:none}` now fails the Print test). See
+  the second QL-011 addendum.
 - All 62 scheduled Playwright test runs (58 passed, 4 intentionally skipped
   per-viewport, 0 failed) and all 48 dependency-free checks (`npm test`:
   12 structural + 36 DOM behavior) passed locally after these changes.

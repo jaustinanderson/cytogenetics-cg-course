@@ -16,9 +16,11 @@ All notable repository changes are recorded here.
   sidebar nav, mobile menu, quizzes, exercises, module completion, Print,
   and Reset. Every claimed-reachable control is proven so via real `Tab`
   key presses to the exact target element (never programmatic `.focus()`,
-  which would pass on an unreachable `tabindex="-1"` element), with
-  `toHaveAccessibleName()` checks, focus-visibility checks, and a
-  keyboard-trap check for the mobile menu
+  which would pass on an unreachable `tabindex="-1"` element), with a
+  `toHaveAccessibleName()` check against real expected content, a shared
+  `assertVisibleFocus()` check (non-`none` outline style, non-zero width,
+  non-transparent color) applied uniformly to all nine covered controls, and
+  a keyboard-trap check for the mobile menu
 - `@axe-core/playwright` as a development-only dependency
 - A dependency-free DOM behavior suite covering navigation, quizzes,
   exercises, migration, persistence, Reset, import/export, print, the public

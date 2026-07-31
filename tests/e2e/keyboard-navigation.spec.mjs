@@ -15,23 +15,60 @@ import { test, expect } from "./fixtures.mjs";
  * checking document.activeElement can. Every "reachable by Tab" claim below
  * is proven by tabUntilFocused() driving actual page.keyboard.press("Tab")
  * input from wherever focus currently is.
+ *
+ * Every control this suite (and docs/VALIDATION.md) claims receives a
+ * "visible focus" check is verified immediately after that real Tab arrival
+ * by the shared assertVisibleFocus() helper below -- not just an isolated
+ * outline-style check on some controls and a bare toBeFocused() on others.
  */
 
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-async function focusedOutline(page) {
-  return page.evaluate(() => {
-    const el = document.activeElement;
+/**
+ * Asserts `target` is genuinely keyboard-focused (document.activeElement,
+ * checked by DOM node identity, the same way tabUntilFocused() checks it --
+ * not Playwright's toBeFocused(), so both helpers agree on what "focused"
+ * means) and that its computed :focus-visible outline would actually be
+ * visible to a sighted keyboard user: a non-"none" outline-style, a
+ * greater-than-zero outline-width, and -- where the computed value makes
+ * this checkable -- a non-transparent outline-color.
+ */
+async function assertVisibleFocus(page, target, { label = "target" } = {}) {
+  const handle = await target.elementHandle();
+  if (!handle) {
+    throw new Error(`assertVisibleFocus: "${label}" did not resolve to an element in the DOM`);
+  }
+  const isFocused = await page.evaluate((el) => el === document.activeElement, handle);
+  expect(isFocused, `assertVisibleFocus: "${label}" is not document.activeElement`).toBe(true);
+
+  const style = await page.evaluate((el) => {
     const cs = getComputedStyle(el);
     return {
-      tag: el.tagName,
-      cls: el.className,
       outlineStyle: cs.outlineStyle,
       outlineWidth: cs.outlineWidth,
+      outlineColor: cs.outlineColor,
     };
-  });
+  }, handle);
+
+  expect(style.outlineStyle, `${label}: outline-style`).not.toBe("none");
+  expect(parseFloat(style.outlineWidth), `${label}: outline-width`).toBeGreaterThan(0);
+
+  // Non-transparent color, where practical: getComputedStyle normally
+  // resolves outline-color to an rgb()/rgba() string (or occasionally the
+  // literal keyword "transparent"). Treat the keyword, or an rgba() alpha
+  // of 0, as a failure -- either would make an otherwise-present outline
+  // invisible. An unresolvable format (e.g. a browser returning something
+  // else entirely) is not asserted against, since it cannot be reliably
+  // checked here rather than because it is assumed fine.
+  expect(style.outlineColor, `${label}: outline-color`).not.toBe("transparent");
+  const alphaMatch = style.outlineColor.match(/rgba?\([^)]*,\s*([\d.]+)\s*\)/);
+  if (alphaMatch) {
+    expect(parseFloat(alphaMatch[1]), `${label}: outline-color alpha`).toBeGreaterThan(0);
+  }
+
+  return style;
 }
 
 /**
@@ -67,10 +104,12 @@ async function tabUntilFocused(page, target, { max = 100, label = "target" } = {
 }
 
 test.describe("keyboard: skip link and visible navigation", () => {
-  test("the skip link is the first tab stop and keyboard-activating it moves focus into the content", async ({
+  test("the skip link is the first tab stop, has a meaningful name, is visibly focused, and keyboard-activating it moves focus into the content", async ({
     page,
   }) => {
     await page.goto("/");
+    await expect(page.locator(".skip-link")).toHaveAccessibleName("Skip to content");
+
     await page.keyboard.press("Tab");
     const first = await page.evaluate(() => ({
       tag: document.activeElement.tagName,
@@ -78,15 +117,13 @@ test.describe("keyboard: skip link and visible navigation", () => {
     }));
     expect(first.cls).toContain("skip-link");
 
-    const outline = await focusedOutline(page);
-    expect(outline.outlineStyle).not.toBe("none");
-    expect(parseFloat(outline.outlineWidth)).toBeGreaterThan(0);
+    await assertVisibleFocus(page, page.locator(".skip-link"), { label: "skip link" });
 
     await page.keyboard.press("Enter");
     await expect(page.locator("#main")).toBeFocused();
   });
 
-  test("a desktop sidebar nav link is keyboard-reachable by real Tab order, has a meaningful name, and Enter activates it", async ({
+  test("a desktop sidebar nav link is keyboard-reachable by real Tab order, has a meaningful name, is visibly focused, and Enter activates it", async ({
     page,
   }) => {
     await page.goto("/");
@@ -98,9 +135,7 @@ test.describe("keyboard: skip link and visible navigation", () => {
     await expect(link).toHaveAccessibleName(new RegExp(escapeRegExp(m5.short)));
 
     await tabUntilFocused(page, link, { max: 20, label: "m5 sidebar nav link" });
-    await expect(link).toBeFocused();
-    const outline = await focusedOutline(page);
-    expect(outline.outlineStyle).not.toBe("none");
+    await assertVisibleFocus(page, link, { label: "m5 sidebar nav link" });
 
     await page.keyboard.press("Enter");
     await expect(link).toHaveClass(/active/);
@@ -108,7 +143,7 @@ test.describe("keyboard: skip link and visible navigation", () => {
 });
 
 test.describe("keyboard: mobile menu", () => {
-  test("the hamburger toggle is keyboard-reachable by real Tab order, has a meaningful name, Enter/Space activate it, and there is no keyboard trap", async ({
+  test("the hamburger toggle is keyboard-reachable by real Tab order, has a meaningful name, is visibly focused, Enter/Space activate it, and there is no keyboard trap", async ({
     page,
   }) => {
     await page.goto("/");
@@ -118,9 +153,7 @@ test.describe("keyboard: mobile menu", () => {
     await expect(toggle).toHaveAccessibleName("Open module navigation");
 
     await tabUntilFocused(page, toggle, { max: 10, label: "mobile hamburger toggle" });
-    await expect(toggle).toBeFocused();
-    const outline = await focusedOutline(page);
-    expect(outline.outlineStyle).not.toBe("none");
+    await assertVisibleFocus(page, toggle, { label: "mobile hamburger toggle" });
 
     await page.keyboard.press("Enter");
     await expect(page.locator("#sidebar")).toHaveClass(/open/);
@@ -158,7 +191,7 @@ test.describe("keyboard: mobile menu", () => {
 });
 
 test.describe("keyboard: quiz interaction", () => {
-  test("a quiz option is keyboard-reachable by real Tab order, has a meaningful name, and Enter answers the item", async ({
+  test("a quiz option is keyboard-reachable by real Tab order, has a meaningful name, is visibly focused, and Enter answers the item", async ({
     page,
   }) => {
     test.slow(); // reaching a module-1 quiz option takes ~50 real Tab presses
@@ -172,9 +205,7 @@ test.describe("keyboard: quiz interaction", () => {
     await expect(target).toHaveAccessibleName(new RegExp(escapeRegExp(question.o[question.a])));
 
     await tabUntilFocused(page, target, { max: 80, label: "m1 first question, correct option" });
-    await expect(target).toBeFocused();
-    const outline = await focusedOutline(page);
-    expect(outline.outlineStyle).not.toBe("none");
+    await assertVisibleFocus(page, target, { label: "m1 first question, correct option" });
 
     await page.keyboard.press("Enter");
     await expect(target).toHaveClass(/correct/);
@@ -190,7 +221,7 @@ test.describe("keyboard: quiz interaction", () => {
 });
 
 test.describe("keyboard: exercise interaction", () => {
-  test("an exercise option and the Next control are each keyboard-reachable by real Tab order and keyboard-operable in sequence", async ({
+  test("an exercise option and the Next control are each keyboard-reachable by real Tab order, visibly focused, and keyboard-operable in sequence", async ({
     page,
   }) => {
     test.slow(); // the first exercise sits well into the document; ~200+ real Tab presses
@@ -203,7 +234,8 @@ test.describe("keyboard: exercise interaction", () => {
     await expect(opt).toHaveAccessibleName(items[0].options[items[0].answer]);
 
     await tabUntilFocused(page, opt, { max: 280, label: "first exercise, correct option" });
-    await expect(opt).toBeFocused();
+    await assertVisibleFocus(page, opt, { label: "first exercise, correct option" });
+
     await page.keyboard.press("Enter");
     await expect(host.locator(".eh-score")).toHaveText(`1 / ${items.length}`);
 
@@ -219,14 +251,15 @@ test.describe("keyboard: exercise interaction", () => {
     // not from the top of the document -- but the search does not assume
     // that and is bounded generously in case that behavior ever changes.)
     await tabUntilFocused(page, next, { max: 20, label: "exercise Next control" });
-    await expect(next).toBeFocused();
+    await assertVisibleFocus(page, next, { label: "exercise Next control" });
+
     await page.keyboard.press("Enter");
     await expect(host.locator(".exer-prompt")).toHaveText(items[1].prompt);
   });
 });
 
 test.describe("keyboard: module completion, print, and reset", () => {
-  test("a mark-complete button is keyboard-reachable by real Tab order, and Space/Enter toggle it with its accessible name reflecting each state", async ({
+  test("a mark-complete button is keyboard-reachable by real Tab order, visibly focused, and Space/Enter toggle it with its accessible name reflecting each state", async ({
     page,
   }) => {
     test.slow(); // reaching module 1's mark-complete button takes ~70 real Tab presses
@@ -235,9 +268,7 @@ test.describe("keyboard: module completion, print, and reset", () => {
     await expect(button).toHaveAccessibleName("Mark module complete");
 
     await tabUntilFocused(page, button, { max: 120, label: "module 1 mark-complete button" });
-    await expect(button).toBeFocused();
-    const outline = await focusedOutline(page);
-    expect(outline.outlineStyle).not.toBe("none");
+    await assertVisibleFocus(page, button, { label: "module 1 mark-complete button" });
 
     await page.keyboard.press(" ");
     await expect(button).toHaveClass(/done/);
@@ -253,7 +284,7 @@ test.describe("keyboard: module completion, print, and reset", () => {
     await expect(button).toHaveAccessibleName("Mark module complete");
   });
 
-  test("Enter on the Print control, reached by real Tab order, invokes window.print without a mouse", async ({
+  test("Enter on the Print control, reached by real Tab order and visibly focused, invokes window.print without a mouse", async ({
     page,
   }) => {
     await page.addInitScript(() => {
@@ -267,12 +298,13 @@ test.describe("keyboard: module completion, print, and reset", () => {
     await expect(printBtn).toHaveAccessibleName("Print");
 
     await tabUntilFocused(page, printBtn, { max: 15, label: "Print control" });
-    await expect(printBtn).toBeFocused();
+    await assertVisibleFocus(page, printBtn, { label: "Print control" });
+
     await page.keyboard.press("Enter");
     expect(await page.evaluate(() => window.__printCalls)).toBe(1);
   });
 
-  test("Enter on the Reset control, reached by real Tab order, opens the confirmation and, once accepted, clears progress", async ({
+  test("Enter on the Reset control, reached by real Tab order and visibly focused, opens the confirmation and, once accepted, clears progress", async ({
     page,
   }) => {
     await page.goto("/");
@@ -292,7 +324,8 @@ test.describe("keyboard: module completion, print, and reset", () => {
     await expect(resetBtn).toHaveAccessibleName("Reset");
 
     await tabUntilFocused(page, resetBtn, { max: 15, label: "Reset control" });
-    await expect(resetBtn).toBeFocused();
+    await assertVisibleFocus(page, resetBtn, { label: "Reset control" });
+
     page.once("dialog", (dialog) => dialog.accept());
     await page.keyboard.press("Enter");
     await page.waitForLoadState("load");

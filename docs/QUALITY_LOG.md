@@ -351,3 +351,54 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   instead. When in doubt whether a keyboard test proves what it claims,
   mutation-test it: make the specific regression it claims to catch (e.g.
   add `tabindex="-1"`) and confirm the test actually fails.
+
+### Second addendum — documentation claimed assertion coverage the tests did not yet have
+
+- **Status:** Corrected in a second independent review of PR #6, before merge
+- **Finding:** After the first addendum's fix, the PR body and
+  `docs/VALIDATION.md` described the suite as asserting a computed
+  accessible name and a visible keyboard-focus outline for every covered
+  control. Three specific gaps meant that description was not yet true:
+  (1) the skip link had no `toHaveAccessibleName("Skip to content")`
+  assertion at all; (2) the exercise option, the exercise Next control,
+  Print, and Reset were each reached via real `tabUntilFocused()` but never
+  received a visible-focus (outline) check afterward — only a bare
+  `toBeFocused()`; (3) the outline checks that did exist verified
+  `outline-style` and `outline-width` but never checked `outline-color`, so
+  a focus style that was technically non-`none` but fully transparent (and
+  therefore still invisible to a sighted keyboard user) would have passed.
+- **Impact:** None shipped to `index.html`. As with the addendum above, this
+  was documentation overclaiming what the committed instrument actually
+  checked — a reader of the PR body or `docs/VALIDATION.md` would
+  reasonably have believed Print, Reset, and the exercise controls had
+  their focus visibility verified, when they did not.
+- **Cause:** The visible-focus check was added ad hoc per test as each one
+  was written, rather than as a single shared assertion applied uniformly;
+  it was easy to add the reachability proof (`tabUntilFocused`) everywhere
+  while only remembering the accompanying visibility proof for some
+  controls. The outline-color gap was a narrower version of the same
+  problem: the two properties that were checked felt like "the outline
+  check," so a third relevant property went unchecked without the
+  documentation's claim being narrowed to match.
+- **Correct action:** Write one shared assertion for a claim that applies to
+  many controls, so adding a new covered control cannot silently omit part
+  of the claim; and word documentation claims narrowly enough to match
+  exactly what that shared assertion checks.
+- **Correction:** Added `assertVisibleFocus(page, locator, {label})`,
+  called immediately after `tabUntilFocused()` for every control this file
+  or `docs/VALIDATION.md` describes as visibly focused (skip link, m5 nav
+  link, hamburger toggle, quiz option, exercise option, exercise Next,
+  mark-complete button, Print, Reset). It checks `outline-style !== "none"`,
+  `outline-width > 0`, and a non-transparent `outline-color` (rejecting the
+  literal `"transparent"` keyword and any `rgba()` value with zero alpha).
+  Added the missing `toHaveAccessibleName("Skip to content")` assertion for
+  the skip link. Mutation-verified: adding `#printBtn:focus-visible{outline:
+  none}` made the Print control's test fail immediately with a clear
+  `outline-style` message; reverted before commit.
+- **Prevention:** When a claim ("visible focus," "accessible name") is meant
+  to apply uniformly across a set of controls, implement it once as a
+  shared helper and call it for every member of that set, not per-test —
+  otherwise coverage silently narrows to whichever tests happened to
+  include the check when it was first written. Word documentation to match
+  exactly what the shared helper checks, not what the feature could
+  plausibly be assumed to check.

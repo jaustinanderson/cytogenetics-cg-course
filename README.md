@@ -188,9 +188,11 @@ the mobile menu, quizzes, exercises, module completion, Print, and Reset.
 For each, the suite proves real Tab-order reachability by driving actual
 `Tab` key presses to the target (never programmatic `.focus()`, which would
 pass even on a control a keyboard user could never reach), asserts its
-computed accessible name, activates it with `Enter`/`Space`, and checks a
-visible focus outline and the absence of a keyboard trap. Automated scanning
-and keyboard testing are not a screen-reader review; a genuine review with
+computed accessible name, confirms a genuinely visible focus outline
+(non-`none` style, non-zero width, non-transparent color), and only then
+activates it with `Enter`/`Space`, plus checks the absence of a keyboard
+trap for the mobile menu. Automated scanning and keyboard testing are not a
+screen-reader review; a genuine review with
 real assistive technology has not been performed. See
 [Validation](./docs/VALIDATION.md) for scope and limits.
 
