@@ -102,8 +102,14 @@ the course.
   verified by comparing SHA-256 hashes of the raw capture across two runs,
   not by file size
 - [ ] Decide whether to localize remote fonts and the two approved images
-- [ ] Record a question-by-question scientific review status before removing
-  the beta warning
+- [x] Record a question-by-question scientific review status before removing
+  the beta warning — `docs/SCIENTIFIC_REVIEW.md` records the current status
+  honestly: **no independently reviewed question, exercise, flashcard, or
+  case content exists yet**; only the exam blueprint/domain-weighting
+  structure is source-checked against the dated ASCP BOC content guideline.
+  This item is the status *record*, not the review itself — the underlying
+  question-by-question review remains undone, and the beta warning in
+  `README.md` stays exactly as it is until that changes
 
 ### Exit criteria
 

@@ -454,6 +454,69 @@ committed, so no product, screenshot, or scientific content changed — only
 `scripts/capture-readme-screenshot.mjs`'s documentation. See
 `docs/QUALITY_LOG.md` QL-017.
 
+A scientific-review status record was added 2026-07-31 (branch
+`claude/issue-1-scientific-review-status`, Issue #1):
+
+- `docs/SCIENTIFIC_REVIEW.md` records, honestly and with evidence, that
+  **no question, exercise, flashcard, or case content currently has an
+  independently recorded scientific review** — all of it is Draft per
+  `docs/CONTENT_GOVERNANCE.md`'s content-state definitions. The one
+  exception: the exam blueprint/domain-weighting structure (148
+  blueprint-scored questions distributed 33/91/14/10 across the four ASCP
+  BOC domains) is Source-checked against the dated, linked ASCP BOC CG
+  content guideline — a narrower claim than reviewing individual question
+  substance.
+- The record explicitly separates five things that are easy to conflate:
+  scientific/content review, software validation, accessibility testing,
+  source/provenance review, and image/licensing (rights) review — each
+  with its own current status and a pointer to where its evidence actually
+  lives (this new file, `docs/VALIDATION.md`, or
+  `THIRD_PARTY_NOTICES.md`). It states plainly that passing automated
+  tests establishes structural/behavioral consistency, not scientific
+  correctness.
+- Covers all 17 modules and the separate 42-question final-cumulative-exam
+  pool in a status table. Per-module and pool question counts were read
+  directly from the committed course data via
+  `window.CytoCourse.getQuestions(id)` in a sandboxed `vm` context (the
+  same technique `tests/validate-course.mjs` uses) — not estimated, and
+  reconciled to sum to exactly 153 (111 across modules + 42 in the final
+  pool), matching the domain totals `tests/validate-course.mjs` already
+  asserts.
+- Does **not** claim the credentialed author's review of their own
+  authored content is equivalent to independent review — per
+  `docs/CONTENT_GOVERNANCE.md`, authored content is Draft until reviewed
+  regardless of the author's credentials, and this record holds itself to
+  that standard explicitly.
+- Includes a practical per-item review checklist (adapted directly from
+  `docs/CONTENT_GOVERNANCE.md`'s existing question-review requirements)
+  and a reusable review-log table format (content ID, type, domain,
+  reviewer, date, scope, source(s) cited, status, notes) for recording
+  future reviews as an append-only audit trail.
+- A new structural check in `tests/validate-course.mjs` confirms every
+  module ID from the live `getModules()` API appears in the document,
+  reading the module list dynamically rather than a hardcoded count, so it
+  catches drift if a module is ever added, removed, or renamed without
+  updating the record. Mutation-verified: deleting one module's row made
+  the check fail with a message naming the missing module; reverted before
+  commit.
+- One self-caught mistake during drafting, corrected before commit: an
+  early draft misattributed a quoted sentence ("Structurally validated
+  beta; full scientific and accessibility review is in progress") to
+  `README.md`'s current status text; it is actually
+  `docs/VALIDATION.md`'s "Release language" guidance for a *future*
+  release, not the project's current wording. Caught by re-checking the
+  literal source text before committing the quote. See
+  `docs/QUALITY_LOG.md` QL-018.
+- No question, answer, explanation, exercise, case, image, or scientific
+  claim was altered — this is a documentation-only addition. `index.html`
+  is untouched.
+- This closes "record the current scientific-review status" in
+  `docs/ROADMAP.md` and Issue #1, as the status *record*, not as the
+  underlying review — the review itself remains undone, and the beta
+  warning in `README.md` is unchanged. Do not check Issue #1's item, or
+  read this as removing the beta warning's basis, before independent
+  review of this record.
+
 ## Read these files first
 
 1. `README.md`
@@ -510,8 +573,12 @@ questions or images:
    2026-07-31 (branch `claude/issue-1-readme-screenshot`, Issue #1) —
    `docs/assets/course-overview.png`, reproducible via `npm run
    capture:readme-screenshot`. See below.
-5. Record a documented scientific-review status rather than treating structural
-   validation as content validation.
+5. ~~Record a documented scientific-review status rather than treating
+   structural validation as content validation.~~ Done 2026-07-31 (branch
+   `claude/issue-1-scientific-review-status`, Issue #1) —
+   `docs/SCIENTIFIC_REVIEW.md`. The record itself is honest that the
+   underlying question-by-question review has **not** happened; do not
+   read this item's completion as "content review is done." See below.
 
 Do not begin the 46-question expansion or image embedding while the data
 contract and review gates remain incomplete.

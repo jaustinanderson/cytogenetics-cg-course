@@ -73,6 +73,8 @@ The structural validator checks:
 - embedded-image license and redistribution metadata
 - quiz and exercise mount resolution
 - atomic rejection of malformed and globally duplicate injected questions
+- `docs/SCIENTIFIC_REVIEW.md` names every current module (catches drift if a
+  module is added, removed, or renamed without updating the status record)
 
 ### DOM behavior suite
 
@@ -669,6 +671,19 @@ Required before release qualification:
 - Austin's subject-matter review
 - review date and status
 - edition/SOP sensitivity where applicable
+
+The current, itemized status against these requirements — what is
+Source-checked, what remains Draft, and what is explicitly unknown — is
+recorded in [`docs/SCIENTIFIC_REVIEW.md`](./SCIENTIFIC_REVIEW.md), added
+2026-07-31. As of that record: no question, exercise, flashcard, or case
+content has an independent scientific review recorded; only the exam
+blueprint/domain-weighting structure is source-checked against the dated
+ASCP BOC content guideline. That document also carries the reusable
+review-log format and per-item checklist to use once a real review begins.
+Passing the automated suites documented above establishes structural and
+behavioral consistency — it does not and cannot establish scientific
+correctness; `docs/SCIENTIFIC_REVIEW.md` states this distinction explicitly
+so it cannot be inferred from a green CI run.
 
 ### Rights review
 

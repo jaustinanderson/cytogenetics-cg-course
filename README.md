@@ -11,6 +11,9 @@ local progress tracking, performance analytics, and automated validation.
 > validated. The full question bank has not yet completed a documented,
 > question-by-question scientific review for public release.
 
+See [Scientific Review Status](./docs/SCIENTIFIC_REVIEW.md) for the current,
+itemized record of what has and has not been independently reviewed.
+
 **[Open the live course](https://jaustinanderson.github.io/cytogenetics-cg-course/)**
 
 [![Screenshot of the Cytogenetics CG(ASCP) course homepage in a fresh, no-progress state: the header with progress bar and module sidebar, the hero section, the exam content-weighting chart, and the full 17-module progress dashboard grid.](./docs/assets/course-overview.png)](./docs/assets/course-overview.png)
@@ -272,6 +275,7 @@ input, it does not exercise real touch hardware or a mobile OS/browser.
 │   ├── VALIDATION.md
 │   ├── QUALITY_LOG.md
 │   ├── LICENSING.md
+│   ├── SCIENTIFIC_REVIEW.md      # Current scientific-review status record
 │   ├── CLAUDE_HANDOFF.md
 │   ├── assets/
 │   │   └── course-overview.png   # README screenshot (regenerate via the script above)

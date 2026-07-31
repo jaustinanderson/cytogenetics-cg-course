@@ -881,3 +881,41 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   existing should create that directory itself (`mktemp -d`), not assume
   the reader's environment happens to have it.
 
+## QL-018 — A quoted source was misattributed while drafting the scientific-review record
+
+- **Status:** Corrected before commit; nothing incorrect shipped
+- **Finding:** While drafting `docs/SCIENTIFIC_REVIEW.md` (Issue #1), a
+  draft passage quoted the phrase "Structurally validated beta; full
+  scientific and accessibility review is in progress" and attributed it to
+  `README.md`'s current beta-status blockquote. Checking the actual text of
+  both files before committing showed that phrase does not appear in
+  `README.md` at all — it is `docs/VALIDATION.md`'s "Release language"
+  section, describing *recommended future release wording*, not the
+  project's current status text. `README.md`'s actual current blockquote
+  reads: "Status: beta baseline. The application is functional and
+  structurally validated. The full question bank has not yet completed a
+  documented, question-by-question scientific review for public release."
+- **Impact:** None shipped — caught by `grep`-verifying the exact quoted
+  text against both files before committing, not after. Had it shipped, a
+  document whose entire purpose is recording accurate, evidence-based
+  status would have contained an inaccurate quotation about the project's
+  own current status — a direct contradiction of its own stated standard.
+- **Cause:** Both passages are short, thematically similar sentences about
+  the same beta/review status, drafted from memory of prior reading in this
+  session rather than re-checked against the source files at the moment of
+  writing the quote.
+- **Correct action:** Verify any quoted text against the literal source
+  file at the time of writing it down, especially in a document whose
+  purpose is asserting what is and is not established — the same standing
+  discipline this log already applies to test claims, tool defaults, and
+  documented commands (QL-007, QL-008, QL-013, QL-014, QL-017), extended
+  here to quotations.
+- **Correction:** Reworded the passage to quote `README.md`'s actual
+  current text, and added a separate sentence correctly attributing the
+  "Structurally validated beta..." phrase to `docs/VALIDATION.md`'s
+  Release language section as future-release guidance, not current status.
+- **Prevention:** Any quotation in committed documentation should be
+  produced by copying the literal source text (or grep-verified against
+  it) at the point of writing, not reproduced from recollection of an
+  earlier read in the same session.
+

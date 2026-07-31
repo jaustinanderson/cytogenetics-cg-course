@@ -192,4 +192,19 @@ test("question injection rejects malformed and globally duplicate ids atomically
   assert.equal(api.getQuestions("m2").length, before);
 });
 
+test("the scientific-review status record covers every current module", () => {
+  const reviewDocPath = path.join(root, "docs", "SCIENTIFIC_REVIEW.md");
+  const reviewDoc = fs.readFileSync(reviewDocPath, "utf8");
+  const modules = api.getModules();
+  assert.ok(modules.length > 0, "expected at least one module from the live course data");
+  for (const module of modules) {
+    assert.match(
+      reviewDoc,
+      new RegExp(`\\|\\s*${module.id}\\s*\\|`),
+      `docs/SCIENTIFIC_REVIEW.md is missing a table row for module "${module.id}" — ` +
+        "add or update its status row when modules change",
+    );
+  }
+});
+
 console.log("\nCourse validation passed.");
