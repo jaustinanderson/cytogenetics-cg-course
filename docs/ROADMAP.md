@@ -59,7 +59,14 @@ the course.
 
 ### Remaining
 
-- [ ] Confirm the GitHub Actions run passes on the published commit
+- [x] Confirm the GitHub Actions run passes on the published commit — GitHub
+  Actions run
+  [`30646173289`](https://github.com/jaustinanderson/cytogenetics-cg-course/actions/runs/30646173289)
+  passed on `main`'s commit `033f8c5` (the accessibility/keyboard-testing
+  baseline, PR #6), confirmed directly against the repository rather than
+  inferred from a run ID recorded earlier (see `docs/QUALITY_LOG.md` QL-009
+  on why a run ID can only ever be a fixed historical checkpoint, not a
+  standing "current" claim — check the Actions tab for the live result)
 - [x] Enable GitHub Pages and run an initial deployed desktop smoke test
 - [x] Add real-browser smoke tests for navigation, quizzes, exercises,
   migration, persistence, import/export, Reset, print, and the public API at
@@ -73,10 +80,16 @@ the course.
   Issue #1); six confirmed defects found by the scan were fixed (see
   `docs/QUALITY_LOG.md` QL-010). A genuine screen-reader review has **not**
   been performed, so this item stays open until one is
-- [ ] Run *deployed* (GitHub Pages, not local-server) narrow-screen, touch,
-  and mobile-navigation tests; the local Playwright suite covers narrow
-  viewport and touch-emulated behavior against a local static server, not the
-  live Pages URL
+- [x] Run *deployed* (GitHub Pages, not local-server) narrow-screen, touch,
+  and mobile-navigation tests — `tests/e2e-deployed/` (`npm run
+  test:deployed`, Issue #1) runs against the real HTTPS Pages URL and covers
+  the automated/emulated portion: narrow-viewport overflow, the mobile menu
+  opening/closing via Playwright's touch-emulated `.tap()` with
+  `aria-expanded` checked against the sidebar's real bounding-box position, a
+  touch-emulated quiz interaction, and reload persistence in an isolated
+  context. This is touch *emulation*, not physical touch hardware — true
+  touch-gesture testing on real hardware stays an explicit, separate open
+  item (see `docs/VALIDATION.md` "Gates still open")
 - [ ] Capture a clean course-only screenshot for the README
 - [ ] Decide whether to localize remote fonts and the two approved images
 - [ ] Record a question-by-question scientific review status before removing

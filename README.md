@@ -79,7 +79,11 @@ The application is client-only:
 Progress and answer history are not transmitted. The current page does request
 Google Fonts and two public-domain images from external hosts, so those hosts
 receive ordinary web-request metadata such as an IP address and user agent.
-Localizing those assets is an open roadmap decision.
+A 2026-07-31 deployed-suite run observed both images completing delivery with
+nonzero natural dimensions from one development environment's network (see
+[Validation](./docs/VALIDATION.md)); that is one successful observation, not
+a guarantee for every visitor's network. Localizing those assets is still an
+open roadmap decision.
 
 ## Integration API
 
@@ -163,6 +167,9 @@ The committed test suite checks:
   import/export, print, public API, event, and analytics behavior
 - implemented keyboard and accessibility affordances that can be evaluated
   without layout or assistive technology
+- the deployed-revision verifier's hashing/fetch logic, entirely over
+  loopback (a local HTTP server standing in for "the live URL"), so it needs
+  no external network access
 
 A separate real-browser suite runs in Chromium via Playwright:
 
@@ -196,11 +203,40 @@ screen-reader review; a genuine review with
 real assistive technology has not been performed. See
 [Validation](./docs/VALIDATION.md) for scope and limits.
 
+A third, separate Playwright suite runs against the real deployed HTTPS
+GitHub Pages URL rather than a local server:
+
+```bash
+npm run test:deployed   # defaults to https://jaustinanderson.github.io/cytogenetics-cg-course/
+```
+
+It confirms a successful HTTPS response, the expected title/heading, the 17
+quiz mounts / 17 modules / 6 exercise sets, page-origin console cleanliness,
+absence of horizontal overflow at the narrow viewport, mobile-navigation
+open/close/backdrop/module-link behavior driven by Playwright's
+touch-emulated `.tap()` (with `aria-expanded` checked against the sidebar's
+actual on-canvas position, not just its class name), a touch-emulated quiz
+interaction, reload persistence in an isolated browser context, and the
+actual decoded natural dimensions of the two approved remote images. The
+target URL is configurable via `DEPLOYED_BASE_URL`. This suite is separate
+from `npm test` and `npm run test:e2e` on purpose — it requires outbound
+internet access and must never make an ordinary local or PR run depend on
+it. `scripts/verify-deployed-revision.mjs` guards against testing a stale
+deployment by combining two checks — GitHub's own deployments API record for
+the target commit, and a cache-busted SHA-256 comparison of the live
+`index.html` against the checked-out one — instead of assuming a fixed wait
+was long enough. Each check proves something narrower than "this is
+definitely the currently served commit" on its own; see
+[Validation](./docs/VALIDATION.md) for the precise scope of each, the exact
+remote-image result observed, and the distinction between touch *emulation*
+and physical touch hardware.
+
 Passing these tests does **not** establish scientific correctness. Scientific
 review, rights review, a representative screen-reader review, and release
 readiness are separate gates documented in
-[Validation](./docs/VALIDATION.md). True touch-gesture testing also remains
-open.
+[Validation](./docs/VALIDATION.md). True touch-gesture testing on physical
+hardware also remains open — Playwright's `hasTouch`/`.tap()` emulates touch
+input, it does not exercise real touch hardware or a mobile OS/browser.
 
 ## Repository map
 
@@ -214,11 +250,16 @@ open.
 ├── CLAUDE.md                     # Collaboration guardrails
 ├── package.json
 ├── playwright.config.mjs         # Real-browser (Chromium) smoke-test config
+├── playwright.deployed.config.mjs # Deployed HTTPS Pages smoke-test config
+├── scripts/
+│   └── verify-deployed-revision.mjs # Deployment-record + live-hash check before testing
 ├── tests/
 │   ├── validate-course.mjs       # Structural/content contracts
 │   ├── dom-behavior.mjs          # Dependency-free behavior checks
 │   ├── dom-harness.mjs           # Minimal test-only DOM fixture
-│   └── e2e/                      # Playwright real-browser smoke suite
+│   ├── verify-deployed-revision.mjs # Loopback-only hash-check tests (no external network)
+│   ├── e2e/                      # Playwright real-browser smoke suite (local server)
+│   └── e2e-deployed/             # Playwright smoke suite (real deployed Pages URL)
 ├── docs/
 │   ├── ROADMAP.md
 │   ├── ARCHITECTURE.md
@@ -231,7 +272,8 @@ open.
 │       └── claude-roadmap-v1.md
 └── .github/
     └── workflows/
-        └── ci.yml
+        ├── ci.yml
+        └── deployed-smoke.yml    # Manual/post-deploy deployed-site verification
 ```
 
 ## Contributing

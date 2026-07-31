@@ -40,6 +40,50 @@ All notable repository changes are recorded here.
 - `@playwright/test` as a development-only dependency, plus a `package-lock.json`
 - `playwright.config.mjs` and a local static-server (`python3 -m http.server`)
   arrangement Playwright and GitHub Actions both use to serve the course
+- A dedicated deployed-site Playwright smoke suite (`tests/e2e-deployed/`,
+  `npm run test:deployed`, `playwright.deployed.config.mjs`) targeting the
+  real HTTPS GitHub Pages deployment (URL configurable via
+  `DEPLOYED_BASE_URL`, default
+  `https://jaustinanderson.github.io/cytogenetics-cg-course/`) at the same
+  1280x900 and 390x844 viewports as the local suite. Verifies a successful
+  HTTPS response, expected title/heading, the 17 quiz mounts / 17 modules / 6
+  exercise sets, page-origin console cleanliness, absence of horizontal
+  overflow at the narrow viewport, touch-emulated (`hasTouch`/`.tap()`)
+  mobile-navigation open/close/backdrop/module-link behavior with
+  `aria-expanded` checked against the sidebar's actual on/off-canvas
+  position, a touch-emulated quiz interaction, module-completion persistence
+  across a real reload in an isolated browser context (`browser.newContext({
+  baseURL })`, with an explicit assertion that navigation reached the
+  expected deployed origin/path), and the natural decoded dimensions of the
+  two approved remote images. Entirely separate from `tests/e2e/`: it has no
+  `webServer`, is never invoked by `npm test` or `npm run test:e2e`, and
+  requires outbound internet access only when explicitly run
+- `scripts/verify-deployed-revision.mjs` (`npm run
+  verify:deployed-revision`), which requires **both** of two checks to agree
+  before treating a deployment as verified: GitHub's deployments API record
+  for the `github-pages` environment (commit SHA + status) for the target
+  commit, and a cache-busted, no-cache SHA-256 comparison of the live
+  `index.html` at the exact `DEPLOYED_BASE_URL` against the checked-out
+  `index.html`. Each check's precise, narrower scope — the API proves a
+  registered build record, the hash proves current live-artifact equivalence,
+  neither alone proves "the currently served commit" — is stated in the
+  script's own comments and log output, not only in documentation. Warns
+  explicitly if `DEPLOYED_BASE_URL` doesn't match the canonical Pages URL
+  derived from `GITHUB_REPOSITORY`, so overriding the target URL without
+  also binding the repository/commit it verifies cannot silently claim a
+  meaningless result
+- `tests/verify-deployed-revision.mjs` (part of `npm test`): focused,
+  loopback-only checks of the hashing/fetch logic (identical/differing
+  content hashes, and a local HTTP server standing in for "the live URL"
+  fetched with a distinct cache-busting query parameter each time), requiring
+  no external network access
+- `.github/workflows/deployed-smoke.yml`: a separate, network-dependent
+  workflow (manual `workflow_dispatch`, plus automatic `workflow_run` after
+  GitHub's own `pages-build-deployment` completes on `main`) that runs the
+  revision check and the deployed suite against the same `DEPLOYED_BASE_URL`
+  (bound once at job level); requests `deployments: read` alongside
+  `contents: read`. `ci.yml` is unchanged and still requires no external
+  network access
 
 ### Changed
 

@@ -1,0 +1,72 @@
+name: Deployed Pages smoke test
+
+# Separate from ci.yml on purpose: this workflow requires outbound internet
+# access to the real GitHub Pages deployment and to api.github.com, and must
+# never gate ordinary push/PR validation (ci.yml) on that availability.
+#
+# Triggers:
+# - workflow_dispatch: manual, with an optional override of the target URL
+# - workflow_run: automatically after "pages-build-deployment" (GitHub's own
+#   Pages deploy workflow) completes on main, i.e. post-deployment
+#   verification, not a fixed schedule or a guessed delay
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "Deployed course URL to test"
+        required: false
+        default: "https://jaustinanderson.github.io/cytogenetics-cg-course/"
+  workflow_run:
+    workflows: ["pages-build-deployment"]
+    branches: [main]
+    types: [completed]
+
+permissions:
+  contents: read
+  deployments: read
+
+jobs:
+  deployed-smoke:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Bound once, at job level, so the revision-verification step and the
+    # Playwright suite are guaranteed to target the exact same URL — the
+    # verifier's result is meaningless if it checked a different target than
+    # the one the tests actually exercised.
+    env:
+      DEPLOYED_BASE_URL: ${{ github.event.inputs.base_url || 'https://jaustinanderson.github.io/cytogenetics-cg-course/' }}
+    steps:
+      - name: Check out the revision under test
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npm run test:e2e:install
+
+      - name: Verify the live deployment matches this revision
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: node scripts/verify-deployed-revision.mjs
+
+      - name: Run deployed-site smoke tests
+        run: npm run test:deployed
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-deployed-report
+          path: playwright-deployed-report/
+          retention-days: 7
