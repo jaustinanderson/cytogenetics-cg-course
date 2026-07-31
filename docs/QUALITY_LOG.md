@@ -139,3 +139,37 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   `addInitScript`, unless "first load" behavior is specifically what is
   under test. At narrow viewports, expect fixed-position layers (headers,
   open sidebars) to overlap default click targets and aim clicks explicitly.
+
+### Addendum — import/export test shared storage with its own source page
+
+- **Status:** Corrected in independent review of PR #5, before merge
+- **Finding:** The `exportJSON`/`importJSON` round-trip test opened its
+  "fresh" destination page with `context.newPage()`. `localStorage` is
+  partitioned per `BrowserContext` + origin, not per page, so that second
+  page shared the exact storage partition the first page had already
+  written module-completion and answer state into. The test asserted the
+  destination showed the exported progress after calling `importJSON()`,
+  but that assertion would have passed identically even if `importJSON()`
+  silently did nothing, because the state was already present in shared
+  storage before import ran. The test was green and looked like it proved
+  import restores progress; it actually proved nothing about import at all.
+- **Impact:** None shipped; `index.html` was not modified. This was a latent
+  false-confidence risk in the test suite itself: a passing check that did
+  not exercise the behavior its name claimed to.
+- **Cause:** `context.newPage()` reads as "a fresh page" but is not "fresh
+  storage" — the two are easy to conflate, and nothing in the test made the
+  shared partition visible.
+- **Correct action:** Before asserting an import restores state, first
+  assert the destination has zero/undefined progress, so the test would
+  fail loudly if storage were ever inadvertently shared again.
+- **Correction:** The destination now comes from `browser.newContext()` — a
+  genuinely separate storage partition — and the test asserts `#tpLabel`
+  reads "0 of 17 modules complete" and the target answer is `undefined`
+  immediately after that context's first load, *before* calling
+  `importJSON()`. Only then does it import and assert the exported progress
+  is restored.
+- **Prevention:** Any real-browser test claiming to prove cross-instance
+  persistence, import, or migration must assert the destination's clean
+  starting state before the action under test runs, not just the end state
+  after. A test that only checks the end state cannot distinguish "the
+  action worked" from "the state was already there."

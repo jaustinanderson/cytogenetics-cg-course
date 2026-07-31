@@ -107,7 +107,7 @@ hamburger control is CSS-hidden). Coverage:
 - Reset clearing both storage keys and reloading to a clean course, and the
   declined-confirmation path leaving progress untouched
 - `exportJSON`/`importJSON` round-tripping progress between two independent
-  page loads
+  browser contexts (separate storage partitions, proven empty before import)
 - the public API's documented method surface, read-copy isolation, and
   `answer`/`exercise`/`progress`/`content` events firing from real UI actions
 - the print control invoking `window.print`, and `beforeprint`/`afterprint`

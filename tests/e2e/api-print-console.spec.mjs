@@ -70,7 +70,10 @@ test.describe("public API, import/export, and print", () => {
     expect(events.progress).toBeGreaterThanOrEqual(2);
   });
 
-  test("exportJSON/importJSON round-trips progress between two real page loads", async ({ page, context }) => {
+  test("exportJSON/importJSON round-trips progress between two independent browser contexts", async ({
+    page,
+    browser,
+  }) => {
     await page.goto("/");
     await page.locator('.mark-complete[data-mod="m1"]').click();
     const question = await page.evaluate(() => window.CytoCourse.getQuestions("m9")[0]);
@@ -86,8 +89,23 @@ test.describe("public API, import/export, and print", () => {
     const parsed = JSON.parse(exported);
     expect(parsed.state.v).toBe(2);
 
-    const fresh = await context.newPage();
+    // A new page in the SAME BrowserContext would share localStorage with
+    // `page` above (storage is partitioned per context+origin, not per
+    // page), so it would already carry this progress before import ever
+    // runs and the assertions below would pass even if importJSON did
+    // nothing. Use a genuinely separate context so the destination starts
+    // from proven-clean storage.
+    const freshContext = await browser.newContext();
+    const fresh = await freshContext.newPage();
     await fresh.goto("/");
+
+    await expect(fresh.locator("#tpLabel")).toHaveText("0 of 17 modules complete");
+    const priorAnswer = await fresh.evaluate(
+      (id) => window.CytoCourse.getProgress().answers[id],
+      question.id,
+    );
+    expect(priorAnswer).toBeUndefined();
+
     const result = await fresh.evaluate((json) => window.CytoCourse.importJSON(json), exported);
     expect(result.ok).toBe(true);
     await expect(fresh.locator("#tpLabel")).toHaveText("1 of 17 modules complete");
@@ -96,7 +114,7 @@ test.describe("public API, import/export, and print", () => {
       question.id,
     );
     expect(restoredCorrect).toBe(true);
-    await fresh.close();
+    await freshContext.close();
   });
 
   test("the print control invokes window.print and beforeprint/afterprint toggle print mode", async ({ page }) => {
