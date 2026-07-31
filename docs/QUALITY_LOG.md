@@ -173,3 +173,33 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   starting state before the action under test runs, not just the end state
   after. A test that only checks the end state cannot distinguish "the
   action worked" from "the state was already there."
+
+## QL-009 — Recording a CI run as "current" inside a commit is self-invalidating
+
+- **Status:** Corrected
+- **Finding:** `docs/CLAUDE_HANDOFF.md` described a specific commit as "the
+  current branch head" and its GitHub Actions run as "the authoritative
+  current CI result." The act of committing that wording produced a newer
+  head and a newer CI run, so the claim was already stale the moment it
+  merged into the branch's history — a document cannot correctly describe
+  itself as reflecting the branch's live state, because committing it is
+  itself a branch change.
+- **Impact:** None shipped; no product or test behavior was affected. A
+  future reader could be misled into treating a specific old run ID as
+  "current" indefinitely, when live status was only ever a PR or Actions
+  page away.
+- **Cause:** Conflating two different kinds of fact: a stable, timeless
+  claim ("commit X was verified by run Y") with a time-relative claim
+  ("this is the current state"), which decays the instant it's written down.
+- **Correct action:** Record which commit a specific CI run verified, as a
+  fixed historical fact, and separately tell the reader to consult GitHub
+  for live status rather than trust any run ID recorded in a document.
+- **Correction:** Reworded both references in `docs/CLAUDE_HANDOFF.md` to
+  say a named commit is a "post-correction implementation checkpoint" that a
+  named run "verified," with explicit instruction to check the PR or GitHub
+  Actions for the branch's actual current status. Removed "current branch
+  head" and "authoritative current CI result" phrasing.
+- **Prevention:** Document CI results as fixed checkpoints ("commit X, run
+  Y, verified Z") tied to a specific commit, never as "current" or "latest."
+  Point readers to GitHub (the PR, the Actions tab) for live status instead
+  of asserting it in committed prose.
