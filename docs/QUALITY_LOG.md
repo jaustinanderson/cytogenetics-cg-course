@@ -656,4 +656,125 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   file-size reduction alone or by assuming a tool's default settings are
   safe; record the exact flags required to keep a given tool lossless so the
   step is reproducible without rediscovering the same default.
+- **Update:** The screenshot was regenerated again after the dashboard-card
+  layout fix below (QL-016) and a recalculated, shorter capture height, so
+  the exact byte counts above describe an intermediate version that was
+  never committed. The same `--palette=false` verification was re-run
+  against the final image and again confirmed pixel-identical before commit
+  — see QL-016 for the current figures (raw 383,090 bytes; optimized
+  280,149 bytes, ~27% reduction). The methodology finding above (verify
+  losslessness directly, don't trust file size or tool defaults) is
+  unaffected by which specific capture it was first demonstrated against.
+
+## QL-015 — Reproducibility evidence used file-size equality, not a real comparison
+
+- **Status:** Corrected before commit
+- **Finding:** An earlier record of this screenshot work claimed the capture
+  script was reproducible because running it twice produced files of the
+  *same size* (389,650 bytes both times). Identical file size is not
+  evidence of identical content — two different PNGs (different pixels,
+  different metadata, different internal chunk ordering) can coincidentally
+  share a byte count, and nothing about the check actually inspected the
+  bytes themselves.
+- **Impact:** None shipped incorrectly — the underlying capture genuinely
+  was reproducible in this environment, so the conclusion happened to be
+  right, but the evidence offered for it was not actually proof. Recording
+  an unverified inference as if it were a checked fact is the same category
+  of mistake this log tracks elsewhere (QL-002, QL-004), regardless of
+  whether the conclusion turns out correct.
+- **Cause:** File size is an easy, cheap signal to compare and was
+  available immediately from `ls -la`; reaching for it instead of an actual
+  content comparison substitutes a proxy for the real property being
+  claimed.
+- **Correct action:** When claiming two artifacts are identical, compare
+  their actual content (a cryptographic hash of the bytes, or a decoded
+  pixel-buffer comparison for images), not a derived property like size
+  that merely correlates with content in the common case.
+- **Correction:** Re-ran `npm run capture:readme-screenshot` twice and
+  compared `sha256sum` output for the resulting file both times; both runs
+  produced the identical hash
+  (`a81201a670cf64f7457111a5df011e00e802ea568a5e562f3f362c510d63261a`),
+  which is a real, checkable claim. `docs/VALIDATION.md` and this log now
+  state plainly that this is same-environment reproducibility evidence
+  only — not a claim that the script (or the separate, optional
+  `sharp-cli` optimization step) produces byte-identical output across
+  different OS/Chromium/font environments, which font hinting and
+  rendering differences could legitimately change.
+- **Prevention:** Prefer a cryptographic hash or decoded-content comparison
+  over file size whenever "these two things are the same" is the actual
+  claim being made; word any reproducibility claim to name the exact scope
+  it was verified under (here: this environment, this Chromium build, this
+  font availability) rather than an unqualified "reproducible."
+
+## QL-016 — Confirmed dashboard-card layout defect, exposed by the committed screenshot
+
+- **Status:** Corrected on branch `claude/issue-1-readme-screenshot`
+  (Issue #1); no scientific content changed
+- **Finding:** Independent review of the committed `docs/assets/
+  course-overview.png` identified a real, visible layout defect in every
+  one of the 17 progress-dashboard cards: the module title ran directly
+  into "Module N" on one line (e.g. "How to use this courseModule 1"
+  instead of two separate lines), and the "To do"/"Done" status text had
+  no protection against wrapping.
+- **Confirmed against `index.html` before changing anything** (per the
+  standing discipline in this log): the title/subtitle wrapper `<span>`
+  generated at the dashboard-card template (`grid.innerHTML = MODULES.map
+  (...)`) had no class and no CSS applied to it, so its two children
+  (`.dc-t`, `.dc-s`), both plain inline `<span>`s with no layout rules of
+  their own, rendered on the same line by default. Separately, `.dc-state`
+  had `margin-left:auto` but neither `flex:0 0 auto` nor
+  `white-space:nowrap`, so at a narrow width it could shrink and wrap its
+  two words onto separate lines.
+- **Impact:** Every dashboard card was affected — this was the single most
+  visible element in the very screenshot meant to showcase the product,
+  not a rare edge case. Anyone viewing the README screenshot (or the real
+  page) would see concatenated, harder-to-read card text.
+- **Cause:** The wrapper span was written without a class at the time the
+  dashboard-card template was authored; nothing in the structural
+  validator, the DOM behavior suite, or the axe-core/keyboard suites checks
+  visual line arrangement, so this had no automated coverage in any
+  existing test.
+- **Correct action:** Fix the product with the narrowest change that
+  resolves the defect without touching scientific content or unrelated
+  styling, verify it with real bounding-box measurements at both desktop
+  and narrow viewports (not visual inspection alone), and add a committed
+  regression test.
+- **Correction:** `index.html`:
+  - `.dash-cell .dc-body{flex:1 1 auto;min-width:0;display:flex;
+    flex-direction:column;gap:.15rem}` added, and the dashboard-card
+    template's wrapper span now carries `class="dc-body"`
+  - `.dash-cell .dc-t`/`.dc-s` gained explicit `display:block`
+  - `.dc-state` gained `flex:0 0 auto;white-space:nowrap`
+  - Verified by real bounding-box measurement at 1440px and 390px: the
+    subtitle now starts at or below the title's bottom edge (on its own
+    line) and the status text's box stays within a single computed
+    line-height, at both widths, for the first card and (via the new test
+    below) all 17
+- **New test:** `tests/e2e/dashboard-layout.spec.mjs` (6 runs across both
+  Playwright projects, part of `npm run test:e2e`) asserts, via bounding
+  boxes and computed line-height — not pixel snapshots — that all 17 cards
+  render, that every card's title/subtitle are on separate non-overlapping
+  lines, and that the status text neither overlaps the title nor wraps, at
+  both viewports. Mutation-verified: temporarily reverting both the CSS
+  and the template's `class="dc-body"` back to the pre-fix state made 4 of
+  the 6 test runs fail immediately, each naming the specific overlap/line
+  violation it caught; reverted before commit.
+- **Screenshot regenerated and height recalculated:** the fix actually
+  made dashboard rows *shorter* on average (the pre-fix concatenated text
+  had wrapped across more lines than the corrected two-line layout), so
+  the previous capture height (1500px, chosen before this fix) was
+  re-measured rather than assumed still correct. An intermediate capture
+  at 1500px was visually inspected and found to cut into module 1's own
+  header — a real, avoidable defect in the capture itself, caught before
+  committing it. The final height (1430px) was chosen from a fresh
+  measurement: the dashboard now ends at ~1415.8px and module 1 begins at
+  ~1441.4px, so 1430 shows the complete dashboard with a small margin and
+  stops cleanly before any module content.
+- **Prevention:** A screenshot is also a review surface — visually
+  inspecting a generated artifact before committing it can surface real
+  product defects the automated suites don't check (here: line
+  arrangement/wrapping, which none of the structural, DOM-behavior,
+  axe-core, or keyboard suites evaluate). When a generated artifact's
+  dimensions depend on a product layout that changes, re-measure rather
+  than assume the previous constant is still correct.
 

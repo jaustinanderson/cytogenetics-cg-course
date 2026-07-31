@@ -366,12 +366,72 @@ A README course screenshot was added on 2026-07-31 (branch
   6% of bytes differed by up to 25/255. Adding `--palette=false` and
   re-verifying byte-for-byte pixel identity before committing caught this
   before a subtly degraded asset shipped. See `docs/QUALITY_LOG.md` QL-014.
-- No product change; `index.html` and all scientific content remain
-  untouched.
+- Initially: no product change; `index.html` untouched. **This was revised**
+  — independent review of this screenshot found a real product defect it
+  exposed; see the correction entry immediately below. Scientific content
+  was never touched, in either version of this work.
 - This closes the "capture a clean course-only README screenshot" item in
   `docs/ROADMAP.md` and Issue #1. Screen-reader review, physical
   touch-hardware testing, and the scientific-review status record remain
   open — this work does not and cannot establish any of them.
+
+Independent review of that screenshot found and prompted correcting three
+issues, applied 2026-07-31 on the same branch:
+
+1. **A confirmed product defect, found from the screenshot itself.** Every
+   one of the 17 dashboard cards ran its title directly into "Module N" on
+   one line, and the status text ("To do"/"Done") had no protection against
+   wrapping. Confirmed against `index.html` before changing anything (the
+   title/subtitle wrapper `<span>` had no class or layout rules; `.dc-t`/
+   `.dc-s` were plain inline spans with nothing to make them stack; `.dc-
+   state` lacked `flex:0 0 auto`/`white-space:nowrap`). Fixed with a scoped
+   CSS/markup change (`.dc-body` wrapper class with flex/column layout,
+   `display:block` on title/subtitle, the missing flex/nowrap on the
+   status), verified by real bounding-box measurement at both the desktop
+   and narrow/mobile viewports. **`index.html` is no longer unchanged for
+   this PR** — this is the one exception, a narrowly scoped, independently
+   confirmed layout fix; no scientific content changed. See
+   `docs/QUALITY_LOG.md` QL-016 for the full diagnosis, fix, and a
+   mutation-test proof (reverting the fix made 4 of 6 new test runs fail
+   immediately).
+2. **A new regression test** — `tests/e2e/dashboard-layout.spec.mjs` (6
+   runs across both Playwright projects) — asserts, via bounding boxes and
+   computed line-height (not pixel snapshots), that all 17 cards render
+   with title/subtitle on separate non-overlapping lines and non-wrapping
+   status text, at both viewports.
+3. **The reproducibility evidence was corrected.** The original entry above
+   claimed reproducibility from two runs producing the *same file size*,
+   which is not proof of identical content. Corrected to compare
+   `sha256sum` of the raw capture across two runs (both produced
+   `a81201a6...d63261a`) — real cryptographic evidence for this
+   environment, explicitly not a claim that the script (or the optional
+   `sharp-cli` optimization step) reproduces byte-identical output across
+   different OS/Chromium/font environments. See `docs/QUALITY_LOG.md`
+   QL-015.
+4. **The capture script was hardened**: an OS-assigned ephemeral local-
+   server port with conclusive early-exit failure detection (instead of a
+   fixed port and a generic timeout), explicit pre-capture assertions of
+   the page title/heading/17-dashboard-cards, a font-load check that
+   confirms each expected family reached `status: "loaded"` in
+   `document.fonts` rather than trusting `document.fonts.ready` alone
+   (which also resolves after a *failed* font request — verified by
+   deliberately blocking the Google Fonts requests and confirming
+   `.ready` still resolved while this stricter check correctly failed),
+   and a guaranteed-clean server shutdown in both the success and failure
+   paths (verified by checking for a leftover process after each induced
+   failure above).
+5. **The screenshot was regenerated** after the product fix, and its
+   capture height recalculated from a fresh measurement rather than
+   assumed unchanged — the fix actually made dashboard rows shorter on
+   average, and an intermediate 1500px-tall capture was visually inspected
+   and rejected because it cut into module 1's own header. Final:
+   `docs/assets/course-overview.png`, 1440x1430, 280,149 bytes, verified
+   pixel-identical to the raw capture before committing.
+
+All of `npm test`, `npm run test:e2e` (including the new layout test), and
+two capture-script runs (compared by `sha256sum`, not file size) passed
+locally after these corrections. Issue #1's screenshot checkbox and the
+issue itself remain open, pending independent review of this correction.
 
 ## Read these files first
 
