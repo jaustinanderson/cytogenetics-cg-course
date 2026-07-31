@@ -6,6 +6,17 @@ All notable repository changes are recorded here.
 
 ### Added
 
+- Automated WCAG scanning via `@axe-core/playwright`
+  (`tests/e2e/accessibility.spec.mjs`), run against the real course at
+  desktop and narrow/mobile viewports in five states (fresh load, mobile
+  nav open, quiz answered, exercise answered, module complete + flashcard
+  flipped); zero violations after fixes
+- A representative real-browser keyboard-only interaction suite
+  (`tests/e2e/keyboard-navigation.spec.mjs`) covering the skip link, visible
+  sidebar nav, mobile menu, quizzes, exercises, module completion, Print,
+  and Reset, with focus-visibility, accessible-name, and keyboard-trap checks
+- `@axe-core/playwright` as a development-only dependency
+
 - A dependency-free DOM behavior suite covering navigation, quizzes,
   exercises, migration, persistence, Reset, import/export, print, the public
   API, API events, analytics, and implemented keyboard/accessibility affordances
@@ -34,6 +45,23 @@ All notable repository changes are recorded here.
 - CI now installs dependencies and a Chromium binary and runs the Playwright
   suite after `npm test`, uploading the HTML report as a build artifact on
   failure
+- Darkened the `--ink-faint`, `--accent`, and `--ok-ink` CSS color variables to
+  meet WCAG AA 4.5:1 text contrast (no other visual change)
+- Corrected 22 heading-order violations (17 "Learning objectives" headings
+  plus 5 others) to the correct heading level, with a matching CSS override
+  so their visible size and weight are unchanged
+- Added an accessible name (or `aria-hidden`, where the image is purely
+  redundant with adjacent quiz/exercise text) to instructional/quiz/exercise
+  SVGs via a new optional parameter on the shared `svgWrap()` helper
+- Added a visually hidden label to the two comparison-table corner cells
+  that previously had no accessible header text
+- Made the 18 scrollable data-table containers keyboard-focusable
+
+### Fixed
+
+- The skip link's target (`#main`) is now focusable, so keyboard-activating
+  "Skip to content" moves focus into the content instead of silently
+  returning it to `<body>`
 
 ## [1.1.1] - 2026-07-30
 

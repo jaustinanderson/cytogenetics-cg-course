@@ -67,7 +67,12 @@ the course.
   `tests/e2e/`, `npm run test:e2e`); the committed DOM behavior suite remains
   the dependency-free prerequisite, and this satisfies it as a real browser
 - [ ] Add automated WCAG checks and representative keyboard/screen-reader
-  review in a real browser
+  review in a real browser — automated axe-core WCAG scanning and a
+  representative keyboard-only interaction suite are committed
+  (`tests/e2e/accessibility.spec.mjs`, `tests/e2e/keyboard-navigation.spec.mjs`,
+  Issue #1); six confirmed defects found by the scan were fixed (see
+  `docs/QUALITY_LOG.md` QL-010). A genuine screen-reader review has **not**
+  been performed, so this item stays open until one is
 - [ ] Run *deployed* (GitHub Pages, not local-server) narrow-screen, touch,
   and mobile-navigation tests; the local Playwright suite covers narrow
   viewport and touch-emulated behavior against a local static server, not the

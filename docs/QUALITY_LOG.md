@@ -203,3 +203,99 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   Y, verified Z") tied to a specific commit, never as "current" or "latest."
   Point readers to GitHub (the PR, the Actions tab) for live status instead
   of asserting it in committed prose.
+
+## QL-010 — Six confirmed accessibility defects found by automated WCAG scanning
+
+- **Status:** Corrected on branch `claude/issue-1-accessibility-baseline`
+  (Issue #1)
+- **Finding:** An initial `@axe-core/playwright` scan of the fully rendered
+  course found six distinct, independently confirmed defects:
+  1. Insufficient color contrast for `--ink-faint` (~213 nodes across
+     `.brand-sub`, `.side-title`, `.nav-section`, `.source-note`,
+     `.dc-s`/`.dc-state`, and more), `--accent` used as text color, and
+     `--ok-ink` against its own background — all below the WCAG AA 4.5:1
+     threshold for normal text.
+  2. Heading-order violations (22 nodes): the "Learning objectives" `<h4>` in
+     all 17 modules, plus five more `<h4>`s (the final-exam quiz-head, four
+     `.grid-card` group headings, and the disclaimer heading) that jumped
+     directly from an `<h2>` with no intervening `<h3>`.
+  3. Two comparison-table corner cells (`<th></th>`, mosaicism/chimerism and
+     interphase/metaphase FISH) carried no accessible text for their
+     row-label column.
+  4. Instructional/quiz/exercise SVGs rendered with `role="img"` but no
+     accessible name, so any visible `<text>` label already inside them was
+     invisible to assistive tech.
+  5. The 18 scrollable `.tbl-wrap` table containers were not
+     keyboard-focusable, so a keyboard user could not scroll a table wider
+     than its container.
+  6. The skip link's target, `#main`, was not focusable, so keyboard-activating
+     "Skip to content" silently returned focus to `<body>` instead of moving
+     it into the content. Found while authoring the keyboard-navigation
+     suite, not by axe-core (which does not check this).
+- **Impact:** A screen-reader or low-vision user would have hit unreadable
+  low-contrast text and a confusing heading structure, missed labeled row
+  context in two tables, been unable to identify several images, and would
+  have had the single most important keyboard shortcut on the page silently
+  fail.
+- **Cause:** None of the existing structural, DOM-behavior, or Playwright
+  smoke suites perform contrast, heading-structure, or accessible-name
+  analysis, so these defects were never exercised.
+- **Correct action:** Add automated WCAG scanning and representative
+  keyboard testing; independently confirm every finding against product
+  source before editing `index.html`; apply the narrowest fix that resolves
+  the defect without touching scientific content.
+- **Correction:** Darkened `--ink-faint`, `--accent`, and `--ok-ink` by the
+  minimum amount needed to clear 4.5:1 against every background they appear
+  on. Promoted the 22 affected headings to the correct level with a
+  same-size CSS override so no visual size/weight changed. Added a
+  `.sr-only` label to both empty table corner cells. Added an optional
+  `name` parameter to the shared `svgWrap()` helper (threaded through
+  `rowCard`/`nucleusCard`/`nucleusRow`/`metaphaseCard`/`karyoLayoutSVG`) that
+  exposes an SVG's own already-visible text as its accessible name, or marks
+  it `aria-hidden` when it is purely redundant with its adjacent quiz/exercise
+  prompt text — no new descriptive content was invented. Added `tabindex="0"`
+  to every `.tbl-wrap`. Added `tabindex="-1"` to `#main`. A full re-scan of
+  all five axe states plus two additional interaction states (flashcard
+  flipped, all modules complete) at both viewports now returns zero
+  violations.
+- **Prevention:** `tests/e2e/accessibility.spec.mjs` runs this scan on every
+  CI push/PR with no rule disabled and no violation filtered. A new axe
+  finding must be fixed or recorded here as a specific, justified exception —
+  never suppressed to force a green run.
+
+## QL-011 — Two self-caught test-authoring mistakes, corrected before commit
+
+- **Status:** Corrected before any product or committed-test change shipped
+- **Finding:** While authoring the accessibility/keyboard suites for Issue #1:
+  (1) an initial fix for the `scrollable-region-focusable` axe finding added
+  `role="region" aria-label="Scrollable data table"` to all 18 `.tbl-wrap`
+  containers; because all 18 shared the identical accessible name, this
+  created a new `landmark-unique` violation (18 indistinguishable landmark
+  regions) that a full re-scan caught before commit. (2) An initial
+  keyboard-navigation assertion assumed that, immediately after opening the
+  mobile sidebar, the very next `Tab` press would land on a sidebar
+  `.nav-link`; running the test against the real page showed focus actually
+  moves to the Print button first, because the hamburger toggle precedes
+  Print/Reset in DOM order and tab order follows DOM order, not visual
+  position — the test was wrong, not the product.
+- **Impact:** None shipped in either case. Trusting either result would have
+  produced a pointless "fix" for a landmark-labeling collision introduced by
+  the previous fix itself, and a false keyboard-trap defect report against a
+  product that has none.
+- **Cause:** (1) A fix scoped to one axe rule was applied without re-scanning
+  for new violations it might introduce. (2) An assumption about tab order
+  was written into an assertion without first confirming actual DOM order in
+  the real page.
+- **Correct action:** Re-run the full axe scan after every accessibility fix,
+  not just the rule being addressed; confirm real browser behavior before
+  asserting it in a test, per the same discipline already recorded in
+  QL-007/QL-008.
+- **Correction:** `.tbl-wrap` now gets only `tabindex="0"` (no `role` or
+  `aria-label`), which resolves `scrollable-region-focusable` without
+  creating a landmark. The keyboard test now presses `Tab` in a bounded loop
+  and asserts a sidebar `.nav-link` is *eventually* reached without focus
+  stalling, instead of asserting it is the very next stop.
+- **Prevention:** Treat "does this fix introduce a new finding" as part of
+  fixing any accessibility violation — re-scan, don't just re-check the one
+  rule. Treat an assumption about DOM/tab order as a claim to verify against
+  the real page, exactly like any other claimed product behavior.

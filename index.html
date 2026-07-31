@@ -11,16 +11,16 @@
 <style>
   :root{
     --bg:#f5f8fb; --surface:#ffffff; --surface-2:#fbfdfe;
-    --ink:#10243a; --ink-soft:#46596d; --ink-faint:#76879a;
+    --ink:#10243a; --ink-soft:#46596d; --ink-faint:#637181;
     --line:#dbe4ee; --line-soft:#eaf0f6;
     --primary:#1366c4; --primary-700:#0e4f9e; --primary-050:#eaf2fc;
-    --accent:#0a9fb3; --accent-050:#e5f6f8;
+    --accent:#087c8c; --accent-050:#e5f6f8;
     --pearl-ink:#0e4f9e; --pearl-bg:#eaf2fc; --pearl-line:#bcd6f5;
     --pit-ink:#b3361b; --pit-bg:#fdf0ec; --pit-line:#f4c7b9;
     --lab-ink:#0f6e63; --lab-bg:#e8f6f3; --lab-line:#bfe4dc;
     --iscn-ink:#5331a8; --iscn-bg:#f1ecfb; --iscn-line:#d6c8f1;
     --trouble-ink:#9a5b08; --trouble-bg:#fdf5e6; --trouble-line:#f2dcad;
-    --ok-ink:#15803d; --ok-bg:#e8f6ed; --ok-line:#bce3c9;
+    --ok-ink:#147839; --ok-bg:#e8f6ed; --ok-line:#bce3c9;
     --no-ink:#b91c1c; --no-bg:#fdebeb; --no-line:#f3c4c4;
     --shadow:0 1px 2px rgba(16,36,58,.05), 0 6px 18px rgba(16,36,58,.06);
     --radius:14px;
@@ -44,6 +44,7 @@
   .skip-link{position:absolute;left:-999px;top:0;background:var(--primary);color:#fff;padding:.6rem 1rem;border-radius:0 0 8px 0;z-index:200}
   .skip-link:focus{left:0}
   :focus-visible{outline:3px solid #2b8be6; outline-offset:2px; border-radius:4px}
+  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 
   /* ---------- Top bar ---------- */
   .topbar{
@@ -145,7 +146,7 @@
   .chip-core{background:var(--primary-050);color:var(--primary-700);border:1px solid var(--pearl-line)}
 
   .objectives{background:var(--surface-2);border:1px solid var(--line);border-left:4px solid var(--primary);border-radius:10px;padding:.9rem 1.1rem;margin:0 0 1.2rem}
-  .objectives h4{margin-bottom:.4rem;color:var(--primary-700)}
+  .objectives h3{margin-bottom:.4rem;color:var(--primary-700);font-size:1.02rem;font-weight:600}
   .objectives ul{margin-bottom:0}
   .why{background:var(--accent-050);border:1px solid var(--lab-line);border-radius:10px;padding:.85rem 1.1rem;margin:0 0 1.3rem;font-size:.95rem}
   .why b{color:var(--lab-ink)}
@@ -222,7 +223,7 @@
   .quiz-head{background:var(--primary-050);padding:.7rem 1rem;display:flex;align-items:center;gap:.55rem;border-bottom:1px solid var(--pearl-line)}
   .quiz-head .qh-ic{width:26px;height:26px;border-radius:7px;background:var(--primary);color:#fff;display:grid;place-items:center}
   .quiz-head .qh-ic svg{width:15px;height:15px}
-  .quiz-head h4{margin:0;color:var(--primary-700)}
+  .quiz-head h3{margin:0;color:var(--primary-700);font-size:1.02rem;font-weight:600}
   .quiz-head .qh-score{margin-left:auto;font-size:.8rem;font-weight:700;color:var(--ink-soft);font-family:var(--mono)}
   .quiz-body{padding:1rem}
   .qitem{padding:.9rem 0;border-bottom:1px dashed var(--line)}
@@ -317,6 +318,7 @@
   .two-col{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
   .grid-card{background:var(--surface-2);border:1px solid var(--line);border-radius:11px;padding:.9rem 1rem}
   .grid-card h4{color:var(--primary-700);margin-bottom:.4rem}
+  .grid-card h3{color:var(--primary-700);margin-bottom:.4rem;font-size:1.02rem;font-weight:600}
   .kbd{font-family:var(--mono);font-size:.78rem;background:var(--surface);border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:.05rem .35rem}
   .pill-row{display:flex;flex-wrap:wrap;gap:.4rem;margin:.5rem 0}
   .pill{font-size:.76rem;font-weight:600;background:var(--surface-2);border:1px solid var(--line);border-radius:999px;padding:.25rem .6rem}
@@ -339,6 +341,7 @@
 
   .disclaimer{background:#fff7ed;border:1px solid var(--trouble-line);border-radius:12px;padding:1rem 1.2rem;font-size:.9rem;color:#7a4a08}
   .disclaimer h4{color:var(--trouble-ink)}
+  .disclaimer h3{color:var(--trouble-ink);font-size:1.02rem;font-weight:600}
   footer.site{margin-top:2.5rem;padding:1.4rem 0 2rem;border-top:1px solid var(--line);color:var(--ink-faint);font-size:.82rem;text-align:center}
 
   /* ---------- Backdrop for mobile nav ---------- */
@@ -425,7 +428,7 @@
     <nav aria-label="Modules"><ul class="navlist" id="sidebarNav"></ul></nav>
   </aside>
 
-  <main class="content" id="main">
+  <main class="content" id="main" tabindex="-1">
 
     <section class="hero anchor-offset" id="top" aria-labelledby="heroTitle">
       <div class="eyebrow">Clinical cytogenetics · board-prep mini-course</div>
@@ -471,7 +474,7 @@
       </div>
 
       <div class="objectives">
-        <h4>Learning objectives</h4>
+        <h3>Learning objectives</h3>
         <ul>
           <li>Describe the four content domains of the CG(ASCP) examination and their relative weighting.</li>
           <li>Recognize the question styles the exam favors: recall, application, interpretation, and troubleshooting.</li>
@@ -484,7 +487,7 @@
 
       <h3 class="coreh">The four content domains</h3>
       <p>Every item on the exam maps to one of four areas. The proportions below come from the published ASCP BOC content guideline category structure. Spend study time in proportion to weight, and remember that the largest area is also the one with the steepest skill curve.</p>
-      <div class="tbl-wrap">
+      <div class="tbl-wrap" tabindex="0">
         <table class="data">
           <thead><tr><th>Domain</th><th>Approx. weight</th><th>What it really tests</th></tr></thead>
           <tbody>
@@ -557,7 +560,7 @@
       </div>
 
       <div class="objectives">
-        <h4>Learning objectives</h4>
+        <h3>Learning objectives</h3>
         <ul>
           <li>Match common specimen types to their appropriate anticoagulant, container, and typical cytogenetic use.</li>
           <li>Explain why anticoagulant choice and transport conditions make or break a culture.</li>
@@ -569,7 +572,7 @@
       <div class="why"><b>Why this matters on the exam:</b> Pre-analytic errors are a favorite test theme because they are common and preventable. The exam expects you to know that the wrong anticoagulant or a delayed, mishandled specimen can doom a study before a single cell divides.</div>
 
       <h3 class="coreh">Specimen types at a glance</h3>
-      <div class="tbl-wrap">
+      <div class="tbl-wrap" tabindex="0">
         <table class="data">
           <thead><tr><th>Specimen</th><th>Usual anticoagulant / container</th><th>Typical use</th><th>Notes</th></tr></thead>
           <tbody>
@@ -657,7 +660,7 @@
       </div>
 
       <div class="objectives">
-        <h4>Learning objectives</h4>
+        <h3>Learning objectives</h3>
         <ul>
           <li>Distinguish stimulated from unstimulated cultures and know when each is used.</li>
           <li>Name the role of mitogens (PHA and B-cell mitogens) and core media components.</li>
@@ -669,7 +672,7 @@
       <div class="why"><b>Why this matters on the exam:</b> "The culture failed &mdash; why?" and "Which culture for which specimen?" are reliable items. The exam wants you to reason from specimen and indication to the correct culture strategy, and to diagnose contamination and growth failures.</div>
 
       <h3 class="coreh">Stimulated vs. unstimulated &mdash; the central decision</h3>
-      <div class="tbl-wrap">
+      <div class="tbl-wrap" tabindex="0">
         <table class="data">
           <thead><tr><th>Culture type</th><th>Mitogen?</th><th>Typical use</th><th>Logic</th></tr></thead>
           <tbody>
@@ -769,7 +772,7 @@
       </div>
 
       <div class="objectives">
-        <h4>Learning objectives</h4>
+        <h3>Learning objectives</h3>
         <ul>
           <li>Sequence the harvest: colcemid arrest &rarr; hypotonic &rarr; fixation &rarr; slide making.</li>
           <li>Explain how colcemid exposure time trades metaphase yield against chromosome length/resolution.</li>
@@ -791,7 +794,7 @@
       <div class="callout co-pearl"><span class="co-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12c.7.7 1 1.5 1 2h6c0-.5.3-1.3 1-2a7 7 0 0 0-4-12z"/></svg>Exam Pearl</span><p><strong>Colcemid time is a trade-off.</strong> <em>Longer</em> exposure &rarr; more metaphases but <em>shorter, more contracted</em> chromosomes (lower band resolution). <em>Shorter</em> exposure &rarr; fewer metaphases but <em>longer</em> chromosomes (higher resolution). When a case needs high-resolution banding (e.g., a subtle structural question), the lab shortens colcemid exposure to lengthen chromosomes.</p></div>
 
       <h3 class="coreh">Hypotonic and fixation failure modes</h3>
-      <div class="tbl-wrap">
+      <div class="tbl-wrap" tabindex="0">
         <table class="data">
           <thead><tr><th>Step</th><th>If too little</th><th>If too much</th></tr></thead>
           <tbody>
@@ -867,7 +870,7 @@
       </div>
 
       <div class="objectives">
-        <h4>Learning objectives</h4>
+        <h3>Learning objectives</h3>
         <ul>
           <li>Explain what G-banding (GTG) does and why dark vs. light bands differ biologically.</li>
           <li>Recognize over- and under-trypsinization on sight and trace each to the fix.</li>
@@ -890,7 +893,7 @@
       <div class="callout co-pit"><span class="co-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>Common Pitfall</span><p><strong>Trypsin is a Goldilocks step.</strong> <em>Over-trypsinized</em> chromosomes look <strong>swollen, pale, and "fuzzy/fluffy"</strong> with bands washed out and edges indistinct. <em>Under-trypsinized</em> chromosomes stain <strong>too dark and solid</strong>, with bands that fail to separate. Both destroy analyzability even when the harvest was perfect.</p></div>
 
       <h3 class="coreh">The major banding / staining methods</h3>
-      <div class="tbl-wrap">
+      <div class="tbl-wrap" tabindex="0">
         <table class="data">
           <thead><tr><th>Method</th><th>What it shows</th><th>Typical use</th></tr></thead>
           <tbody>
@@ -940,7 +943,7 @@
       </div>
 
       <div class="objectives">
-        <h4>Learning objectives</h4>
+        <h3>Learning objectives</h3>
         <ul>
           <li>Match magnification to task: low power to <em>find</em> metaphases, 100&times; oil to <em>analyze</em> them.</li>
           <li>Explain K&ouml;hler illumination and why even, aligned light is prerequisite to good banding analysis.</li>
@@ -968,7 +971,7 @@
       <div class="callout co-pit"><span class="co-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>Common Pitfall</span><p><strong>Image enhancement has hard limits.</strong> Adjusting overall brightness/contrast or subtracting even background to aid visualization is acceptable; <strong>adding, erasing, cloning, or moving real chromatin or signal is not</strong>&mdash;that fabricates or destroys a finding. Always retain the <strong>original/raw image</strong>. Treating an automated system's auto-karyotype as final without review is another classic error.</p></div>
 
       <h3 class="coreh">Imaging troubleshooting quick map</h3>
-      <div class="tbl-wrap">
+      <div class="tbl-wrap" tabindex="0">
         <table class="data">
           <thead><tr><th>What you see</th><th>Likely cause</th><th>Fix</th></tr></thead>
           <tbody>
@@ -1027,7 +1030,7 @@
       </div>
 
       <div class="objectives">
-        <h4>Learning objectives</h4>
+        <h3>Learning objectives</h3>
         <ul>
           <li>Define and rank <strong>countable</strong>, <strong>analyzable</strong>, and <strong>karyotypable</strong> metaphases.</li>
           <li>Judge a spread on spreading, length/resolution, band sharpness, and completeness.</li>
@@ -1040,7 +1043,7 @@
       <div class="why"><b>Why this matters on the exam:</b> "Is this cell good enough, and for what?" is the everyday decision of bench cytogenetics and a heavily tested concept. Items frequently describe a spread and ask whether it is countable, analyzable, or karyotypable&mdash;or ask how cell selection could bias a mosaicism result.</div>
 
       <h3 class="coreh">The three quality tiers (a nested hierarchy)</h3>
-      <div class="tbl-wrap">
+      <div class="tbl-wrap" tabindex="0">
         <table class="data">
           <thead><tr><th>Tier</th><th>Definition</th><th>Good enough to&hellip;</th></tr></thead>
           <tbody>
@@ -1104,7 +1107,7 @@
       </div>
 
       <div class="objectives">
-        <h4>Learning objectives</h4>
+        <h3>Learning objectives</h3>
         <ul>
           <li>Distinguish a <strong>karyogram</strong> (the arranged image) from a <strong>karyotype</strong> (the written formula).</li>
           <li>Apply standard arrangement: groups A&ndash;G, largest&rarr;smallest, <strong>p-arm up</strong>, homologs paired, centromeres aligned.</li>
@@ -1200,7 +1203,7 @@
       </div>
 
       <div class="objectives">
-        <h4>Learning objectives</h4>
+        <h3>Learning objectives</h3>
         <ul>
           <li>Identify chromosomes using the triad: <strong>size &rarr; centromere position &rarr; banding pattern</strong>.</li>
           <li>Classify metacentric, submetacentric, and acrocentric morphology.</li>
@@ -1230,7 +1233,7 @@
       </figure>
 
       <h3 class="coreh">Groups A&ndash;G (Denver classification)</h3>
-      <div class="tbl-wrap">
+      <div class="tbl-wrap" tabindex="0">
         <table class="data">
           <thead><tr><th>Group</th><th>Chromosomes</th><th>Morphology &amp; key features</th></tr></thead>
           <tbody>
@@ -1254,7 +1257,7 @@
       </ul>
 
       <h3 class="coreh">The classic mix-ups (and how to break them)</h3>
-      <div class="tbl-wrap">
+      <div class="tbl-wrap" tabindex="0">
         <table class="data">
           <thead><tr><th>Pair / set</th><th>Distinguishing landmark</th></tr></thead>
           <tbody>
@@ -1317,7 +1320,7 @@
       </div>
 
       <div class="objectives">
-        <h4>Learning objectives</h4>
+        <h3>Learning objectives</h3>
         <ul>
           <li>Define aneuploidy vs. polyploidy and name the common liveborn aneuploidies.</li>
           <li>Write numerical findings in ISCN: trisomies, <strong>45,X</strong>, sex-chromosome gains, triploidy, tetraploidy, and mosaics.</li>
@@ -1357,7 +1360,7 @@
         <span class="iscn-tok tok-abn"><span class="t-val">+21</span><span class="t-lab">gain of 21</span></span>
       </div>
       <p>More examples:</p>
-      <div class="tbl-wrap">
+      <div class="tbl-wrap" tabindex="0">
         <table class="data">
           <thead><tr><th>ISCN</th><th>Meaning</th></tr></thead>
           <tbody>
@@ -1420,7 +1423,7 @@
       </div>
 
       <div class="objectives">
-        <h4>Learning objectives</h4>
+        <h3>Learning objectives</h3>
         <ul>
           <li>Separate <strong>balanced</strong> from <strong>unbalanced</strong> rearrangements (net gain/loss or not).</li>
           <li>Write deletions (terminal vs interstitial), duplications, and insertions in ISCN with correct breakpoints.</li>
@@ -1432,7 +1435,7 @@
       <div class="why"><b>Why this matters on the exam:</b> Structural items test both <em>recognition</em> (what does the chromosome show?) and <em>nomenclature</em> (how is it written?). Breakpoint notation, the one-vs-two-breakpoint logic, and the meaning of <code>i</code>, <code>der</code>, and <code>add</code> are reliably tested.</div>
 
       <h3 class="coreh">The within-chromosome rearrangements</h3>
-      <div class="tbl-wrap">
+      <div class="tbl-wrap" tabindex="0">
         <table class="data">
           <thead><tr><th>Type (symbol)</th><th>What happens</th><th>Balanced?</th><th>ISCN example</th></tr></thead>
           <tbody>
@@ -1511,7 +1514,7 @@
       </div>
 
       <div class="objectives">
-        <h4>Learning objectives</h4>
+        <h3>Learning objectives</h3>
         <ul>
           <li>Write reciprocal and Robertsonian translocations and explain why <strong>rob &rarr; 45 chromosomes</strong>.</li>
           <li>Distinguish <strong>pericentric</strong> from <strong>paracentric</strong> inversions.</li>
@@ -1523,7 +1526,7 @@
       <div class="why"><b>Why this matters on the exam:</b> Translocations, inversions, and cancer nomenclature are heavily weighted. The Philadelphia chromosome is a near-guaranteed concept, and examiners test the rob-equals-45 logic, pericentric-vs-paracentric, marker workup, and clone-size brackets.</div>
 
       <h3 class="coreh">Between-chromosome rearrangements</h3>
-      <div class="tbl-wrap">
+      <div class="tbl-wrap" tabindex="0">
         <table class="data">
           <thead><tr><th>Type (symbol)</th><th>What happens</th><th>Count / balance</th><th>ISCN example</th></tr></thead>
           <tbody>
@@ -1623,7 +1626,7 @@
       </div>
 
       <div class="objectives">
-        <h4>Learning objectives</h4>
+        <h3>Learning objectives</h3>
         <ul>
           <li>Distinguish <strong>mosaicism</strong> (one zygote) from <strong>chimerism</strong> (&ge;2 zygotes) and write each in ISCN.</li>
           <li>Apply the pseudomosaicism vs. true-mosaicism logic (single cell/colony vs. multiple cultures).</li>
@@ -1636,9 +1639,9 @@
       <div class="why"><b>Why this matters on the exam:</b> "Is it real?" is the highest-order skill the exam probes. Items distinguish artifactual loss from true monosomy, pseudomosaicism from true mosaicism, and normal variants from pathogenic findings&mdash;and test the mosaicism/chimerism vocabulary and notation.</div>
 
       <h3 class="coreh">Mosaicism vs. chimerism</h3>
-      <div class="tbl-wrap">
+      <div class="tbl-wrap" tabindex="0">
         <table class="data">
-          <thead><tr><th></th><th>Mosaicism</th><th>Chimerism</th></tr></thead>
+          <thead><tr><th><span class="sr-only">Category</span></th><th>Mosaicism</th><th>Chimerism</th></tr></thead>
           <tbody>
             <tr><td>Origin</td><td><strong>One</strong> zygote; post-zygotic <strong>mitotic</strong> event</td><td><strong>Two or more</strong> zygotes / cell sources</td></tr>
             <tr><td>Examples</td><td>mos 45,X/46,XX; mosaic trisomy 21</td><td>Post-transplant donor/recipient; blood-group chimera; twin transfusion</td></tr>
@@ -1719,7 +1722,7 @@
       </div>
 
       <div class="objectives">
-        <h4>Learning objectives</h4>
+        <h3>Learning objectives</h3>
         <ul>
           <li>State the ISCN string grammar and the order in which abnormalities are listed.</li>
           <li>Decode a band address down to sub-band and read breakpoint conventions.</li>
@@ -1733,7 +1736,7 @@
       <h3 class="coreh">The grammar of an ISCN string</h3>
       <p>Read it as three slots: <strong>[modal number] , [sex chromosomes] , [abnormalities]</strong>. Abnormalities are listed in a set order: <strong>sex-chromosome abnormalities first, then autosomes in numerical order</strong>; within a given chromosome, <strong>numerical changes precede structural</strong> ones.</p>
 
-      <div class="tbl-wrap">
+      <div class="tbl-wrap" tabindex="0">
         <table class="data">
           <thead><tr><th>Symbol</th><th>Meaning</th><th>Symbol</th><th>Meaning</th></tr></thead>
           <tbody>
@@ -1828,7 +1831,7 @@
       </div>
 
       <div class="objectives">
-        <h4>Learning objectives</h4>
+        <h3>Learning objectives</h3>
         <ul>
           <li>Contrast <strong>interphase (nuc ish)</strong> and <strong>metaphase (ish)</strong> FISH and when each is used.</li>
           <li>Match probe designs&mdash;enumeration, locus-specific/deletion, <strong>break-apart</strong>, <strong>dual-fusion</strong>, paint, subtelomere&mdash;to the question they answer.</li>
@@ -1842,9 +1845,9 @@
 
       <h3 class="coreh">How FISH works; interphase vs. metaphase</h3>
       <p>A fluorescently labeled DNA <strong>probe</strong> hybridizes to its complementary target; after denaturation, hybridization, washing, and a <strong>DAPI</strong> counterstain, signals are read under fluorescence.</p>
-      <div class="tbl-wrap">
+      <div class="tbl-wrap" tabindex="0">
         <table class="data">
-          <thead><tr><th></th><th>Interphase FISH (<code>nuc ish</code>)</th><th>Metaphase FISH (<code>ish</code>)</th></tr></thead>
+          <thead><tr><th><span class="sr-only">Category</span></th><th>Interphase FISH (<code>nuc ish</code>)</th><th>Metaphase FISH (<code>ish</code>)</th></tr></thead>
           <tbody>
             <tr><td>Cells</td><td>Non-dividing nuclei</td><td>Metaphase spreads (needs dividing cells/culture)</td></tr>
             <tr><td>Strengths</td><td>Fast; no culture; great for <strong>enumeration</strong> and known targets; works on FFPE</td><td>Localizes a probe to a <strong>chromosome band</strong>; confirms structure/origin</td></tr>
@@ -1854,7 +1857,7 @@
       </div>
 
       <h3 class="coreh">Probe designs &amp; their signal logic</h3>
-      <div class="tbl-wrap">
+      <div class="tbl-wrap" tabindex="0">
         <table class="data">
           <thead><tr><th>Probe type</th><th>Normal pattern</th><th>Abnormal pattern</th><th>Typical use</th></tr></thead>
           <tbody>
@@ -1937,7 +1940,7 @@
       </div>
 
       <div class="objectives">
-        <h4>Learning objectives</h4>
+        <h3>Learning objectives</h3>
         <ul>
           <li>Apply biosafety, chemical, fire, sharps, and spill safety to a cytogenetics bench.</li>
           <li>Maintain specimen identity and chain of identity from accessioning to report.</li>
@@ -1949,7 +1952,7 @@
       <div class="why"><b>Why this matters on the exam:</b> Operations items reward knowing the <em>rules of the system</em>: how PT samples must be handled, what CLIA vs. CAP do, how identity is protected, and which hazards each reagent poses. They are high-yield, learnable points that don't depend on image skill.</div>
 
       <h3 class="coreh">Safety on a cytogenetics bench</h3>
-      <div class="tbl-wrap">
+      <div class="tbl-wrap" tabindex="0">
         <table class="data">
           <thead><tr><th>Domain</th><th>Key practices</th></tr></thead>
           <tbody>
@@ -2023,7 +2026,7 @@
       </div>
 
       <div class="objectives">
-        <h4>Learning objectives</h4>
+        <h3>Learning objectives</h3>
         <ul>
           <li>Chain the full workflow&mdash;specimen &rarr; culture/harvest &rarr; analysis &rarr; ISCN &rarr; FISH/array &rarr; report&mdash;under realistic constraints.</li>
           <li>Choose the right confirmatory method and recognize each method's blind spots.</li>
@@ -2173,7 +2176,7 @@
       <p>The facts and rules most likely to earn (or cost) points. If any of these feels shaky, revisit the linked module.</p>
       <div class="two-col">
         <div class="grid-card">
-          <h4>Specimen, culture &amp; harvest</h4>
+          <h3>Specimen, culture &amp; harvest</h3>
           <ul class="checklist hy">
             <li><strong>Sodium heparin (green top)</strong> for blood cultures; <strong>EDTA kills cultures</strong>.</li>
             <li><strong>PHA</strong> stimulates T-cells (constitutional blood); B-cell mitogens for CLL; marrow/tumor cultured <strong>unstimulated</strong>.</li>
@@ -2183,7 +2186,7 @@
           </ul>
         </div>
         <div class="grid-card">
-          <h4>Banding &amp; identification</h4>
+          <h3>Banding &amp; identification</h3>
           <ul class="checklist hy">
             <li><strong>GTG</strong>: dark = AT-rich/late/gene-poor; light = GC-rich/early/gene-rich.</li>
             <li>Over-trypsin = pale/fuzzy; under-trypsin = dark/unresolved.</li>
@@ -2193,7 +2196,7 @@
           </ul>
         </div>
         <div class="grid-card">
-          <h4>Abnormalities &amp; ISCN</h4>
+          <h3>Abnormalities &amp; ISCN</h3>
           <ul class="checklist hy">
             <li>It's <strong>45,X</strong> &mdash; never 45,XO. Triploidy <strong>69</strong>, tetraploidy <strong>92</strong>.</li>
             <li>Clone rules: gain/structural <strong>&ge;2 cells</strong>; loss/monosomy <strong>&ge;3 cells</strong>.</li>
@@ -2204,7 +2207,7 @@
           </ul>
         </div>
         <div class="grid-card">
-          <h4>FISH, array &amp; operations</h4>
+          <h3>FISH, array &amp; operations</h3>
           <ul class="checklist hy">
             <li><strong>Break-apart: normal fused / abnormal sep</strong>; <strong>dual-fusion: normal separate / abnormal con</strong>.</li>
             <li><code>ish</code> = metaphase, <code>nuc ish</code> = interphase; cutoffs from normal controls.</li>
@@ -2241,7 +2244,7 @@
       <p>Three repeatable sequences to run in your head at the bench&mdash;and on case-style exam items.</p>
       <div class="two-col">
         <div class="grid-card">
-          <h4>Image interpretation</h4>
+          <h3>Image interpretation</h3>
           <ol class="wf">
             <li>Is the cell <strong>countable / analyzable / karyotypable</strong>? Reject for the purpose it can't serve.</li>
             <li><strong>Count</strong> the chromosomes; resolve touching vs. overlapping.</li>
@@ -2252,7 +2255,7 @@
           </ol>
         </div>
         <div class="grid-card">
-          <h4>Writing ISCN</h4>
+          <h3>Writing ISCN</h3>
           <ol class="wf iscn">
             <li>State the <strong>modal number</strong>.</li>
             <li>Add the <strong>sex chromosomes</strong>.</li>
@@ -2263,7 +2266,7 @@
           </ol>
         </div>
         <div class="grid-card">
-          <h4>FISH interpretation</h4>
+          <h3>FISH interpretation</h3>
           <ol class="wf fish">
             <li>Confirm the <strong>correct probe</strong> and <strong>filter</strong> for each fluorophore.</li>
             <li>Check that <strong>controls</strong> hybridized (positive and negative).</li>
@@ -2280,7 +2283,7 @@
     <section class="section-block anchor-offset" id="troubleshooting" aria-labelledby="tsTitle">
       <h2 id="tsTitle">Troubleshooting quick reference</h2>
       <p>Symptom &rarr; most likely cause &rarr; first action. Numbers and exact settings are SOP-dependent; this maps the <em>reasoning</em>.</p>
-      <div class="tbl-wrap">
+      <div class="tbl-wrap" tabindex="0">
         <table class="data">
           <thead><tr><th>Symptom</th><th>Likely cause</th><th>First action</th></tr></thead>
           <tbody>
@@ -2306,7 +2309,7 @@
       <p>Use authoritative, current sources&mdash;cytogenetics nomenclature and guidelines are updated periodically.</p>
       <div class="two-col">
         <div class="grid-card">
-          <h4>Standards &amp; certification</h4>
+          <h3>Standards &amp; certification</h3>
           <ul>
             <li><strong>ISCN</strong> (current edition) &mdash; <em>An International System for Human Cytogenomic Nomenclature</em>, the authority for all nomenclature in this course.</li>
             <li><strong>ASCP Board of Certification</strong> &mdash; current CG content guideline and exam information; confirm the blueprint before you sit.</li>
@@ -2315,7 +2318,7 @@
           </ul>
         </div>
         <div class="grid-card">
-          <h4>Open image libraries (verify license)</h4>
+          <h3>Open image libraries (verify license)</h3>
           <ul>
             <li><strong>NHGRI Image Gallery</strong> &mdash; genome.gov/image-gallery (many U.S. government public-domain images).</li>
             <li><strong>CDC Public Health Image Library (PHIL)</strong> &mdash; phil.cdc.gov (public domain).</li>
@@ -2350,7 +2353,7 @@
 
       <hr class="soft">
       <div class="disclaimer">
-        <h4>Educational disclaimer</h4>
+        <h3>Educational disclaimer</h3>
         <p>This mini-course is a <strong>study aid for the CG(ASCP) examination</strong>, not a clinical, diagnostic, or laboratory-procedure reference. Reagent concentrations, incubation/colcemid/trypsin times, cell-scoring counts, FISH cutoffs, retention periods, and similar specifics are <strong>laboratory-, SOP-, assay-, and regulation-dependent</strong> and are presented as <em>concepts and examples only</em>. Nomenclature follows the general logic of ISCN, but you must use the <strong>current ISCN edition</strong>, current <strong>ASCP/CAP/CLIA/ACMG guidance</strong>, and your laboratory's validated procedures for any real-world or examination decision. Verify every fact against an authoritative, up-to-date source.</p>
         <p>This independent project is not affiliated with, endorsed by, or sponsored by ASCP or the ASCP Board of Certification. Credential names are used only to describe the intended exam alignment. The course does not contain recalled examination questions.</p>
       </div>
@@ -3070,8 +3073,15 @@
              sec:'#eef4fb', red:'#e4572e', green:'#2fae66', yellow:'#e6b800',
              nuc:'#e7eef7', nucEdge:'#9fb4cb', txt:'#33506b'};
 
-  function svgWrap(inner, w, h){
-    return '<svg viewBox="0 0 '+w+' '+h+'" xmlns="http://www.w3.org/2000/svg" role="img" preserveAspectRatio="xMidYMid meet" style="max-width:100%;height:auto">'+inner+'</svg>';
+  function escAttr(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  /* name should be the exact text already rendered inside the SVG (a visible
+     <text> label or a fixed transcription of static markup), never new
+     descriptive content — when no such visible label exists, the schematic
+     is redundant with its adjacent quiz/exercise prompt and is hidden from
+     assistive tech instead of guessing at a caption. */
+  function svgWrap(inner, w, h, name){
+    var a11y = name ? ' role="img" aria-label="'+escAttr(name)+'"' : ' aria-hidden="true"';
+    return '<svg viewBox="0 0 '+w+' '+h+'" xmlns="http://www.w3.org/2000/svg"'+a11y+' preserveAspectRatio="xMidYMid meet" style="max-width:100%;height:auto">'+inner+'</svg>';
   }
 
   /* Draw one chromosome centered at cx, p-arm starting at y=top. Returns {m:markup, bottom:y, cx:cx}. */
@@ -3126,7 +3136,9 @@
     });
     var W = x + pad, H = maxBottom + pad + labelH;
     var head = opt.title ? '<text x="'+(W/2)+'" y="13" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="11.5" fill="'+COL.txt+'" font-weight="700">'+opt.title+'</text>' : '';
-    return svgWrap(head+body, W, H);
+    var name = opt.name || (opt.labels ? cfgs.map(function(c){ return c.label; }).filter(Boolean).join(', ') : '');
+    if(opt.title) name = name ? (opt.title+': '+name) : opt.title;
+    return svgWrap(head+body, W, H, name);
   }
 
   function chromoCard(cfg){ return rowCard([cfg], {labels: !!cfg.label}); }
@@ -3140,9 +3152,9 @@
     });
     return m;
   }
-  function nucleusCard(dots, w, h){
+  function nucleusCard(dots, w, h, name){
     w=w||150; h=h||120;
-    return svgWrap(nucleusG(w/2, h/2, w*0.34, h*0.34, dots), w, h);
+    return svgWrap(nucleusG(w/2, h/2, w*0.34, h*0.34, dots), w, h, name);
   }
   /* Row of labeled nuclei (for the figure). panels:[{dots,label}] */
   function nucleusRow(panels){
@@ -3153,7 +3165,8 @@
       body += '<text x="'+cx+'" y="116" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="11" fill="'+COL.txt+'" font-weight="700">'+p.label+'</text>';
       x += cw;
     });
-    return svgWrap(body, x, ch);
+    var name = panels.map(function(p){ return p.label; }).filter(Boolean).join(', ');
+    return svgWrap(body, x, ch, name);
   }
 
   /* Metaphase glyph: a tiny chromosome (two arms + bridge) at (x,y) rotated rot deg, scaled. */
@@ -3180,7 +3193,7 @@
     var W=152, H=label?150:134;
     var body='<rect x="2" y="2" width="'+(W-4)+'" height="130" rx="10" fill="#f5f9fd" stroke="#d6e2ee" stroke-width="1"/>'+metaphaseG(kind);
     if(label) body += '<text x="'+(W/2)+'" y="146" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="11" fill="'+COL.txt+'" font-weight="700">'+label+'</text>';
-    return svgWrap(body, W, H);
+    return svgWrap(body, W, H, label);
   }
 
   /* ============================ INTERACTIVE EXERCISES ============================ */
@@ -3481,7 +3494,8 @@
       }
       y += rowH;
     });
-    return svgWrap(body, W, y+8);
+    var name = 'Karyogram row layout by group: ' + rows.map(function(r){ return r[0]+' ('+r.slice(1).join(', ')+')'; }).join('; ');
+    return svgWrap(body, W, y+8, name);
   }
 
   /* ============================ QUIZ ENGINE ============================ */
@@ -3492,7 +3506,7 @@
     var title = (key==='final') ? 'Final cumulative exam' : 'Quick check';
     var total = qs.length, score = 0;
     var icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>';
-    var html = '<div class="quiz"><div class="quiz-head"><span class="qh-ic">'+icon+'</span><h4>'+title+'</h4><span class="qh-score">0 / '+total+'</span></div><div class="quiz-body">';
+    var html = '<div class="quiz"><div class="quiz-head"><span class="qh-ic">'+icon+'</span><h3>'+title+'</h3><span class="qh-score">0 / '+total+'</span></div><div class="quiz-body">';
     qs.forEach(function(item, qi){
       html += '<div class="qitem" data-qi="'+qi+'"><div class="qnum">Question '+(qi+1)+' of '+total+'</div><div class="qtext">'+esc(item.q)+'</div><div class="qopts">';
       item.o.forEach(function(opt, oi){

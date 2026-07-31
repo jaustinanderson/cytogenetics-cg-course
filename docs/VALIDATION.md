@@ -3,10 +3,12 @@
 ## Current status
 
 The v1.1.1 repository baseline has passed local structural, content-contract,
-DOM-level behavior, and real-browser (Playwright/Chromium) smoke validation.
-This is a reproducible software result, not a claim that every scientific
-statement is correct or that a full accessibility or rights review has
-passed.
+DOM-level behavior, and real-browser (Playwright/Chromium) smoke validation,
+including automated WCAG scanning (axe-core) and representative
+keyboard-only interaction testing. This is a reproducible software result,
+not a claim that every scientific statement is correct or that a full
+accessibility review — which still requires a representative screen-reader
+pass — or a rights review has passed.
 
 ## Run all committed tests
 
@@ -84,13 +86,16 @@ output. CI runs `npm test` on pushes to `main` and pull requests.
 
 ### Real-browser smoke suite (Playwright)
 
-`tests/e2e/` runs 18 checks per project against `index.html` in a real
+`tests/e2e/` runs 31 checks per project against `index.html` in a real
 Chromium instance, served locally over HTTP (`python3 -m http.server`, the
 same approach the README documents for manual local development), across a
 1280×900 desktop viewport and a 390×844 narrow/mobile viewport
-(`isMobile`/`hasTouch` enabled). 35 total test runs currently pass (one
-mobile-only sidebar test is intentionally skipped on desktop, where the
-hamburger control is CSS-hidden). Coverage:
+(`isMobile`/`hasTouch` enabled). Of 62 total scheduled test runs, 58
+currently pass and 4 are intentionally skipped where a check only applies to
+one viewport (the mobile-only sidebar/hamburger tests skip on desktop, where
+the hamburger control is CSS-hidden; the desktop-only sidebar-link keyboard
+test skips on the narrow viewport, where the sidebar is off-canvas until
+opened). Coverage:
 
 - page initialization: title, all declared quiz/exercise/flashcard mounts,
   hero stat counts, and the public API's reported version/schema/module count
@@ -124,11 +129,71 @@ via `npm run test:e2e:install`. CI runs both.
 This suite establishes real rendering, real layout-dependent scrolling, a
 real `IntersectionObserver`, real `localStorage` across navigations, and
 real `window.print`/dialog behavior — the specific gaps the DOM harness
-above documents that it cannot cover. It does not perform an accessibility
-scan, screen-reader review, true touch-gesture testing (only viewport/
-`hasTouch` emulation), or confirm delivery of the two third-party images
-(the sandboxed CI runner's network reachability to Google Fonts, Wikimedia,
-and the CDC image host is not asserted by these tests).
+above documents that it cannot cover. On its own it does not perform an
+accessibility scan or screen-reader review, does not exercise true
+touch-gesture testing (only viewport/`hasTouch` emulation), and does not
+confirm delivery of the two third-party images (the sandboxed CI runner's
+network reachability to Google Fonts, Wikimedia, and the CDC image host is
+not asserted by these tests). Automated accessibility scanning and keyboard
+testing are added by the two suites documented next.
+
+### Automated WCAG scanning (axe-core) — added 2026-07-31
+
+`tests/e2e/accessibility.spec.mjs` runs a full-document
+[`@axe-core/playwright`](https://github.com/dequelabs/axe-core-npm) scan
+against the real, fully rendered course, at the same desktop and
+narrow/mobile Playwright projects as the rest of the suite, in five states:
+immediately after load, with the mobile navigation open (narrow viewport
+only), after answering a quiz item, after answering an exercise item, and
+after marking a module complete and flipping a flashcard. Each test asserts
+the axe-core violation list is empty; no rule is disabled and no violation is
+filtered to force a pass. `@axe-core/playwright` is a devDependency used only
+by this suite and adds no runtime dependency to `index.html`.
+
+A full-document scan against this single-file, ~4,000-line course takes
+roughly 20–30 seconds per run; these five tests call `test.slow()` (3×
+Playwright's default per-test timeout) so that is comfortable headroom rather
+than a near-miss under normal CI load.
+
+Six confirmed defects were found by this scan, independently verified against
+the real page and product source before any change, and corrected with
+narrowly scoped fixes that touch styling, markup, and accessible-name
+plumbing only — no scientific content changed. See `docs/QUALITY_LOG.md`
+QL-010 for the full diagnosis/correction/prevention record. All five states
+above now scan clean on both projects.
+
+Scope and an explicit non-claim: axe-core detects a documented subset of
+mechanically checkable WCAG 2.x success criteria (missing accessible names,
+contrast ratios, heading order, landmark structure, and similar). It cannot
+judge whether an experience actually makes sense to someone using a screen
+reader. **A green axe-core scan is not a screen-reader review.** No
+representative screen-reader review has been performed; that item stays open
+in Issue #1 and below.
+
+### Keyboard-navigation interaction — added 2026-07-31
+
+`tests/e2e/keyboard-navigation.spec.mjs` drives the same real Chromium
+instance with `page.keyboard` input only, covering the controls named in
+Issue #1: the skip link, the desktop sidebar nav, the mobile hamburger menu,
+a quiz item, an exercise item plus its Next control, a module-completion
+button, Print, and Reset. For each it checks keyboard reachability, a
+non-empty accessible name, correct behavior on `Enter`/`Space` activation,
+and a visible `:focus-visible` outline. The mobile-menu test also confirms
+repeated `Tab` presses keep moving focus forward and reach the sidebar's own
+links once it is open, rather than stalling — the absence-of-keyboard-trap
+check for that control.
+
+This suite confirmed one real defect (the skip link did not move keyboard
+focus; see QL-010) and, in the course of authoring it, one false claim in the
+test itself (an incorrect assumption about mobile-menu tab order, corrected
+before merge — see QL-011), following the same confirm-before-trusting
+discipline as QL-007/QL-008.
+
+This is representative, not exhaustive, coverage: it does not tab through
+every one of the 153 questions or 30 exercise items, and it does not
+implement or test Escape-to-close, focus trapping, or inert background
+content for the mobile sidebar, because the product does not implement those
+either — see "Gates still open" below.
 
 ## Deployed smoke test — 2026-07-30
 
@@ -187,19 +252,23 @@ print invocation, and console cleanliness described above. Still required:
 
 ### Accessibility
 
-The DOM suite checks only the implemented static and keyboard affordances
-listed above; the Playwright suite does not add automated accessibility
-coverage.
+The DOM suite checks the implemented static and keyboard affordances listed
+above. `tests/e2e/accessibility.spec.mjs` adds an automated axe-core WCAG
+scan (five real-browser states, both viewports, zero violations, six
+confirmed-and-fixed defects — see QL-010) and
+`tests/e2e/keyboard-navigation.spec.mjs` adds representative keyboard-only
+interaction coverage with focus-visibility and keyboard-trap checks (see
+above).
 
 Still required:
 
 - Escape and focus behavior for the mobile sidebar
 - hidden/inert navigation state
 - live announcements for results and completion
-- accessible names for instructional SVGs
 - flashcard front/back screen-reader state
-- contrast remediation for faint/accent text
-- automated scan and representative screen-reader review
+- a representative screen-reader review — **not established by an automated
+  scanner or by keyboard-only testing, no matter how thorough**; this remains
+  a distinct, unperformed gate
 
 ### Scientific review
 
