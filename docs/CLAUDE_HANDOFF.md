@@ -433,6 +433,27 @@ two capture-script runs (compared by `sha256sum`, not file size) passed
 locally after these corrections. Issue #1's screenshot checkbox and the
 issue itself remain open, pending independent review of this correction.
 
+A final documentation-only correction was applied 2026-07-31 on the same
+branch: the optional pixel-verification command documented in
+`scripts/capture-readme-screenshot.mjs`'s header comment invoked
+`node -e 'require("sharp")...'` as its own process, but `sharp` (the
+library) is not a project dependency and nothing made it resolvable there
+— reproduced directly (confirmed no global/local `sharp` was reachable,
+then ran the exact documented commands and got the same failure). A second
+portability bug was found while fixing the first: the re-encode command
+pointed `sharp-cli`'s `-o` flag at a fixed path that the documentation
+never created, and `sharp-cli` silently writes a single file at that exact
+path instead of a directory when it doesn't already exist. Both fixed by
+using `mktemp -d` for both temporary directories and installing `sharp`
+into the isolated one with `NODE_PATH` pointed at it — no dependency added
+(`git diff --stat package.json package-lock.json` confirmed empty). The
+full corrected sequence was executed end-to-end in one shell session from
+a clean state and produced `pixel-identical: true`; the resulting
+`docs/assets/course-overview.png` hash is unchanged from what was already
+committed, so no product, screenshot, or scientific content changed — only
+`scripts/capture-readme-screenshot.mjs`'s documentation. See
+`docs/QUALITY_LOG.md` QL-017.
+
 ## Read these files first
 
 1. `README.md`

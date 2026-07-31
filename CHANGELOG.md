@@ -19,7 +19,12 @@ All notable repository changes are recorded here.
   OS-assigned ephemeral local-server port and treats an early server exit as
   a conclusive startup failure. This is a generation script, not a test —
   no pixel-comparison assertion was added. Same-environment reproducibility
-  is verified with `sha256sum`, not file size
+  is verified with `sha256sum`, not file size. The documented optional
+  lossless-PNG-optimization commands install `sharp` into an isolated
+  temporary directory (`npm install --no-save --prefix`, `NODE_PATH`) and
+  create their working directories with `mktemp -d`, so they run correctly
+  on a clean clone with nothing globally pre-installed and no assumed
+  pre-existing `/tmp` state — see `docs/QUALITY_LOG.md` QL-017
 - `tests/e2e/dashboard-layout.spec.mjs`: a real-browser regression test
   (bounding-box/computed-line-height assertions, not pixel snapshots) added
   after the screenshot itself exposed a genuine dashboard-card layout defect

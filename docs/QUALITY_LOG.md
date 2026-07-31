@@ -778,3 +778,106 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   dimensions depend on a product layout that changes, re-measure rather
   than assume the previous constant is still correct.
 
+## QL-017 — The documented pixel-verification command was not portable to a clean clone
+
+- **Status:** Corrected before commit; no product/screenshot change
+- **Finding:** Independent review found that the optional lossless-PNG
+  verification command documented in
+  `scripts/capture-readme-screenshot.mjs`'s header comment invoked
+  `node -e 'const sharp = require("sharp"); ...'` as its own separate
+  process, entirely apart from the preceding `npx --yes --package=sharp-cli`
+  step. `sharp` (the library) is not a project dependency — only
+  `sharp-cli` (a different package, fetched ephemerally by that `npx` call
+  purely for its own CLI use) was ever available, and nothing makes the
+  `sharp` library resolvable to a plain `node -e` invoked afterward.
+- **Reproduced directly, in this environment, before changing anything**:
+  confirmed no global or local `sharp` was reachable
+  (`node -e 'console.log(require.resolve("sharp"))'` from the repo root
+  failed with `Error: Cannot find module 'sharp'`), then ran the exact
+  documented command block verbatim and got the identical failure at the
+  verification step, immediately after the `sharp-cli` re-encode step had
+  already completed successfully — confirming the bug was specifically in
+  the second command, not the first.
+- **A second bug found while fixing the first**: the natural first fix
+  attempt — have `sharp-cli` itself write a `--format raw` file so `cmp`
+  could compare it directly, avoiding `sharp`/Node entirely — turned out
+  not to be supported by the installed `sharp-cli` version's `-o`
+  file-output path (`Unsupported output format ...` for every extension
+  tried, including a literal `.raw` file path). While testing an
+  alternative, a second, unrelated portability bug surfaced: the
+  documented re-encode command pointed `sharp-cli`'s `-o` flag at a fixed
+  path (`/tmp/png-opt`) that the surrounding documentation never created.
+  `sharp-cli` only treats `-o` as "a directory to write
+  `<input-basename>` into" when that directory *already exists on disk*;
+  pointing it at a path that does not yet exist makes it write a single
+  literal *file* at that exact path instead, with no error — reproduced by
+  removing `/tmp/png-opt` first and observing a 280,149-byte PNG land at
+  the literal path `/tmp/png-opt` (a file, not a directory) instead of
+  `/tmp/png-opt/course-overview.png`.
+- **Impact:** None shipped — both were caught by literally executing the
+  documented commands end-to-end before trusting them, not by inspection
+  alone. Had either shipped uncorrected: the first would make the
+  documented optimization workflow fail outright for anyone without a
+  coincidentally-available global `sharp`, including on a genuinely clean
+  clone; the second would silently produce a same-sized but wrongly-placed
+  file that a copy-pasted next step (reading
+  `"$OPT_TMP/course-overview.png"`) would fail to find, or — worse, on a
+  machine where `/tmp/png-opt` happened to already exist as a directory
+  from unrelated prior state — would appear to work while being entirely
+  dependent on that undocumented precondition.
+- **Cause:** (1) The verification command was written and tested in a
+  session that happened to have `sharp` available from unrelated prior
+  work in that same environment (an ad hoc scratch install used earlier
+  while developing this feature), so the missing-dependency failure was
+  never actually observed before being documented as a command anyone could
+  run. (2) The re-encode command's `-o /tmp/png-opt` was copied from an
+  interactive session where that directory had already been created by an
+  earlier, unrelated `mkdir`/prior run — the command "worked" there for a
+  reason the documented text itself did not create or mention.
+- **Correct action:** Execute a documented command sequence exactly as
+  written, from a genuinely clean state (no assumed pre-existing
+  directories, no assumed pre-installed packages), before publishing it as
+  something a reader can copy-paste — the same discipline this log already
+  applies to test claims and tool defaults (QL-007, QL-008, QL-013,
+  QL-014), extended here to documentation itself.
+- **Correction:** Rewrote the documented block in
+  `scripts/capture-readme-screenshot.mjs`:
+  - `export OPT_TMP=$(mktemp -d)` replaces the fixed `/tmp/png-opt`, so the
+    `sharp-cli` re-encode always writes into a directory guaranteed to
+    exist, regardless of the machine's prior `/tmp` state
+  - the verification step installs `sharp` into its own isolated temporary
+    directory (`SHARP_TMP=$(mktemp -d); npm install --no-save --prefix
+    "$SHARP_TMP" sharp`) and points `NODE_PATH` at
+    `"$SHARP_TMP/node_modules"`, so `require("sharp")` resolves without
+    ever adding `sharp` to this repository's `package.json` — confirmed by
+    checking `git diff --stat package.json package-lock.json` showed no
+    change after running the full sequence
+  - both temporary directories are removed at the end
+    (`rm -rf "$SHARP_TMP" "$OPT_TMP"`)
+  - the full, corrected sequence was then executed end-to-end, in one
+    shell session (so the `export`ed `OPT_TMP` was actually visible to the
+    child `node` process — a separate detail worth naming, since shell
+    state does not carry across independently-invoked shells), from a
+    clean state: the re-encode succeeded, the isolated install succeeded
+    (`added 11 packages`), the verification printed
+    `pixel-identical: true`, the committed asset was replaced, and both
+    temporary directories were confirmed gone afterward. The resulting
+    `docs/assets/course-overview.png` hash
+    (`c5f9bf8162e1376bce957b2d11f53f7cfa9a25fa5dcabeead6994135661523a7`)
+    is identical to the asset already committed — this correction changed
+    only the documentation/tooling, not the product, the screenshot, or
+    any scientific content
+- **Prevention:** A one-off "fetched via npx, not a dependency" tool and
+  the *library* underlying it are not automatically the same thing —
+  `npx --package=X` only makes `X`'s own CLI available, not an arbitrary
+  library of the same name or from the same publisher, for a separately
+  invoked process. When a documented command needs a Node library
+  specifically (not a CLI), and that library is intentionally not a
+  project dependency, resolve it through an isolated, explicitly-scoped
+  install (`npm install --no-save --prefix <tmpdir>` plus `NODE_PATH`),
+  not an unqualified `require()` that depends on whatever happens to be
+  globally or ambiently available in the environment where it was
+  authored. Separately: any command that depends on a directory already
+  existing should create that directory itself (`mktemp -d`), not assume
+  the reader's environment happens to have it.
+

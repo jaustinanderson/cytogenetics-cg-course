@@ -61,24 +61,55 @@
 // (fetched on demand via npx, not a project dependency; the same one-off
 // pattern docs/VALIDATION.md documents for `html-validate`) defaults to
 // palette (color-quantized) PNG output, which is lossy, not a size-only
-// re-encode. Always pass `--palette=false`, and always verify with the
-// command below (decodes both files to raw pixel buffers and compares them
-// byte-for-byte — file size or visual similarity alone is not proof of
-// losslessness) before replacing the committed asset:
+// re-encode. Always pass `--palette=false`.
 //
+//   export OPT_TMP=$(mktemp -d)
 //   npx --yes --package=sharp-cli -- sharp \
-//     -i docs/assets/course-overview.png -o /tmp/png-opt \
+//     -i docs/assets/course-overview.png -o "$OPT_TMP" \
 //     --compressionLevel 9 --effort 6 --palette=false
-//   node -e '
+//
+// (`mktemp -d` matters here, not just style: `-o` writes to
+// "$OPT_TMP/course-overview.png" only when that directory already exists
+// on disk — pointing `-o` at a path that does not yet exist, e.g. a bare
+// `/tmp/png-opt` on a clean environment where nothing created it first,
+// makes sharp-cli write a single literal *file* at that exact path
+// instead, silently producing something other than what later steps
+// expect. `mktemp -d` guarantees the directory exists before sharp-cli
+// runs, on any machine, every time.)
+//
+// Then verify losslessness (decodes both files to raw pixel buffers and
+// compares them byte-for-byte — file size or visual similarity alone is
+// NOT proof of losslessness) before replacing the committed asset. This
+// needs the `sharp` *library* (not the `sharp-cli` binary used above,
+// which does not expose an equivalent `cmp`-friendly raw-file output in
+// this version); `sharp` is not a project dependency, so a plain
+// `node -e '...require("sharp")...'` fails on a clean clone with "Cannot
+// find module 'sharp'" (reproduced and documented in
+// docs/QUALITY_LOG.md — the standalone `npx --package=sharp-cli` step
+// above only makes the `sharp-cli` binary available, not the separate
+// `sharp` module a differently-invoked `node -e` could `require()`).
+// Install it into an isolated temporary directory instead, and point
+// `NODE_PATH` at it so `require()` resolves there without ever adding
+// `sharp` to this repository's `package.json`:
+//
+//   SHARP_TMP=$(mktemp -d)
+//   npm install --no-save --prefix "$SHARP_TMP" sharp
+//   NODE_PATH="$SHARP_TMP/node_modules" node -e '
 //     const sharp = require("sharp");
 //     (async () => {
 //       const a = await sharp("docs/assets/course-overview.png").raw().toBuffer();
-//       const b = await sharp("/tmp/png-opt/course-overview.png").raw().toBuffer();
+//       const b = await sharp(process.env.OPT_TMP + "/course-overview.png").raw().toBuffer();
 //       console.log("pixel-identical:", Buffer.compare(a, b) === 0);
 //     })();
 //   '
-//   # only if the above printed "pixel-identical: true":
-//   cp /tmp/png-opt/course-overview.png docs/assets/course-overview.png
+//
+// Only if the above printed "pixel-identical: true":
+//
+//   cp "$OPT_TMP/course-overview.png" docs/assets/course-overview.png
+//
+// Either way, clean up both temporary directories:
+//
+//   rm -rf "$SHARP_TMP" "$OPT_TMP"
 
 import { chromium } from "@playwright/test";
 import { spawn } from "node:child_process";

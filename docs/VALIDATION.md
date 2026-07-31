@@ -588,16 +588,32 @@ The PNG is optionally, losslessly re-encoded after capture with `sharp-cli`
 as `html-validate` above) at a higher compression effort than Playwright's
 default encoder uses. This step is **not** trusted by file size or by
 "looks the same" — it is verified by decoding both the raw capture and the
-re-encoded file to raw pixel buffers with `sharp` and comparing them
-byte-for-byte (`Buffer.compare(...) === 0`) before the committed asset is
-replaced. `sharp-cli`'s default PNG output quantizes to a 256-color palette
-(lossy; a first attempt measured a 6% pixel byte difference with values up
-to 25/255 off), so `--palette=false` is required. The exact verification
-command is documented directly in
+re-encoded file to raw pixel buffers and comparing them byte-for-byte
+(`Buffer.compare(...) === 0`) before the committed asset is replaced.
+`sharp-cli`'s default PNG output quantizes to a 256-color palette (lossy; a
+first attempt measured a 6% pixel byte difference with values up to 25/255
+off), so `--palette=false` is required.
+
+The pixel-buffer comparison needs the `sharp` *library*, which is a
+different thing from the `sharp-cli` binary used for the re-encode itself —
+`sharp` is not a project dependency, so a plain `node -e
+'...require("sharp")...'` fails on a clean clone with "Cannot find module
+'sharp'" (this was an actual bug in an earlier version of this
+documentation, reproduced and corrected — see `docs/QUALITY_LOG.md` QL-017).
+The corrected, portable form installs `sharp` into an isolated temporary
+directory (`npm install --no-save --prefix "$SHARP_TMP" sharp`) and points
+`NODE_PATH` at it, so the comparison works on any clean clone without ever
+adding `sharp` to `package.json`. Both temporary directories involved (the
+`sharp-cli` output directory and the `sharp` install directory) are created
+with `mktemp -d`, not a fixed path — pointing `sharp-cli`'s `-o` flag at a
+path that does not already exist as a directory silently makes it write a
+single file at that exact path instead of a directory, a second real
+portability bug caught while fixing the first one (also QL-017). The exact,
+verified-working command sequence is documented directly in
 `scripts/capture-readme-screenshot.mjs`'s header comment, so regenerating
 the optimization step repeats the same check rather than trusting it by
-inference. See `docs/QUALITY_LOG.md` for the full account of both
-corrections.
+inference. See `docs/QUALITY_LOG.md` for the full account of all three
+corrections to this record.
 
 ## Gates still open
 
