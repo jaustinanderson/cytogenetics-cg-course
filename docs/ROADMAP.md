@@ -61,12 +61,17 @@ the course.
 
 - [ ] Confirm the GitHub Actions run passes on the published commit
 - [x] Enable GitHub Pages and run an initial deployed desktop smoke test
-- [ ] Add real-browser smoke tests for navigation, quizzes, exercises,
-  migration, persistence, import/export, Reset, print, and the public API; the
-  committed DOM behavior suite is the prerequisite, not a browser substitute
+- [x] Add real-browser smoke tests for navigation, quizzes, exercises,
+  migration, persistence, import/export, Reset, print, and the public API at
+  desktop and narrow/mobile viewports (Playwright/Chromium,
+  `tests/e2e/`, `npm run test:e2e`); the committed DOM behavior suite remains
+  the dependency-free prerequisite, and this satisfies it as a real browser
 - [ ] Add automated WCAG checks and representative keyboard/screen-reader
   review in a real browser
-- [ ] Run deployed narrow-screen, touch, and mobile-navigation tests
+- [ ] Run *deployed* (GitHub Pages, not local-server) narrow-screen, touch,
+  and mobile-navigation tests; the local Playwright suite covers narrow
+  viewport and touch-emulated behavior against a local static server, not the
+  live Pages URL
 - [ ] Capture a clean course-only screenshot for the README
 - [ ] Decide whether to localize remote fonts and the two approved images
 - [ ] Record a question-by-question scientific review status before removing

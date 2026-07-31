@@ -3,9 +3,10 @@
 ## Current status
 
 The v1.1.1 repository baseline has passed local structural, content-contract,
-and DOM-level behavior validation. This is a reproducible software result, not
-a claim that every scientific statement is correct or that a browser,
-accessibility, or rights review has passed.
+DOM-level behavior, and real-browser (Playwright/Chromium) smoke validation.
+This is a reproducible software result, not a claim that every scientific
+statement is correct or that a full accessibility or rights review has
+passed.
 
 ## Run all committed tests
 
@@ -21,6 +22,16 @@ Each can also be run independently:
 ```bash
 npm run validate
 npm run test:behavior
+```
+
+The real-browser Playwright suite is separate because it requires installing
+a Chromium binary; it is not part of `npm test` and is not required to
+install anything to run the dependency-free suites above.
+
+```bash
+npm ci
+npm run test:e2e:install   # one-time Chromium download (devDependency only)
+npm run test:e2e
 ```
 
 ### Structural and content-contract validator
@@ -71,7 +82,61 @@ The harness is not a browser. It cannot establish rendering, layout, color
 contrast, real focus behavior, touch input, networking, or screen-reader
 output. CI runs `npm test` on pushes to `main` and pull requests.
 
+### Real-browser smoke suite (Playwright)
+
+`tests/e2e/` runs 18 checks per project against `index.html` in a real
+Chromium instance, served locally over HTTP (`python3 -m http.server`, the
+same approach the README documents for manual local development), across a
+1280×900 desktop viewport and a 390×844 narrow/mobile viewport
+(`isMobile`/`hasTouch` enabled). 35 total test runs currently pass (one
+mobile-only sidebar test is intentionally skipped on desktop, where the
+hamburger control is CSS-hidden). Coverage:
+
+- page initialization: title, all declared quiz/exercise/flashcard mounts,
+  hero stat counts, and the public API's reported version/schema/module count
+- sidebar navigation generation and target resolution; scroll-driven active
+  nav-link highlighting through the real `IntersectionObserver` (the DOM
+  harness only stubs this and requires a manual trigger)
+- the mobile navigation toggle's open/close state, backdrop dismissal, and
+  close-on-link-activation, at the narrow viewport where the hamburger is
+  actually rendered
+- correct and incorrect quiz answers: scoring, item locking, and feedback
+- exercise answering, scoring, advancing, and full completion
+- module completion and its persistence across a real `page.reload()`
+- legacy v1-to-v2 progress migration on first real-browser load
+- Reset clearing both storage keys and reloading to a clean course, and the
+  declined-confirmation path leaving progress untouched
+- `exportJSON`/`importJSON` round-tripping progress between two independent
+  browser contexts (separate storage partitions, proven empty before import)
+- the public API's documented method surface, read-copy isolation, and
+  `answer`/`exercise`/`progress`/`content` events firing from real UI actions
+- the print control invoking `window.print`, and `beforeprint`/`afterprint`
+  toggling `body.printmode`
+- page-origin console errors/warnings staying empty through load and through
+  a representative navigation/quiz/exercise interaction pass
+
+Playwright (`@playwright/test`) is a devDependency used only for this suite;
+it adds no production runtime dependency and `index.html` requires no build
+step. `npm test` (structural + DOM behavior) still runs with zero installed
+dependencies; `npm run test:e2e` requires `npm ci` and one Chromium download
+via `npm run test:e2e:install`. CI runs both.
+
+This suite establishes real rendering, real layout-dependent scrolling, a
+real `IntersectionObserver`, real `localStorage` across navigations, and
+real `window.print`/dialog behavior — the specific gaps the DOM harness
+above documents that it cannot cover. It does not perform an accessibility
+scan, screen-reader review, true touch-gesture testing (only viewport/
+`hasTouch` emulation), or confirm delivery of the two third-party images
+(the sandboxed CI runner's network reachability to Google Fonts, Wikimedia,
+and the CDC image host is not asserted by these tests).
+
 ## Deployed smoke test — 2026-07-30
+
+This was a one-off manual check of the live deployment, not a repeatable
+instrument. The committed Playwright suite above now provides repeatable
+equivalents for its navigation, quiz, module-completion, and console-cleanliness
+observations, run locally and in CI against the same `index.html`; it does not
+itself verify the deployed GitHub Pages URL.
 
 Verified URL:
 <https://jaustinanderson.github.io/cytogenetics-cg-course/>
@@ -103,24 +168,28 @@ npm exec --yes --package=html-validate@10.4.0 -- html-validate index.html
 
 That tool is intentionally not a runtime or committed package dependency.
 
-## Gates not yet automated in a real browser
+## Gates still open
 
 ### Browser behavior
 
-The DOM suite covers the core logic paths above. Still required in a real
-browser:
+The DOM suite and the Playwright real-browser suite together cover the core
+logic paths, real scrolling/highlighting, real reload/storage behavior,
+print invocation, and console cleanliness described above. Still required:
 
-- repeatable deployed-page tests with page-origin console assertions
-- scroll-driven active-section highlighting
-- real reload/storage behavior
-- print rendering
-- narrow-screen and touch navigation
-- confirmation that the two third-party images load or fall back
+- running the same repeatable browser assertions against the deployed
+  GitHub Pages URL, not only a local static server
+- pixel/visual print-rendering review (the suite verifies the print hook and
+  class toggling, not print layout)
+- true touch-gesture testing (the suite emulates a narrow viewport with
+  `hasTouch`, not real touch hardware)
+- confirmation, in an environment with normal network access, that the two
+  third-party images load or fall back as expected
 
 ### Accessibility
 
-The DOM suite checks only the implemented static and keyboard affordances listed
-above.
+The DOM suite checks only the implemented static and keyboard affordances
+listed above; the Playwright suite does not add automated accessibility
+coverage.
 
 Still required:
 

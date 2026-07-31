@@ -102,3 +102,104 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
 - **Prevention:** Keep harness scope limits explicit, mutation-check critical
   paths, and add fixture-fidelity assertions when a product behavior depends on
   a modeled browser contract.
+
+## QL-008 — Initial Playwright suite authoring produced false failures, not product defects
+
+- **Status:** Corrected before any product change was made
+- **Finding:** While authoring `tests/e2e/` (Playwright/Chromium), several
+  tests initially failed at the narrow/mobile viewport project. Causes:
+  (1) `page.addInitScript` re-seeds `localStorage` on every navigation in a
+  page, including the reload the Reset control itself triggers, which
+  silently re-wrote the very keys Reset had just cleared and made a working
+  Reset look broken; (2) at 390px width the open sidebar visually overlaps
+  most of the full-screen backdrop and the fixed topbar header overlaps its
+  top strip, so a default center-point click on the backdrop landed on
+  those elements instead; (3) a scroll-to-module test clicked a sidebar nav
+  link without first opening the mobile nav, and the link is off-canvas
+  (`transform: translateX(-105%)`) until opened.
+- **Impact:** None shipped; `index.html` was not modified. Trusting these
+  first-run failures would have produced an incorrect Reset regression claim
+  and pointless product edits for the backdrop/nav-link cases.
+- **Cause:** The test instrument itself was new and not yet proven; real
+  browser geometry, overlapping fixed-position layers, and reload-scoped
+  init scripts were not accounted for on the first pass.
+- **Correct action:** Reproduce unexpected failures with a minimal isolated
+  script before concluding the product regressed; fix the test's seeding and
+  targeting strategy rather than the product.
+- **Correction:** Reset/migration tests that need to trigger a subsequent
+  reload now seed `localStorage` via `page.evaluate` after one `goto` plus
+  one `reload`, not `addInitScript`, so nothing re-seeds on Reset's own
+  reload. Backdrop clicks target an explicit on-screen point clear of the
+  sidebar and header. Tests that click sidebar nav links open the mobile
+  toggle first when it is the visible affordance. All 18 Playwright checks
+  now pass at both the desktop and narrow/mobile viewport across repeated
+  runs.
+- **Prevention:** When a real-browser test seeds storage and the flow under
+  test reloads the page, seed with `evaluate` + one explicit `reload`, not
+  `addInitScript`, unless "first load" behavior is specifically what is
+  under test. At narrow viewports, expect fixed-position layers (headers,
+  open sidebars) to overlap default click targets and aim clicks explicitly.
+
+### Addendum — import/export test shared storage with its own source page
+
+- **Status:** Corrected in independent review of PR #5, before merge
+- **Finding:** The `exportJSON`/`importJSON` round-trip test opened its
+  "fresh" destination page with `context.newPage()`. `localStorage` is
+  partitioned per `BrowserContext` + origin, not per page, so that second
+  page shared the exact storage partition the first page had already
+  written module-completion and answer state into. The test asserted the
+  destination showed the exported progress after calling `importJSON()`,
+  but that assertion would have passed identically even if `importJSON()`
+  silently did nothing, because the state was already present in shared
+  storage before import ran. The test was green and looked like it proved
+  import restores progress; it actually proved nothing about import at all.
+- **Impact:** None shipped; `index.html` was not modified. This was a latent
+  false-confidence risk in the test suite itself: a passing check that did
+  not exercise the behavior its name claimed to.
+- **Cause:** `context.newPage()` reads as "a fresh page" but is not "fresh
+  storage" — the two are easy to conflate, and nothing in the test made the
+  shared partition visible.
+- **Correct action:** Before asserting an import restores state, first
+  assert the destination has zero/undefined progress, so the test would
+  fail loudly if storage were ever inadvertently shared again.
+- **Correction:** The destination now comes from `browser.newContext()` — a
+  genuinely separate storage partition — and the test asserts `#tpLabel`
+  reads "0 of 17 modules complete" and the target answer is `undefined`
+  immediately after that context's first load, *before* calling
+  `importJSON()`. Only then does it import and assert the exported progress
+  is restored.
+- **Prevention:** Any real-browser test claiming to prove cross-instance
+  persistence, import, or migration must assert the destination's clean
+  starting state before the action under test runs, not just the end state
+  after. A test that only checks the end state cannot distinguish "the
+  action worked" from "the state was already there."
+
+## QL-009 — Recording a CI run as "current" inside a commit is self-invalidating
+
+- **Status:** Corrected
+- **Finding:** `docs/CLAUDE_HANDOFF.md` described a specific commit as "the
+  current branch head" and its GitHub Actions run as "the authoritative
+  current CI result." The act of committing that wording produced a newer
+  head and a newer CI run, so the claim was already stale the moment it
+  merged into the branch's history — a document cannot correctly describe
+  itself as reflecting the branch's live state, because committing it is
+  itself a branch change.
+- **Impact:** None shipped; no product or test behavior was affected. A
+  future reader could be misled into treating a specific old run ID as
+  "current" indefinitely, when live status was only ever a PR or Actions
+  page away.
+- **Cause:** Conflating two different kinds of fact: a stable, timeless
+  claim ("commit X was verified by run Y") with a time-relative claim
+  ("this is the current state"), which decays the instant it's written down.
+- **Correct action:** Record which commit a specific CI run verified, as a
+  fixed historical fact, and separately tell the reader to consult GitHub
+  for live status rather than trust any run ID recorded in a document.
+- **Correction:** Reworded both references in `docs/CLAUDE_HANDOFF.md` to
+  say a named commit is a "post-correction implementation checkpoint" that a
+  named run "verified," with explicit instruction to check the PR or GitHub
+  Actions for the branch's actual current status. Removed "current branch
+  head" and "authoritative current CI result" phrasing.
+- **Prevention:** Document CI results as fixed checkpoints ("commit X, run
+  Y, verified Z") tied to a specific commit, never as "current" or "latest."
+  Point readers to GitHub (the PR, the Actions tab) for live status instead
+  of asserting it in committed prose.

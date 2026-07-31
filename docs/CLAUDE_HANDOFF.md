@@ -119,6 +119,54 @@ The cloud test browser did not complete the two third-party image requests, so
 remote image delivery still requires confirmation in another environment or
 asset localization.
 
+A real-browser Playwright/Chromium smoke suite was added on 2026-07-30
+(branch `claude/issue-1-playwright-smoke`, Issue #1):
+
+- `tests/e2e/` runs 18 checks per project (desktop 1280×900, narrow/mobile
+  390×844 with `hasTouch`), 35 total runs passing, against `index.html`
+  served by `python3 -m http.server` — the same local-serving approach the
+  README already documented
+- Covers page initialization, navigation and mobile-sidebar behavior
+  (including real `IntersectionObserver`-driven active-nav highlighting,
+  which the DOM harness only stubs), correct/incorrect quiz interaction,
+  exercise interaction, module-completion persistence across a real reload,
+  v1-to-v2 migration, Reset clearing both storage keys (accept and decline),
+  import/export, the public API and its events, print invocation, and
+  page-origin console cleanliness
+- `@playwright/test` is a devDependency only; `index.html` gained no runtime
+  dependency and no build step. `npm test` (structural + DOM behavior) still
+  installs nothing; `npm run test:e2e` requires `npm ci` plus one Chromium
+  download (`npm run test:e2e:install`)
+- CI (`.github/workflows/ci.yml`) now runs `npm ci`, `npm test`, installs
+  Chromium, and runs `npm run test:e2e`, uploading the HTML report on failure
+- No product defect was found or fixed. Three test-authoring bugs were found
+  and corrected in the suite itself before they could produce false claims —
+  see `docs/QUALITY_LOG.md` QL-008 (an `addInitScript` reseeding trap on
+  Reset's internal reload, and two narrow-viewport click-target overlaps)
+- GitHub Actions confirmed this on PR #5, not only local runs: workflow run
+  `30600962632` passed (`npm ci` → `npm test` → Chromium install →
+  `npm run test:e2e`) in 1m16s on the pushed branch, at commit `14d22e1`
+- An independent review pass before merge found that the export/import
+  round-trip test opened its destination page via `context.newPage()`,
+  which shares `localStorage` with the source page in the same
+  `BrowserContext` — the test could pass without import doing anything. It
+  now uses `browser.newContext()` (a genuinely separate storage partition)
+  and asserts zero progress on that context before calling `importJSON()`.
+  The local static server also now binds explicitly to `127.0.0.1` rather
+  than all interfaces. See the QL-008 addendum for detail.
+- Commit `2eb20f2` is the post-correction implementation checkpoint — the
+  one that applied the isolated-`BrowserContext` import test and the
+  loopback-bound server described above. GitHub Actions workflow run
+  `30602095883` (passed, 1m3s) verified that checkpoint specifically.
+  `30600962632` above verified the earlier, pre-correction commit
+  `14d22e1`. Neither run ID is the branch's live CI status by the time
+  anyone reads this — the branch moves on with every push. Check the PR
+  (#5) or GitHub Actions directly for the current result; don't infer it
+  from a run ID recorded here.
+- This closes the "Add real-browser automation" item below; WCAG/screen-reader
+  automation, deployed-Pages-URL testing, true touch hardware, and the
+  third-party image-delivery confirmation remain open
+
 ## Read these files first
 
 1. `README.md`
@@ -148,17 +196,16 @@ roadmap.
 Complete the remaining **Milestone 0 repository-foundation work** before adding
 questions or images:
 
-1. Add real-browser automation for:
-   - navigation
-   - quizzes and exercises
-   - v1-to-v2 migration
-   - persistence after reload
-   - Reset from v1-only, migrated, and v2-only states
-   - import/export
-   - print
-   - public API behavior and events
-   The committed DOM suite covers these logic paths but is not a browser
-   substitute.
+1. ~~Add real-browser automation for navigation, quizzes/exercises, v1-to-v2
+   migration, persistence after reload, Reset, import/export, print, and
+   public API behavior/events.~~ Done 2026-07-30 via the Playwright suite
+   described above (`tests/e2e/`) on PR #5, confirmed on GitHub Actions, not
+   only local runs. Commit `2eb20f2` is the post-correction implementation
+   checkpoint (isolated `BrowserContext` import test, loopback-bound local
+   server); GitHub Actions run `30602095883` verified it. For the branch's
+   actual current CI status, check the PR or GitHub Actions — do not infer
+   it from a run ID recorded here. Issue #1 stays open for the remaining
+   Milestone 0 items below.
 2. Add automated WCAG checks and representative keyboard/screen-reader review.
 3. Run narrow-screen, touch, and mobile-navigation tests against the live page.
 4. Capture a clean screenshot of the course itself for the README.
