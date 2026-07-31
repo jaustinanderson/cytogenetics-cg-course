@@ -167,6 +167,62 @@ A real-browser Playwright/Chromium smoke suite was added on 2026-07-30
   automation, deployed-Pages-URL testing, true touch hardware, and the
   third-party image-delivery confirmation remain open
 
+Automated WCAG scanning and representative keyboard testing were added on
+2026-07-31 (branch `claude/issue-1-accessibility-baseline`, Issue #1):
+
+- `tests/e2e/accessibility.spec.mjs` runs a full-document
+  `@axe-core/playwright` scan against the real course at both viewports in
+  five states (fresh load, mobile nav open, quiz answered, exercise
+  answered, module complete + flashcard flipped). `@axe-core/playwright` is
+  a devDependency; `index.html` gained no runtime dependency.
+- `tests/e2e/keyboard-navigation.spec.mjs` adds representative keyboard
+  coverage of the skip link, the desktop sidebar nav, the mobile hamburger
+  menu, a quiz item, an exercise item, module completion, Print, and Reset.
+  Every control claimed as Tab-reachable is proven so by a shared, bounded
+  `tabUntilFocused()` helper that drives real `Tab` key presses to the exact
+  target element — never `locator.focus()`, which would pass even on a
+  `tabindex="-1"` element a real keyboard user could never reach. Each
+  control's computed accessible name is asserted with `toHaveAccessibleName()`
+  against real expected content, a shared `assertVisibleFocus()` helper then
+  confirms a genuinely visible `:focus-visible` outline (non-`none` style,
+  non-zero width, non-transparent color) before the control is activated
+  with `Enter`/`Space`, plus (for the mobile menu) an
+  absence-of-keyboard-trap check.
+- The initial scan found six confirmed, independently verified defects —
+  insufficient contrast on three CSS color variables, 22 heading-order
+  violations, two unlabeled table corner cells, unlabeled instructional
+  SVGs, non-focusable scrollable tables, and a skip link that did not move
+  keyboard focus. All six were fixed with narrowly scoped changes (color
+  values, heading levels with a same-size CSS override, an `.sr-only` label,
+  an SVG accessible-name parameter, and two `tabindex` additions) that do
+  not touch any scientific content. See `docs/QUALITY_LOG.md` QL-010.
+- Two mistakes in the tests themselves were caught and corrected during
+  authoring, not shipped (QL-011). A third, more consequential one was
+  caught in independent review of the draft PR: every original
+  "keyboard-reachable" test used `locator.focus()` instead of real `Tab`
+  input, so it could not have caught a `tabindex="-1"` regression on any of
+  those controls despite the test names and this document's earlier wording
+  claiming Tab-reachability. Rewritten to use `tabUntilFocused()` throughout
+  and mutation-verified (a deliberately added `tabindex="-1"` now fails the
+  test with a clear message). See the first QL-011 addendum.
+- A second independent review found the documentation itself had then
+  overclaimed: it described every control's accessible name and visible
+  focus as asserted, but the skip link had no accessible-name assertion and
+  four controls (the exercise option, exercise Next, Print, and Reset)
+  never received a visible-focus check. Added the missing skip-link
+  assertion and a shared `assertVisibleFocus()` helper applied to all nine
+  controls uniformly; mutation-verified with a second, independent mutation
+  (`#printBtn:focus-visible{outline:none}` now fails the Print test). See
+  the second QL-011 addendum.
+- All 62 scheduled Playwright test runs (58 passed, 4 intentionally skipped
+  per-viewport, 0 failed) and all 48 dependency-free checks (`npm test`:
+  12 structural + 36 DOM behavior) passed locally after these changes.
+- This item stays **unchecked** in Issue #1 and in `docs/ROADMAP.md`: a
+  genuine representative screen-reader review has not been performed, and
+  passing an automated scanner plus keyboard-only testing does not establish
+  one. Deployed-Pages-URL testing, true touch hardware, and the third-party
+  image-delivery confirmation also remain open.
+
 ## Read these files first
 
 1. `README.md`
@@ -206,7 +262,12 @@ questions or images:
    actual current CI status, check the PR or GitHub Actions — do not infer
    it from a run ID recorded here. Issue #1 stays open for the remaining
    Milestone 0 items below.
-2. Add automated WCAG checks and representative keyboard/screen-reader review.
+2. ~~Add automated WCAG checks and representative keyboard/screen-reader
+   review.~~ Automated WCAG scanning (axe-core) and representative
+   keyboard-only interaction testing are done as of 2026-07-31 (see above,
+   `docs/QUALITY_LOG.md` QL-010/QL-011). A genuine screen-reader review has
+   **not** been performed and stays open; do not check this item in Issue #1
+   or `docs/ROADMAP.md` until one is.
 3. Run narrow-screen, touch, and mobile-navigation tests against the live page.
 4. Capture a clean screenshot of the course itself for the README.
 5. Record a documented scientific-review status rather than treating structural
@@ -264,15 +325,19 @@ Do not describe adaptation as automatic until that exists.
 
 ### Accessibility
 
-The course has a skip link, visible focus styling, reduced-motion support,
-semantic landmarks, and keyboard-operable flashcards. Remaining work includes:
+The course has a skip link that now moves keyboard focus into `#main`
+(fixed 2026-07-31, QL-010), visible focus styling, reduced-motion support,
+semantic landmarks, keyboard-operable flashcards, WCAG-AA text contrast, a
+correct heading order, labeled table headers, and accessible names on
+instructional/quiz/exercise SVGs (also fixed 2026-07-31, QL-010). Remaining
+work includes:
 
 - Escape/focus/inert behavior for the mobile sidebar
 - live result/status announcements
-- accessible names for instructional SVGs
 - flashcard front/back screen-reader state
 - current-state semantics such as `aria-current` and `aria-pressed`
-- contrast remediation for faint/accent small text
+- a representative screen-reader review (automated scanning and
+  keyboard-only testing do not establish this — see `docs/VALIDATION.md`)
 
 ### Image evidence
 

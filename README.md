@@ -179,10 +179,28 @@ and page-origin console cleanliness, at both a desktop and a narrow/mobile
 viewport. Playwright is a development-only dependency; the shipped course
 has no runtime dependency on it.
 
+The same Playwright run also includes automated WCAG scanning
+(`@axe-core/playwright`, `tests/e2e/accessibility.spec.mjs`) against the fully
+rendered course at both viewports and in several interaction states, and a
+representative keyboard-only interaction suite
+(`tests/e2e/keyboard-navigation.spec.mjs`) covering the visible sidebar nav,
+the mobile menu, quizzes, exercises, module completion, Print, and Reset.
+For each, the suite proves real Tab-order reachability by driving actual
+`Tab` key presses to the target (never programmatic `.focus()`, which would
+pass even on a control a keyboard user could never reach), asserts its
+computed accessible name, confirms a genuinely visible focus outline
+(non-`none` style, non-zero width, non-transparent color), and only then
+activates it with `Enter`/`Space`, plus checks the absence of a keyboard
+trap for the mobile menu. Automated scanning and keyboard testing are not a
+screen-reader review; a genuine review with
+real assistive technology has not been performed. See
+[Validation](./docs/VALIDATION.md) for scope and limits.
+
 Passing these tests does **not** establish scientific correctness. Scientific
-review, rights review, accessibility, and release readiness are separate
-gates documented in [Validation](./docs/VALIDATION.md). Automated WCAG
-scanning, screen-reader review, and true touch-gesture testing remain open.
+review, rights review, a representative screen-reader review, and release
+readiness are separate gates documented in
+[Validation](./docs/VALIDATION.md). True touch-gesture testing also remains
+open.
 
 ## Repository map
 
