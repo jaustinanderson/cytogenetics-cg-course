@@ -602,10 +602,11 @@ introduced separately and each failed at a distinct, correctly-located
 assertion; all three fully reverted before commit. See the addendum to
 `docs/QUALITY_LOG.md` QL-019. No product or scientific content changed.
 
-Asset localization work started 2026-07-31 (branch
-`claude/issue-1-asset-localization`, Issue #1), the last open Milestone 0
-item ("decide whether to localize remote fonts and the two approved
-images"):
+Asset localization (branch `claude/issue-1-asset-localization`, PR #10,
+Issue #1) implements `docs/ROADMAP.md`'s "decide whether to localize remote
+fonts and the two approved images" item — one Milestone 0 item among the
+several still open (see `docs/ROADMAP.md` for the current full list; this
+entry does not claim Milestone 0 or Issue #1 is complete):
 
 - **Decision:** localize both. The two approved images (NHGRI 46,XY; CDC
   PHIL trisomy-21) are committed to `assets/images/`, fetched byte-for-byte
@@ -637,19 +638,23 @@ images"):
   remote-images.spec.mjs` was renamed to `local-images.spec.mjs` and now
   also asserts each image's `currentSrc` resolves to the deployed page's own
   origin, not a third-party host.
-- **Local validation:** `npm test` (48 checks, including the new structural
-  guard) passed. `npm run test:e2e` passed at both viewports after
-  confirming one apparent failure (`init.spec.mjs`'s `networkidle` wait
-  timing out) was a resource-contention flake from running the full suite
-  fully parallel in this sandbox, not a product regression — re-running
-  `tests/e2e/init.spec.mjs` alone passed cleanly every time, per the
-  standing QL-007/QL-008 discipline of reproducing an unexpected failure in
-  isolation before trusting it.
+- **Local validation:** `npm test` emits 55 checks total (14 structural +
+  36 DOM behavior + 5 deployed-revision-verifier hash checks) and all 55
+  passed, including the new structural guard above. `npm run test:e2e`
+  passed at both viewports after confirming one apparent failure
+  (`init.spec.mjs`'s `networkidle` wait timing out) was a resource-contention
+  flake from running the full suite fully parallel in this sandbox, not a
+  product regression — re-running `tests/e2e/init.spec.mjs` alone passed
+  cleanly every time, per the standing QL-007/QL-008 discipline of
+  reproducing an unexpected failure in isolation before trusting it.
 - No question, answer, explanation, exercise, case, or scientific claim was
   altered. `docs/SCIENTIFIC_REVIEW.md`'s status record is unaffected.
-- A draft PR was opened into `main` for independent review; **not merged**,
-  Issue #1 not otherwise modified. See the PR for CI results and the
-  completion report for the exact commands/results and remaining risks.
+- This closes the asset-localization roadmap item tracked under Issue #1 —
+  it does not close Issue #1 itself, which stays open for its other
+  Milestone 0 items, most notably a genuine representative screen-reader
+  review and true touch-gesture testing on physical hardware, neither of
+  which this work performs or is affected by. PR #10 is the implementation
+  checkpoint for this work; see the PR for CI results and review status.
 
 ## Read these files first
 
@@ -713,12 +718,12 @@ questions or images:
    `docs/SCIENTIFIC_REVIEW.md`. The record itself is honest that the
    underlying question-by-question review has **not** happened; do not
    read this item's completion as "content review is done." See below.
-6. **Decide whether to localize remote fonts and the two approved images.**
-   In progress: implemented 2026-07-31 on branch
-   `claude/issue-1-asset-localization` (Issue #1) — see the entry above for
-   the decision, evidence, and validation results. A draft PR is open for
-   independent review and **has not been merged**; do not check this item in
-   Issue #1 or `docs/ROADMAP.md`'s checkbox as fully closed until it merges.
+6. ~~Decide whether to localize remote fonts and the two approved images.~~
+   Done via PR #10 (branch `claude/issue-1-asset-localization`, Issue #1) —
+   see the entry above for the decision, evidence, and validation results.
+   This closes the asset-localization roadmap item specifically, not
+   Milestone 0 or Issue #1 as a whole; the screen-reader review and
+   physical touch-hardware testing items below remain open.
 
 Do not begin the 46-question expansion or image embedding while the data
 contract and review gates remain incomplete.

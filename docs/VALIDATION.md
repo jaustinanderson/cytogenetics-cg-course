@@ -173,8 +173,10 @@ are now committed to this repository (`assets/fonts/`, `assets/images/`) and
 served from the page's own origin. See `THIRD_PARTY_NOTICES.md` for exact
 upstream sources, retrieval dates, licenses, and file hashes, and
 `docs/ARCHITECTURE.md` "External resources" for the current dependency
-summary. This closes the "decide whether to localize remote fonts and the
-two approved images" item in `docs/ROADMAP.md` and Issue #1.
+summary. This closes the asset-localization roadmap item tracked under
+Issue #1 (PR #10); Issue #1 itself remains open for its other Milestone 0
+items, including a genuine screen-reader review and physical touch-hardware
+testing.
 
 Verification performed:
 
