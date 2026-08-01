@@ -41,7 +41,7 @@
   }
   h1,h2,h3,h4{line-height:1.22; color:var(--ink); margin:0 0 .5em; letter-spacing:-.012em; font-weight:700}
   h2{font-size:1.62rem} h3{font-size:1.2rem} h4{font-size:1.02rem; font-weight:600}
-  p{margin:0 0 1em;max-width:70ch} a{color:var(--primary); text-underline-offset:2px}
+  p{margin:0 0 1em} a{color:var(--primary); text-underline-offset:2px}
   ul,ol{margin:0 0 1em; padding-left:1.25rem} li{margin:.28em 0}
   strong{font-weight:600; color:#0b1c2e}
   code,.mono{font-family:var(--mono)}
@@ -143,6 +143,12 @@
 
   /* ---------- Modules ---------- */
   .module{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:clamp(1.1rem,2.4vw,2rem);box-shadow:var(--shadow);margin-top:1.6rem;scroll-margin-top:calc(var(--header-h) + 14px)}
+  /* Reading-measure cap for genuine long-form lesson prose only. Scoped to
+     plain narrative paragraphs inside a module, explicitly excluding
+     callouts, case studies, quick-reference cards, and the exam-weighting
+     source note -- those already have their own component width/padding and
+     must keep the full content-column width, not the ~70ch reading measure. */
+  .module p:not(.callout p):not(.case-body p):not(.grid-card p):not(.source-note){max-width:70ch}
   .mod-head{display:flex;gap:.9rem;align-items:flex-start;border-bottom:1px solid var(--line-soft);padding-bottom:1rem;margin-bottom:1.1rem}
   .mod-badge{flex:0 0 auto;width:46px;height:46px;border-radius:12px;background:linear-gradient(135deg,var(--primary),var(--accent));color:#fff;display:grid;place-items:center;font-weight:700;font-size:1.15rem;box-shadow:var(--shadow);font-family:var(--mono)}
   .mod-head .mh-eyebrow{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);font-weight:700}
@@ -1139,8 +1145,6 @@
         </figcaption>
       </figure>
 
-      <p>A normal female karyogram (<strong>46,XX</strong>) follows the identical arrangement rules shown above, with one difference: the sex-chromosome pair is two X chromosomes instead of one X and one Y.</p>
-
       <h3 class="coreh">Arrangement conventions</h3>
       <ul>
         <li><strong>Order:</strong> autosomes <strong>1&rarr;22</strong> grouped A&ndash;G (largest to smallest within each group), then the <strong>sex chromosomes</strong> (X, then Y).</li>
@@ -1271,8 +1275,6 @@
 
       <div class="callout co-iscn"><span class="co-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2M9 20h6M12 4v16"/></svg>ISCN Rule / Normal variants</span><p><strong>Heteromorphisms are normal polymorphisms, not abnormalities.</strong> Variation in <code>1qh</code>, <code>9qh</code>, <code>16qh</code>, satellite size, and <strong>Yqh</strong> length is common and benign. When reported, ISCN uses heteromorphism notation (e.g., a larger 9q heterochromatin) rather than an abnormality term. Do not write a gain/deletion for a bigger qh block.</p></div>
 
-      <p>Band resolution (Module&nbsp;5) sets how much detail is visible: at lower resolution (~400 bands) chromosomes look shorter and more condensed with coarser bands; at higher resolution (~550&ndash;850 bands), longer, less-contracted chromosomes reveal finer sub-bands within each major band, which is why subtle structural changes often require requesting higher-resolution banding.</p>
-
       <div class="exer" data-exer="ex9group"></div>
       <div class="exer" data-exer="ex9chrom"></div>
 
@@ -1369,8 +1371,6 @@
       <div class="callout co-pearl"><span class="co-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12c.7.7 1 1.5 1 2h6c0-.5.3-1.3 1-2a7 7 0 0 0-4-12z"/></svg>Exam Pearl</span><p><strong>Clone-size thresholds:</strong> a clone is defined by <strong>&ge;2 cells with the same gain</strong> (extra chromosome) or the same structural rearrangement, but <strong>&ge;3 cells with the same monosomy/loss</strong>. The higher bar for loss exists because <em>single-cell loss is so often technical artifact</em>. Memorize: <strong>gain/structural &ge;2, loss &ge;3</strong>.</p></div>
 
       <div class="callout co-pit"><span class="co-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>Common Pitfall</span><p>Three traps: <strong>(1)</strong> writing <code>45,XO</code> (the correct form is <code>45,X</code>); <strong>(2)</strong> calling a monosomy from one or two cells&mdash;random loss mimics it; <strong>(3)</strong> confusing <strong>triploidy (69)</strong> with <strong>tetraploidy (92)</strong>. Tetraploidy in particular can be a <em>culture artifact</em> (endoreduplication), so correlate before reporting.</p></div>
-
-      <p>Sex-chromosome aneuploidies follow the same counting logic as the trisomy&nbsp;21 example above: <strong>45,X</strong> (Turner) shows a total count of 45 with a single X and no Y or second X; <strong>47,XXY</strong> (Klinefelter) shows a total count of 47 with two X chromosomes plus a Y.</p>
 
       <div class="exer" data-exer="ex10"></div>
 

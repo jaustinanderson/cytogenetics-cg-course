@@ -123,18 +123,21 @@ const REPO_ROOT = path.join(__dirname, "..");
 const OUTPUT_PATH = path.join(REPO_ROOT, "docs", "assets", "course-overview.png");
 
 // 1440 wide keeps the layout solidly in the desktop CSS path (the product's
-// only responsive breakpoints are 980px and 560px). Height is chosen, not
-// guessed, from the real rendered layout: the topbar, hero, weighting chart,
-// and the full 17-card progress dashboard grid together measure ~1463.0px at
-// this width after the visual-polish pass added `p{max-width:70ch}` (Issue
-// #11), which re-wraps the weighting chart's `.source-note` paragraph onto
-// an extra line and pushes everything below it down by ~47px versus the
-// prior 1415.8px measurement. Module 1's own section begins only ~25.6px
-// after that (at ~1488.5px), so 1477 includes the full dashboard with a
-// small margin and stops cleanly before any module content — re-measure
-// this constant again (do not assume it) after any change to content above
-// the dashboard grid.
-const VIEWPORT = { width: 1440, height: 1477 };
+// only responsive breakpoints are 980px and 560px). 1430 tall is chosen,
+// not guessed, from the real rendered layout: the topbar, hero, weighting
+// chart, and the full 17-card progress dashboard grid together measure
+// ~1415.8px at this width. An intermediate version of the visual-polish
+// pass (Issue #11) briefly added an unscoped `p{max-width:70ch}` that
+// re-wrapped the weighting chart's `.source-note` paragraph and pushed this
+// down to ~1463.0px; the rule was corrected to exclude callouts, case
+// studies, quick-reference cards, and `.source-note` specifically (see
+// docs/QUALITY_LOG.md QL-020's correction entry), which restored this
+// measurement to its original 1415.8px. Module 1's own section begins only
+// ~25.6px after that (at ~1441.4px), so 1430 includes the full dashboard
+// with a small margin and stops cleanly before any module content —
+// re-measure this constant again (do not assume it) after any change to
+// content above the dashboard grid.
+const VIEWPORT = { width: 1440, height: 1430 };
 
 const EXPECTED_TITLE = "Cytogenetics CG(ASCP) Mini-Course";
 const EXPECTED_HERO_HEADING = "Read the slide. Name every chromosome. Write the nomenclature.";

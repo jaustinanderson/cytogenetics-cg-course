@@ -6,15 +6,19 @@ All notable repository changes are recorded here.
 
 ### Added
 
-- `tests/e2e/visual-polish.spec.mjs`: real-browser regression coverage (40
+- `tests/e2e/visual-polish.spec.mjs`: real-browser regression coverage (46
   runs across both Playwright projects, plus 1440×900/768×1024/360×800
   exercised directly within the file) for the visual-polish fixes below —
-  no horizontal overflow, no mobile-header control overlap/clipping, header
-  controls stay keyboard- and touch-accessible with a preserved accessible
-  name, zero "Image needed" placeholder text, figures constrained to the
-  viewport, and captions that stay attached and readable. See
-  `docs/QUALITY_LOG.md` QL-020 and `docs/VALIDATION.md` "Visual-polish
-  regression suite"
+  no horizontal overflow, no mobile-header control overlap/clipping, the
+  hamburger/Print/Reset controls each independently proven Tab-reachable,
+  visibly focused, keyboard-operable, and touch-operable (Reset additionally
+  seeding and clearing disposable progress via both paths), zero "Image
+  needed" placeholder text, figures constrained to the viewport, captions
+  that stay attached and readable, and representative components (callouts,
+  case studies, quick-reference cards, disclaimers, the source note) proven
+  unaffected by the reading-measure rule. See `docs/QUALITY_LOG.md` QL-020
+  and its addendum, and `docs/VALIDATION.md` "Visual-polish regression
+  suite"
 
 - `assets/images/`: the two previously remote, approved course images —
   `nhgri-human-male-karyotype-46xy.png` and
@@ -184,32 +188,33 @@ All notable repository changes are recorded here.
 ### Changed
 
 - Removed the five learner-facing "Image needed" authoring/search placeholder
-  figures from Modules 8–12; where the surrounding lesson text did not
-  already stand alone, one short explanatory sentence replaced each
-  placeholder. No new imagery was fabricated, generated, downloaded, or
-  embedded — only the two already-approved local images remain embedded, and
-  the image manifest's provenance records are unchanged. The "Image credits &
-  licensing" section's remaining prose was reworded to describe the same
-  unfilled candidates without shipping search instructions in the learner UI
+  figures from Modules 8–12. No new scientific explanation was added in their
+  place — where the surrounding lesson text did not already stand alone, the
+  placeholder was simply deleted, identical treatment across all five. No new
+  imagery was fabricated, generated, downloaded, or embedded — only the two
+  already-approved local images remain embedded, and the image manifest's
+  provenance records are unchanged. The "Image credits & licensing" section's
+  remaining prose was reworded to describe the same unfilled candidates
+  without shipping search instructions in the learner UI
 - Capped embedded figure images at `max-height:min(52vh,460px)` so they stay
   proportionate to surrounding content instead of dominating most of a
   screen before their caption is visible
 - Raised figcaption/`.src`/`.lic` font sizes (.92rem/.85rem/.78rem) and
   recolored `.src` from `--ink-faint` to the already-AA-passing `--ink-soft`
   for more comfortable reading
-- Added a global `p{max-width:70ch}` reading-measure cap; tables, quizzes,
-  exercises, and other full-width components (which use `div`/`td`, not
-  `p`) are unaffected
+- Added a `max-width:70ch` reading-measure cap scoped to genuine long-form
+  lesson prose (`.module p:not(.callout p):not(.case-body p):
+  not(.grid-card p):not(.source-note)`, derived from a real-DOM survey of
+  every paragraph in the document); tables, quizzes, exercises, callouts,
+  case studies, quick-reference cards, disclaimers, and the exam-weighting
+  source note are confirmed unaffected — see `docs/QUALITY_LOG.md` QL-020's
+  addendum
 - Fixed a mobile-header flexbox bug where the brand-name wrapper's default
   `min-width:auto` refused to shrink, causing the course name to visually
   overlap the Print button around 390px/360px; the brand text now shrinks
   and ellipsizes correctly. At ≤560px, Print/Reset become icon-only with an
   explicit `aria-label` matching their visible text, preserving their
   accessible name
-- `docs/assets/course-overview.png` regenerated at a taller capture height
-  (1440×1477, was 1440×1430) after the reading-measure change re-wrapped a
-  paragraph above the dashboard grid and pushed it down ~47px — see
-  `docs/VALIDATION.md` "Visual-polish regression suite"
 - The course no longer requests any third-party font or image host at
   runtime: the Google Fonts `<link>`/`preconnect` tags are replaced with
   local `@font-face` rules, and both figures' `<img src>` and the

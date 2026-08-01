@@ -8,6 +8,13 @@ import { test, expect } from "./fixtures.mjs";
  * project-level ones (1280x900, 390x844) are covered here directly via
  * `test.use({ viewport })` per describe block, per the acceptance criteria's
  * explicit 1440x900 / 1280x900 / 768x1024 / 390x844 / 360x800 matrix.
+ *
+ * The header-accessibility tests below deliberately duplicate the small
+ * tabUntilFocused()/assertVisibleFocus() helpers from
+ * tests/e2e/keyboard-navigation.spec.mjs rather than importing them, the
+ * same independence convention tests/e2e-deployed/ already uses relative to
+ * tests/e2e/ (see docs/VALIDATION.md) — this file's claims about the header
+ * controls stay provable on their own, not contingent on another suite file.
  */
 
 const EXTRA_VIEWPORTS = [
@@ -15,6 +22,58 @@ const EXTRA_VIEWPORTS = [
   { name: "768x1024", width: 768, height: 1024 },
   { name: "360x800", width: 360, height: 800 },
 ];
+
+/**
+ * Presses real Tab keys -- never locator.focus(), which succeeds even on a
+ * tabindex="-1" element a real keyboard user could never reach -- until
+ * `target` becomes document.activeElement, or throws a descriptive error
+ * after `max` presses.
+ */
+async function tabUntilFocused(page, target, { max = 100, label = "target" } = {}) {
+  const handle = await target.elementHandle();
+  if (!handle) {
+    throw new Error(`tabUntilFocused: "${label}" did not resolve to an element in the DOM`);
+  }
+  const alreadyFocused = await page.evaluate((el) => el === document.activeElement, handle);
+  if (alreadyFocused) return 0;
+  for (let presses = 1; presses <= max; presses += 1) {
+    await page.keyboard.press("Tab");
+    const isFocused = await page.evaluate((el) => el === document.activeElement, handle);
+    if (isFocused) return presses;
+  }
+  const stuckOn = await page.evaluate(() => {
+    const el = document.activeElement;
+    if (!el) return "(none)";
+    const cls = el.className ? `.${String(el.className).trim().replace(/\s+/g, ".")}` : "";
+    return `${el.tagName.toLowerCase()}${el.id ? "#" + el.id : ""}${cls}`;
+  });
+  throw new Error(
+    `tabUntilFocused: "${label}" was not reached by natural Tab order within ${max} presses. Focus ended on ${stuckOn}.`,
+  );
+}
+
+/** Confirms `target` is genuinely document.activeElement with a real, visible :focus-visible outline. */
+async function assertVisibleFocus(page, target, { label = "target" } = {}) {
+  const handle = await target.elementHandle();
+  if (!handle) {
+    throw new Error(`assertVisibleFocus: "${label}" did not resolve to an element in the DOM`);
+  }
+  const isFocused = await page.evaluate((el) => el === document.activeElement, handle);
+  expect(isFocused, `assertVisibleFocus: "${label}" is not document.activeElement`).toBe(true);
+
+  const style = await page.evaluate((el) => {
+    const cs = getComputedStyle(el);
+    return { outlineStyle: cs.outlineStyle, outlineWidth: cs.outlineWidth, outlineColor: cs.outlineColor };
+  }, handle);
+
+  expect(style.outlineStyle, `${label}: outline-style`).not.toBe("none");
+  expect(parseFloat(style.outlineWidth), `${label}: outline-width`).toBeGreaterThan(0);
+  expect(style.outlineColor, `${label}: outline-color`).not.toBe("transparent");
+  const alphaMatch = style.outlineColor.match(/rgba?\([^)]*,\s*([\d.]+)\s*\)/);
+  if (alphaMatch) {
+    expect(parseFloat(alphaMatch[1]), `${label}: outline-color alpha`).toBeGreaterThan(0);
+  }
+}
 
 async function assertNoHorizontalOverflow(page) {
   const { scrollWidth, clientWidth } = await page.evaluate(() => ({
@@ -69,40 +128,89 @@ test.describe("mobile header: no control overlap or clipping", () => {
   }
 });
 
-test.describe("mobile header: essential controls stay accessible", () => {
+test.describe("mobile header: essential controls are keyboard- and touch-accessible", () => {
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
-  test("hamburger, Print, and Reset are reachable by keyboard with a visible name, and operable by touch", async ({
+  test("hamburger: real-Tab reachable, visibly focused, keyboard-operable, and touch-operable", async ({ page }) => {
+    await page.goto("/");
+    const toggle = page.locator("#navToggle");
+    await expect(toggle).toHaveAccessibleName("Open module navigation");
+
+    await tabUntilFocused(page, toggle, { max: 10, label: "hamburger toggle" });
+    await assertVisibleFocus(page, toggle, { label: "hamburger toggle" });
+
+    const sidebar = page.locator("#sidebar");
+    await expect(sidebar).not.toHaveClass(/open/);
+    await page.keyboard.press("Enter");
+    await expect(sidebar).toHaveClass(/open/);
+    await expect(toggle).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(sidebar).not.toHaveClass(/open/);
+
+    await toggle.tap();
+    await expect(sidebar).toHaveClass(/open/);
+    await toggle.tap();
+    await expect(sidebar).not.toHaveClass(/open/);
+  });
+
+  test("Print: real-Tab reachable, visibly focused, keyboard-operable, and touch-operable", async ({ page }) => {
+    await page.addInitScript(() => {
+      window.__printCalls = 0;
+      window.print = () => {
+        window.__printCalls += 1;
+      };
+    });
+    await page.goto("/");
+    const printBtn = page.locator("#printBtn");
+    await expect(printBtn).toHaveAccessibleName("Print");
+
+    await tabUntilFocused(page, printBtn, { max: 15, label: "Print control" });
+    await assertVisibleFocus(page, printBtn, { label: "Print control" });
+
+    await page.keyboard.press("Enter");
+    expect(await page.evaluate(() => window.__printCalls), "keyboard Enter did not invoke window.print").toBe(1);
+
+    await printBtn.tap();
+    expect(await page.evaluate(() => window.__printCalls), "touch tap did not invoke window.print").toBe(2);
+  });
+
+  test("Reset: real-Tab reachable, visibly focused, keyboard-operable, clears seeded progress, and is touch-operable", async ({
     page,
   }) => {
     await page.goto("/");
 
-    for (const [id, expectedName] of [
-      ["#navToggle", "Open module navigation"],
-      ["#printBtn", "Print"],
-      ["#resetBtn", "Reset"],
-    ]) {
-      const locator = page.locator(id);
-      await expect(locator).toBeVisible();
-      await expect(locator).toHaveAccessibleName(expectedName);
-    }
+    // Seed disposable state (mark module 1 complete) so Reset has something
+    // real to clear, then reload -- progress persists via localStorage,
+    // focus does not, so this leaves a genuinely fresh, focus-less start for
+    // the Tab search below, same discipline as
+    // tests/e2e/keyboard-navigation.spec.mjs's Reset test.
+    await page.locator('.mark-complete[data-mod="m1"]').click();
+    await expect(page.locator("#tpLabel")).toHaveText("1 of 17 modules complete");
+    await page.reload();
+    await expect(page.locator("#tpLabel")).toHaveText("1 of 17 modules complete");
 
-    // Bounded real Tab-key walk (never .focus(), which would pass even on an
-    // unreachable control) confirming the hamburger is in the natural tab
-    // order and touch-operable.
-    let reachedToggle = false;
-    for (let i = 0; i < 10 && !reachedToggle; i += 1) {
-      await page.keyboard.press("Tab");
-      reachedToggle = await page.evaluate(() => document.activeElement && document.activeElement.id === "navToggle");
-    }
-    expect(reachedToggle, "hamburger was not reached by real Tab presses").toBe(true);
+    const resetBtn = page.locator("#resetBtn");
+    await expect(resetBtn).toHaveAccessibleName("Reset");
 
-    const sidebar = page.locator("#sidebar");
-    await expect(sidebar).not.toHaveClass(/open/);
-    await page.locator("#navToggle").tap();
-    await expect(sidebar).toHaveClass(/open/);
-    await page.locator("#navToggle").tap();
-    await expect(sidebar).not.toHaveClass(/open/);
+    await tabUntilFocused(page, resetBtn, { max: 15, label: "Reset control" });
+    await assertVisibleFocus(page, resetBtn, { label: "Reset control" });
+
+    page.once("dialog", (dialog) => dialog.accept());
+    await page.keyboard.press("Enter");
+    await page.waitForLoadState("load");
+    await expect(page.locator("#tpLabel")).toHaveText("0 of 17 modules complete");
+
+    // Seed again and repeat via touch, so Reset's touch path is proven to
+    // actually clear state too, not just dispatch a tap event.
+    await page.locator('.mark-complete[data-mod="m1"]').click();
+    await expect(page.locator("#tpLabel")).toHaveText("1 of 17 modules complete");
+    await page.reload();
+    await expect(page.locator("#tpLabel")).toHaveText("1 of 17 modules complete");
+
+    page.once("dialog", (dialog) => dialog.accept());
+    await page.locator("#resetBtn").tap();
+    await page.waitForLoadState("load");
+    await expect(page.locator("#tpLabel")).toHaveText("0 of 17 modules complete");
   });
 });
 
@@ -200,31 +308,77 @@ test.describe("figure captions stay attached and remain readable", () => {
   });
 });
 
-test.describe("long-form prose keeps a constrained reading measure without narrowing full-width components", () => {
+test.describe("the reading-measure cap is scoped to genuine lesson prose only", () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
-  test("module paragraphs stay within the reading-measure cap while tables and quizzes keep full content width", async ({
+  // Module 5 has a genuine narrative paragraph outside any callout/case/card,
+  // plus a table and a quiz, in the same module — a representative real
+  // section to check the cap against its neighbors directly.
+  test("a genuine module paragraph is narrowed to the reading measure, while its sibling table and quiz keep full content width", async ({
     page,
   }) => {
     await page.goto("/");
 
     const contentWidth = await page.locator(".content").first().evaluate((el) => el.getBoundingClientRect().width);
-
-    const proseWidth = await page.locator("#m9 p").first().evaluate((el) => el.getBoundingClientRect().width);
+    const proseWidth = await page
+      .locator("#m5 p:not(.callout p):not(.case-body p):not(.grid-card p):not(.source-note)")
+      .first()
+      .evaluate((el) => el.getBoundingClientRect().width);
     expect(proseWidth, `paragraph width ${proseWidth}px exceeds the intended ~70ch reading measure`).toBeLessThan(
       contentWidth * 0.85,
     );
 
-    const tableWidth = await page.locator("#m9 .tbl-wrap").first().evaluate((el) => el.getBoundingClientRect().width);
+    const tableWidth = await page.locator("#m5 .tbl-wrap").first().evaluate((el) => el.getBoundingClientRect().width);
     expect(
       tableWidth,
       `table width ${tableWidth}px was narrowed along with prose — tables must keep full content width`,
     ).toBeGreaterThan(proseWidth);
 
-    const quizWidth = await page.locator("#m9 .quiz").first().evaluate((el) => el.getBoundingClientRect().width);
+    const quizWidth = await page.locator("#m5 .quiz").first().evaluate((el) => el.getBoundingClientRect().width);
     expect(
       quizWidth,
       `quiz width ${quizWidth}px was narrowed along with prose — quizzes must keep full content width`,
     ).toBeGreaterThan(proseWidth);
+  });
+
+  // Representative regression coverage for every other paragraph-bearing
+  // component the reading-measure rule must NOT reach into. Checked via
+  // computed max-width directly (must resolve to "none"), not by comparing
+  // rendered widths across components -- a card's own narrower column width
+  // (from its own layout, not the reading-measure rule) would otherwise
+  // produce a false failure, exactly as first happened authoring this test:
+  // #m1 .grid-card p legitimately renders at 373px (its own two-column card
+  // width) even though the rule correctly does not apply to it at all.
+  test("callouts, case studies, quick-reference cards, disclaimers, and the exam-weighting source note keep an unconstrained max-width", async ({
+    page,
+  }) => {
+    await page.goto("/");
+
+    const genuineProseMaxWidth = await page
+      .locator("#m5 p:not(.callout p):not(.case-body p):not(.grid-card p):not(.source-note)")
+      .first()
+      .evaluate((el) => getComputedStyle(el).maxWidth);
+    expect(
+      genuineProseMaxWidth,
+      "sanity check: the genuine module paragraph should itself be capped (not \"none\") for this test to be meaningful",
+    ).not.toBe("none");
+
+    const others = {
+      "callout paragraph (#m9 .callout p)": "#m9 .callout p",
+      "case-study paragraph (.case-body p)": ".case-body p",
+      "quick-reference card paragraph (#m1 .grid-card p)": "#m1 .grid-card p",
+      "disclaimer paragraph (.disclaimer p)": ".disclaimer p",
+      "exam-weighting source note (.source-note)": ".source-note",
+    };
+
+    for (const [label, selector] of Object.entries(others)) {
+      const locator = page.locator(selector).first();
+      await expect(locator, `${label}: selector matched nothing`).toBeVisible();
+      const maxWidth = await locator.evaluate((el) => getComputedStyle(el).maxWidth);
+      expect(
+        maxWidth,
+        `${label} has computed max-width "${maxWidth}" — the reading-measure rule must not apply to it`,
+      ).toBe("none");
+    }
   });
 });

@@ -707,7 +707,7 @@ the optimization step repeats the same check rather than trusting it by
 inference. See `docs/QUALITY_LOG.md` for the full account of all three
 corrections to this record.
 
-## Visual-polish regression suite — added 2026-08-01
+## Visual-polish regression suite — added 2026-08-01, corrected 2026-08-01
 
 `tests/e2e/visual-polish.spec.mjs` (Issue #11, `docs/QUALITY_LOG.md` QL-020)
 adds real-browser layout coverage for five confirmed visual/responsive
@@ -722,27 +722,33 @@ computed styles) before any change, per the standing discipline in
 The suite runs across both existing Playwright projects (1280×900 desktop,
 390×844 narrow/mobile) and, per the acceptance criteria's explicit viewport
 matrix, also exercises 1440×900, 768×1024, and 360×800 directly via
-`test.use({ viewport })`/`page.setViewportSize()` within the file — 40 test
+`test.use({ viewport })`/`page.setViewportSize()` within the file — 46 test
 runs total, all passing. It checks:
 
 - no page-level horizontal overflow at any of the five viewports
 - the hamburger, brand, Print, and Reset controls never overlap or get
   clipped past the viewport edge at 768×1024, 390×844, or 360×800
-- the hamburger is reachable by real `Tab` presses (not `.focus()`), and the
-  hamburger/Print/Reset controls keep their accessible name
-  (`toHaveAccessibleName()`) and are operable via `.tap()` at the narrow
-  viewport — Print and Reset now carry an explicit `aria-label` matching
-  their visible text, so hiding the label text at ≤560px does not change
-  their accessible name
+- at the narrow/mobile viewport, the hamburger, Print, and Reset are each
+  independently proven: reachable by real `Tab` presses (never `.focus()`),
+  visibly focused (a real, non-transparent `:focus-visible` outline),
+  keyboard-operable (`Enter`), and touch-operable (`.tap()`) — Print and
+  Reset carry an explicit `aria-label` matching their visible text, so
+  hiding the label text at ≤560px does not change their accessible name;
+  the Reset checks additionally seed a disposable completed-module state via
+  a real UI click and verify both the keyboard-driven and the touch-driven
+  path actually clear it back to "0 of 17 modules complete"
 - zero `.imgneeded` elements and zero "Image needed" text at any tested width
 - both embedded figures (Figure 8.1, Figure 10.1) stay within the viewport's
   width and within 60% of its height at all five viewports
 - each figure's caption sits within 40px of its image (still visually
   attached), and figcaption/`.src` font sizes stay at or above a 14px/13px
   floor
-- a module paragraph stays under 85% of the content column's width while its
-  sibling table and quiz keep the full content width (proving the reading-
-  measure cap did not narrow full-width components)
+- a genuine module paragraph is narrowed to the reading measure while its
+  sibling table and quiz keep the full content width, **and** a
+  representative paragraph from each protected component — a callout, a
+  case study, a quick-reference card, a disclaimer, and the exam-weighting
+  source note — keeps an unconstrained (`"none"`) computed `max-width`,
+  proving the reading-measure rule does not reach into them
 
 This is layout/bounding-box coverage, deliberately not pixel snapshots, for
 the reasons already stated for `tests/e2e/dashboard-layout.spec.mjs` above.
@@ -750,19 +756,42 @@ It does not replace the still-open screen-reader review, and it does not
 address the dense, fully-expanded quiz/exercise disclosure noted as the
 recommended next isolated UX task in `docs/ROADMAP.md`.
 
-### README screenshot regenerated for the reading-measure change
+Mutation-tested: added `tabindex="-1"` to `#printBtn`, re-ran the Print
+reachability test in isolation, and it failed immediately with
+`tabUntilFocused: "Print control" was not reached by natural Tab order
+within 15 presses. Focus ended on a.nav-link.`; reverted before commit,
+confirmed by `git diff index.html` showing no remaining `tabindex` change.
 
-Global `p{max-width:70ch}` re-wraps the weighting chart's `.source-note`
-paragraph onto an extra line, which pushes the progress dashboard grid down
-by ~47px. The fixed capture height in `scripts/capture-readme-screenshot.mjs`
-was re-measured (not assumed) rather than left in place: the dashboard grid's
-bottom edge moved from ~1415.8px to ~1463.0px, so the capture viewport height
-changed from 1430 to 1477, keeping the same small margin before Module 1's
-own section begins (~1488.5px). Verified by locating `#dashboardGrid`'s
-bounding box directly in a real browser, and by visually inspecting the new
-capture to confirm all 17 dashboard cards, including cards 16/17, render
-completely rather than being cut off mid-row as they would be at the old,
-now-too-short 1430px height.
+### The reading-measure rule is scoped to genuine lesson prose only
+
+An intermediate version of this work applied `p{max-width:70ch}` globally,
+which — confirmed by independent review, not assumed — reached into
+`.source-note`, `.callout p`, `.case-body p`, and `.grid-card p`, narrowing
+component paragraphs that were never meant to be affected. The rule is now
+`.module p:not(.callout p):not(.case-body p):not(.grid-card p):
+not(.source-note){max-width:70ch}`, derived from a real-DOM survey (using
+`Element.closest()` in a live Chromium page) of all 159 `<p>` elements in the
+document: exactly 32 are genuine narrative lesson prose with no enclosing
+callout/case/card wrapper, and only those are capped. See
+`docs/QUALITY_LOG.md` QL-020's addendum for the full survey method and
+the two new regression tests that check this directly via computed
+`max-width`, not by comparing rendered widths across unrelated components
+(a first attempt at that comparison produced a false failure against
+`.grid-card p`, which is legitimately narrower than the reading-measure cap
+because of its own two-column card layout — see the addendum).
+
+### README screenshot — reverted, not regenerated
+
+Because the reading-measure rule no longer reaches `.source-note`, the
+progress-dashboard grid's measured bottom edge returned to exactly its
+original ~1415.8px (confirmed directly in a real browser), so
+`docs/assets/course-overview.png` no longer needs regenerating —
+`scripts/capture-readme-screenshot.mjs`'s capture height was restored to
+1430, and the committed screenshot was reverted to the exact
+pre-visual-polish file (`git checkout b3bc3a8 -- docs/assets/
+course-overview.png`), confirmed by matching SHA-256
+(`0db3106529b8e458ff0c1880eca06221b6dba51afc9f0f20d73b64fa0f666331`) rather
+than kept as an unnecessary regenerated replacement.
 
 ## Gates still open
 

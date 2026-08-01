@@ -687,22 +687,65 @@ five confirmed learner-facing visual/responsive defects:
   touch-accessible header controls with preserved accessible names, zero
   "Image needed" text, figures constrained to the viewport, and captions
   that stay attached and readable.
-- `docs/assets/course-overview.png` regenerated (1440×1477, was 1440×1430):
-  the reading-measure change re-wraps a paragraph above the dashboard grid,
-  pushing it down ~47px; the capture height was re-measured, not assumed,
-  confirming all 17 dashboard cards render completely.
 - Deliberately does **not** address the page's dense, fully-expanded
   quiz/exercise disclosure (every quiz/exercise item renders expanded at
   once) — recorded in `docs/ROADMAP.md` as the recommended next isolated UX
   task, not attempted here to keep this change narrowly scoped.
-- No scientific text, question, answer, rationale, progress data, analytics
-  semantics, storage schema, or public API behavior changed. `npm test`
-  (structural + DOM behavior + deployed-revision-verifier hash checks) and
-  the full local Playwright suite (`npm run test:e2e`, including the new
-  spec) passed. The deployed suite (`npm run test:deployed`) targets the
-  live `main` URL, which this unmerged branch does not affect and which
-  this repository has no per-pull-request preview environment for (see
-  `docs/VALIDATION.md`), so it was not re-run against this branch's changes.
+- `npm test` (structural + DOM behavior + deployed-revision-verifier hash
+  checks) and the full local Playwright suite (`npm run test:e2e`,
+  including the new spec) passed. The deployed suite (`npm run
+  test:deployed`) targets the live `main` URL, which this unmerged branch
+  does not affect and which this repository has no per-pull-request preview
+  environment for (see `docs/VALIDATION.md`), so it was not re-run against
+  this branch's changes.
+
+Independent review of that draft PR (#12) found and prompted correcting four
+issues, applied 2026-08-01 on the same branch — full diagnosis and evidence
+in `docs/QUALITY_LOG.md` QL-020's addendum:
+
+1. **An overclaimed "no scientific text changed" statement.** Three of the
+   five placeholder removals (Modules 8–10) had been replaced with newly
+   written explanatory sentences, not quotations of pre-existing course
+   text — e.g. stating a normal female karyogram is 46,XX, and specific
+   band-count figures for band resolution that appear nowhere else in the
+   course. All three were removed, leaving pure placeholder deletions in
+   all five modules (8–12), identical to how Modules 11–12 were always
+   handled. Verified via `git diff` against the pre-visual-polish baseline
+   that every remaining added line is CSS/markup/accessibility-attribute
+   only, and every removed line is placeholder/authoring-instruction text.
+   **This PR's scientific-content claim is now accurate: no course-content
+   prose was added or changed.**
+2. **The mobile-header accessibility test was vacuous for Print and Reset.**
+   The original test proved real Tab-reachability and touch operation only
+   for the hamburger; Print and Reset only had a visibility/name check.
+   Rewritten into three independent tests, each proving real Tab
+   reachability, visible focus, keyboard activation, and touch activation
+   for its own control — the Reset test also seeds a disposable
+   completed-module state and verifies both a keyboard-driven and a
+   touch-driven Reset actually clear it. Mutation-verified: adding
+   `tabindex="-1"` to `#printBtn` made the Print test fail immediately with
+   a clear "not reached by natural Tab order" message; reverted before
+   commit.
+3. **The reading-measure rule reached further than intended.** The original
+   global `p{max-width:70ch}` narrowed `.source-note`, `.callout p`,
+   `.case-body p`, and `.grid-card p` — confirmed as the actual cause of the
+   README-screenshot layout shift the original entry above described, not a
+   coincidence. Rescoped to `.module p:not(.callout p):not(.case-body p):
+   not(.grid-card p):not(.source-note)`, derived from a real-DOM survey of
+   every `<p>` in the document (32 are genuine lesson prose; the rest are
+   now provably untouched, checked via `getComputedStyle(...).maxWidth`).
+   Because this restored the dashboard grid's original layout exactly,
+   `docs/assets/course-overview.png` was reverted to the exact
+   pre-visual-polish committed file (matching SHA-256) instead of kept as
+   an unnecessary regeneration.
+4. **Visual evidence was scratchpad-only**, not accessible to an
+   independent reviewer. Published a self-contained before/after HTML page
+   (real screenshots, no external requests) as a hosted Artifact, linked
+   from the PR description.
+
+`tests/e2e/visual-polish.spec.mjs` now runs 46 test-run instances (was 40);
+all local validation (`npm test`, full `npm run test:e2e`) passed again
+after these corrections.
 
 ## Read these files first
 

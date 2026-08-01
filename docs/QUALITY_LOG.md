@@ -1198,3 +1198,113 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   property on the real page before and after a layout fix, not just
   "looks better."
 
+### Addendum — independent review of draft PR #12 found four issues, corrected before merge
+
+- **Status:** Corrected on the same branch, before merge
+- **Finding:** Independent review of the draft PR found:
+  1. **An overclaimed "no scientific text changed" statement.** The original
+     placeholder-removal work (correction above) replaced three of the five
+     "Image needed" figures in Modules 8–10 with newly written explanatory
+     sentences — e.g. stating a normal female karyogram is 46,XX, and giving
+     specific band-count figures (~400/~550–850 bands) for band resolution.
+     These are new scientific explanations, not quotations of pre-existing
+     course text, despite the PR describing the change as not touching
+     scientific content.
+  2. **The mobile-header accessibility test was vacuous for two of its three
+     claimed controls.** `tests/e2e/visual-polish.spec.mjs`'s "essential
+     controls stay accessible" test proved real Tab-order reachability and
+     touch (`.tap()`) operation only for the hamburger. For Print and Reset
+     it only checked `toBeVisible()`/`toHaveAccessibleName()` — never a real
+     `Tab`-press walk, a visible-focus check, keyboard activation, or a
+     touch interaction — despite the surrounding documentation implying all
+     three controls were equally proven.
+  3. **The global `p{max-width:70ch}` rule reached further than intended.**
+     It applied to every `<p>` in the document, including
+     `.source-note`, `.callout p`, `.case-body p`, and `.grid-card p` — this
+     was the actual, confirmed cause of the README-screenshot layout shift
+     recorded in the main QL-020 entry above (the weighting chart's
+     `.source-note` paragraph got narrowed and re-wrapped), not a
+     coincidence. Component paragraphs with their own established width
+     (callouts, case studies, quick-reference cards, source notes) should
+     not have been affected by a prose reading-measure change at all.
+  4. **Visual evidence was scratchpad-only.** Before/after screenshots
+     existed only in the session's temporary scratchpad directory, not
+     accessible to an independent reviewer of the PR.
+- **Impact:** None shipped to a merged `main` — all four were caught on the
+  open draft PR before merge. Had they gone uncorrected: a documentation
+  claim central to this repository's scientific-content governance
+  (`docs/CONTENT_GOVERNANCE.md`) would have been false; two of three header
+  controls' keyboard/touch accessibility would have been asserted but not
+  actually verified, the same category of gap QL-011's addendum already
+  found and corrected once for a different suite; and a future author could
+  have widened the reading-measure rule further, trusting the existing test
+  suite to catch collateral narrowing, when it did not check for it at all.
+- **Correct action:** For finding 1, apply the same discipline
+  `docs/CONTENT_GOVERNANCE.md` already requires of all course content: new
+  scientific explanation is Draft until reviewed, and this visual-polish
+  task is not the place to introduce any. For finding 2, apply the standing
+  QL-011 rule (a claim of Tab-reachability or touch-operability must be
+  backed by the same proof for every control the claim covers, not just
+  one). For finding 3, scope a CSS rule to what it is actually meant to
+  affect, verified by checking real matched elements, not assumed from the
+  rule's simplicity. For finding 4, use a form of evidence an independent
+  reviewer can actually open without needing this environment's local
+  filesystem.
+- **Correction:**
+  1. Removed all three added sentences from Modules 8–10, leaving pure
+     placeholder deletions in all five modules (8–12) — identical treatment
+     to Modules 11–12, which never had replacement prose. Verified via
+     `git diff` against the pre-visual-polish baseline (`b3bc3a8`) that
+     every added line is CSS/markup/accessibility-attribute-only and every
+     removed line is placeholder/authoring-instruction text, none of it
+     course-content prose.
+  2. Rewrote the header-accessibility tests in
+     `tests/e2e/visual-polish.spec.mjs` into three independent tests
+     (hamburger, Print, Reset), each duplicating the same
+     `tabUntilFocused()`/`assertVisibleFocus()` helpers
+     `tests/e2e/keyboard-navigation.spec.mjs` already uses (an independent
+     copy, not a cross-file import, matching the existing
+     `tests/e2e`/`tests/e2e-deployed` independence convention). Each test
+     proves real Tab reachability, a visible focus outline, keyboard
+     activation (`Enter`), and touch activation (`.tap()`) for its control;
+     the Reset test additionally seeds a disposable completed-module state
+     via a real UI click, reloads, and verifies both a keyboard-driven and a
+     touch-driven Reset actually clear it back to "0 of 17 modules
+     complete". Mutation-tested: added `tabindex="-1"` to `#printBtn`,
+     re-ran the Print test in isolation, and it failed immediately with
+     `tabUntilFocused: "Print control" was not reached by natural Tab order
+     within 15 presses. Focus ended on a.nav-link.`; reverted, confirmed
+     `git diff index.html` showed no `tabindex` remaining, and the test
+     passed again.
+  3. Replaced the global `p{max-width:70ch}` rule with
+     `.module p:not(.callout p):not(.case-body p):not(.grid-card p):
+     not(.source-note){max-width:70ch}`, derived from a real-DOM survey (via
+     `Element.closest()` in a live Chromium page, not a regex heuristic)
+     of every `<p>` in the document and its true nearest component
+     ancestor — 32 paragraphs are genuine narrative lesson prose (correctly
+     capped); the rest (callouts, case-body, grid-card, source-note, plus
+     everything outside any `.module` — hero, disclaimer, credits) are now
+     provably untouched. Two new regression tests in
+     `tests/e2e/visual-polish.spec.mjs` check a genuine module paragraph
+     against `getComputedStyle(...).maxWidth` for five representative
+     protected components. Re-measuring `#dashboardGrid`'s bottom edge
+     after this fix showed it returned to exactly the original ~1415.8px
+     (from the ~1463.0px the unscoped rule had produced), so
+     `docs/assets/course-overview.png` was reverted to the exact
+     pre-visual-polish committed file (`git checkout b3bc3a8 --
+     docs/assets/course-overview.png`, confirmed by matching SHA-256)
+     rather than kept as a regenerated-but-now-unnecessary replacement.
+  4. Published a self-contained HTML evidence page (real before/after
+     screenshots and the mutation-test transcript, no external asset
+     requests) as a hosted Artifact, linked from the PR description, so an
+     independent reviewer can open it directly.
+- **Prevention:** Treat "no scientific content changed" as a specific,
+  checkable claim requiring a real diff review before stating it, the same
+  discipline this log already applies to quotations (QL-018) and validation
+  claims generally. Treat a test suite's own claims about what it proves
+  (Tab-reachable, visibly focused, touch-operable) as requiring the same
+  proof for every control the claim names, not just the first one written.
+  When a CSS rule's selector is broader than its intent, verify the exact
+  set of matched elements against a real DOM before trusting a global
+  selector's simplicity.
+

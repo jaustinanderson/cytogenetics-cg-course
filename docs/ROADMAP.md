@@ -127,7 +127,11 @@ the course.
 - [x] Fix confirmed visual/responsive defects: learner-facing "Image needed"
   placeholders, oversized figures with detached captions, faint caption/source
   text, over-wide prose lines, and an overlapping/truncating mobile header —
-  `docs/QUALITY_LOG.md` QL-020 (Issue #11). Deliberately does **not** address
+  `docs/QUALITY_LOG.md` QL-020 (Issue #11), including a correction pass
+  (QL-020's addendum) that removed scientific explanation newly written
+  during placeholder removal, completed keyboard/touch test coverage for
+  Print and Reset (not just the hamburger), and scoped the reading-measure
+  CSS rule to genuine lesson prose only. Deliberately does **not** address
   the page's dense, fully-expanded quiz/exercise disclosure; that is recorded
   below as the recommended next isolated UX task
 - [ ] Reduce quiz/exercise disclosure density — currently every quiz and
