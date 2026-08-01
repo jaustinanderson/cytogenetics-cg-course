@@ -75,6 +75,8 @@ The structural validator checks:
 - atomic rejection of malformed and globally duplicate injected questions
 - `docs/SCIENTIFIC_REVIEW.md` names every current module (catches drift if a
   module is added, removed, or renamed without updating the status record)
+- displayed fonts and embedded images are served locally, not from a remote
+  runtime host (added 2026-07-31; see "Asset localization" below)
 
 ### DOM behavior suite
 
@@ -152,12 +154,69 @@ This suite establishes real rendering, real layout-dependent scrolling, a
 real `IntersectionObserver`, real `localStorage` across navigations, and
 real `window.print`/dialog behavior — the specific gaps the DOM harness
 above documents that it cannot cover. On its own it does not perform an
-accessibility scan or screen-reader review, does not exercise true
-touch-gesture testing (only viewport/`hasTouch` emulation), and does not
-confirm delivery of the two third-party images (the sandboxed CI runner's
-network reachability to Google Fonts, Wikimedia, and the CDC image host is
-not asserted by these tests). Automated accessibility scanning and keyboard
-testing are added by the two suites documented next.
+accessibility scan or screen-reader review, and does not exercise true
+touch-gesture testing (only viewport/`hasTouch` emulation). As of 2026-07-31
+(see "Asset localization" below), the two approved course images and the IBM
+Plex webfonts are committed to this repository rather than requested from a
+third-party host, so `tests/e2e/local-images.spec.mjs` now confirms their
+delivery (nonzero natural dimensions) as part of this same local suite —
+that confirmation no longer depends on the sandboxed CI runner's network
+reachability to any external font or image host, unlike before this change.
+Automated accessibility scanning and keyboard testing are added by the two
+suites documented next.
+
+### Asset localization — added 2026-07-31
+
+The course previously requested IBM Plex Sans/Mono from Google Fonts and the
+two approved course images from Wikimedia Commons/CDC PHIL at runtime. Both
+are now committed to this repository (`assets/fonts/`, `assets/images/`) and
+served from the page's own origin. See `THIRD_PARTY_NOTICES.md` for exact
+upstream sources, retrieval dates, licenses, and file hashes, and
+`docs/ARCHITECTURE.md` "External resources" for the current dependency
+summary. This closes the asset-localization roadmap item tracked under
+Issue #1 (PR #10); Issue #1 itself remains open for its other Milestone 0
+items, including a genuine screen-reader review and physical touch-hardware
+testing.
+
+Verification performed:
+
+- **Structural** (`tests/validate-course.mjs`, part of `npm test`): every
+  `@font-face` `src` resolves to a local `assets/fonts/` path (none remote);
+  no reference to `fonts.googleapis.com`/`fonts.gstatic.com` remains
+  anywhere in the document; both embedded figures' `<img>` tags point to
+  their local `assets/images/` paths and no `<img>` loads from a remote
+  host; every referenced local font/image file actually exists on disk with
+  nonzero size; and the figures' external source-page/credit links
+  (Wikimedia Commons, `phil.cdc.gov`) remain present and unchanged.
+  Mutation-tested: temporarily reverting one `<img src>` to its old remote
+  URL, and separately reverting one `@font-face src` to a remote URL, each
+  made the check fail immediately with a message naming the exact offending
+  URL; both were reverted before commit.
+- **Local real-browser** (`tests/e2e/local-images.spec.mjs`, part of `npm
+  run test:e2e`, both viewport projects): loads the page from the local
+  static server and confirms both images' `img.complete` is `true` and
+  `naturalWidth`/`naturalHeight` are both nonzero — the same
+  `complete`-alone-is-insufficient discipline the deployed suite already
+  used, now also exercised locally and requiring no outbound network
+  access, because the images no longer depend on one.
+- **Deployed real-browser** (`tests/e2e-deployed/local-images.spec.mjs`,
+  renamed from `remote-images.spec.mjs`, part of `npm run test:deployed`):
+  the same nonzero-natural-dimension check against the real deployed URL,
+  now also asserting each image's `currentSrc` resolves to the deployed
+  page's own origin rather than a third-party host — a positive
+  same-origin-delivery claim, not only "it loaded from somewhere."
+- **Visual/layout**: both the desktop and narrow/mobile Playwright projects
+  in `npm run test:e2e` render the page with the self-hosted fonts; the
+  existing `tests/e2e/dashboard-layout.spec.mjs` and the rest of the suite
+  passed unchanged at both viewports, and no visual regression was found on
+  manual inspection (see "README screenshot" below for whether the
+  screenshot itself needed regenerating).
+- **Console/network cleanliness**: `tests/e2e/init.spec.mjs`'s page-origin
+  console-cleanliness checks and the local static server's own access log
+  were inspected directly during this work and showed only successful
+  (`200`) local requests to `assets/fonts/*.woff2` and `assets/images/*` —
+  no request to any third-party font or image host, and no console error or
+  warning.
 
 ### Automated WCAG scanning (axe-core) — added 2026-07-31
 
@@ -297,11 +356,15 @@ own skip convention) verify against the live page:
   navigation actually reached the expected deployed origin/path — see
   `docs/QUALITY_LOG.md` QL-013 for why this is asserted directly rather than
   relying on it implicitly
-- the two approved remote images' actual decoded state: each is scrolled into
-  view (both use `loading="lazy"`), then checked for `img.complete` **and**
-  nonzero `naturalWidth`/`naturalHeight` — `complete` alone is not sufficient,
-  because it becomes `true` once loading finishes whether it succeeded or
-  failed, so it does not by itself prove delivery
+- the two approved images' actual decoded state (`tests/e2e-deployed/
+  local-images.spec.mjs`, renamed 2026-07-31 from `remote-images.spec.mjs`
+  now that the images are localized — see "Asset localization" below): each
+  is scrolled into view (both use `loading="lazy"`), then checked for
+  `img.complete` **and** nonzero `naturalWidth`/`naturalHeight` — `complete`
+  alone is not sufficient, because it becomes `true` once loading finishes
+  whether it succeeded or failed, so it does not by itself prove delivery —
+  plus, since 2026-07-31, an explicit same-origin check on each image's
+  `currentSrc` against the deployed page's own origin
 
 No smaller viewport was added: the product's only two responsive breakpoints
 are `max-width:980px` and `max-width:560px` (`index.html`'s `@media` rules),
@@ -329,8 +392,10 @@ dimensions (Wikimedia 1280x1003, CDC PHIL 700x563).
   claim otherwise.
 - A result from this development environment, from a GitHub Actions runner,
   or from any other single network is a result from that network. It is not
-  a claim about every visitor's network path to GitHub Pages, particularly
-  for the two third-party image hosts.
+  a claim about every visitor's network path to GitHub Pages. (As of
+  2026-07-31 the two images and the webfonts are served from GitHub Pages
+  itself rather than a separate third-party host, which narrows — but does
+  not eliminate — this network-path caveat to GitHub Pages' own delivery.)
 - Testing the deployed `main` URL exercises only that URL. It does not create
   or exercise a per-pull-request preview environment; no such environment
   exists for this repository.
@@ -459,7 +524,7 @@ npm exec --yes --package=html-validate@10.4.0 -- html-validate index.html
 
 That tool is intentionally not a runtime or committed package dependency.
 
-## README screenshot — added 2026-07-31, corrected 2026-07-31
+## README screenshot — added 2026-07-31, corrected 2026-07-31, regenerated 2026-07-31
 
 `docs/assets/course-overview.png` is a course-only screenshot embedded near
 the top of `README.md`. It is regenerated with:
@@ -467,6 +532,31 @@ the top of `README.md`. It is regenerated with:
 ```bash
 npm run capture:readme-screenshot
 ```
+
+### Regenerated for the font-localization change (2026-07-31)
+
+Self-hosting the IBM Plex webfonts (see "Asset localization" above) is a
+change that could plausibly alter rendered text, so the screenshot was
+re-evaluated rather than assumed unaffected. A fresh raw capture was decoded
+to a raw pixel buffer (via the isolated `sharp` install described below) and
+compared against the previously committed image: 2.476% of bytes differed
+(out of 6,177,600), confined — per a rendered diff image inspecting exactly
+which pixels changed — entirely to text-glyph edge/anti-aliasing pixels
+throughout the page, with **no** difference in layout, card structure,
+color blocks, icons, or content. This is consistent with, and expected from,
+a different font binary (the official `IBM/plex` GitHub release WOFF2 files
+now used, versus whatever build Google Fonts previously served) rendering
+the same text with slightly different sub-pixel hinting — exactly the kind
+of environment/font-source-dependent difference `docs/QUALITY_LOG.md` QL-015
+already cautions is not something this script's reproducibility claim
+covers across different font sources. Visually inspected side-by-side with
+the previous version before committing: no layout or content difference is
+visible to the eye. The new raw capture was then losslessly re-optimized
+with the same `sharp-cli --palette=false` process documented below and
+re-verified pixel-identical to the raw capture before replacing the
+committed file. New hash:
+`sha256:0db3106529b8e458ff0c1880eca06221b6dba51afc9f0f20d73b64fa0f666331`
+(275,156 bytes; same 1440x1430 dimensions as before).
 
 ### A confirmed product defect, found from the screenshot itself
 

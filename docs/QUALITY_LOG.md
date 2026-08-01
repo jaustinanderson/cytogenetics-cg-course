@@ -490,6 +490,16 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   Actions' runners or any other network — see `docs/VALIDATION.md` for the
   full non-claim. `tests/e2e-deployed/remote-images.spec.mjs` re-checks this
   on every run it is given network access to.
+- **Update, 2026-07-31 (asset localization):** both images are now committed
+  to `assets/images/` and served from the page's own origin rather than
+  Wikimedia/CDC at runtime (see `docs/ROADMAP.md` and
+  `docs/VALIDATION.md` "Asset localization"). The test file above was
+  renamed to `tests/e2e-deployed/local-images.spec.mjs` and now also asserts
+  same-origin delivery; the local suite gained an equivalent
+  `tests/e2e/local-images.spec.mjs` check that no longer depends on outbound
+  network access at all. The dimensions above (1280x1003, 700x563) are
+  unchanged — the localized files are byte-identical to what was previously
+  fetched remotely.
 
 ## QL-013 — Independent review of QL-012's work: an overclaim corrected, a claim verified before acting on it
 

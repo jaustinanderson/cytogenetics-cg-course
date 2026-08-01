@@ -5,10 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="description" content="Exam-aligned CG(ASCP) cytogenetics mini-course: metaphase selection, chromosome identification, karyogram interpretation, ISCN nomenclature, FISH, and laboratory operations.">
 <title>Cytogenetics CG(ASCP) Mini-Course</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
+  @font-face{font-family:"IBM Plex Sans";font-style:normal;font-weight:400;font-display:swap;src:url("assets/fonts/ibm-plex-sans/IBMPlexSans-Regular.woff2") format("woff2")}
+  @font-face{font-family:"IBM Plex Sans";font-style:normal;font-weight:500;font-display:swap;src:url("assets/fonts/ibm-plex-sans/IBMPlexSans-Medium.woff2") format("woff2")}
+  @font-face{font-family:"IBM Plex Sans";font-style:normal;font-weight:600;font-display:swap;src:url("assets/fonts/ibm-plex-sans/IBMPlexSans-SemiBold.woff2") format("woff2")}
+  @font-face{font-family:"IBM Plex Sans";font-style:normal;font-weight:700;font-display:swap;src:url("assets/fonts/ibm-plex-sans/IBMPlexSans-Bold.woff2") format("woff2")}
+  @font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:400;font-display:swap;src:url("assets/fonts/ibm-plex-mono/IBMPlexMono-Regular.woff2") format("woff2")}
+  @font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:500;font-display:swap;src:url("assets/fonts/ibm-plex-mono/IBMPlexMono-Medium.woff2") format("woff2")}
+  @font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:600;font-display:swap;src:url("assets/fonts/ibm-plex-mono/IBMPlexMono-SemiBold.woff2") format("woff2")}
   :root{
     --bg:#f5f8fb; --surface:#ffffff; --surface-2:#fbfdfe;
     --ink:#10243a; --ink-soft:#46596d; --ink-faint:#637181;
@@ -1125,7 +1129,7 @@
       <figure class="fig">
         <div class="fig-title">Figure 8.1 &mdash; Normal human male karyotype (G-banded), 46,XY</div>
         <div class="fig-media">
-          <img src="https://commons.wikimedia.org/wiki/Special:FilePath/NHGRI_human_male_karyotype.png?width=1100" alt="G-banded karyogram of a normal human male: 22 paired autosomes arranged largest to smallest in groups A through G, plus one X and one Y chromosome, each chromosome oriented with the short (p) arm up." loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+          <img src="assets/images/nhgri-human-male-karyotype-46xy.png" alt="G-banded karyogram of a normal human male: 22 paired autosomes arranged largest to smallest in groups A through G, plus one X and one Y chromosome, each chromosome oriented with the short (p) arm up." loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
           <div class="fig-fallback">[Image did not load] A normal male karyogram: 22 autosome pairs in size/group order (A&ndash;G) plus X and Y, each p-arm up. View it at the source link below.</div>
         </div>
         <figcaption>
@@ -1342,7 +1346,7 @@
       <figure class="fig">
         <div class="fig-title">Figure 10.1 &mdash; Trisomy 21 (Down syndrome) karyotype</div>
         <div class="fig-media">
-          <img src="https://wwwn.cdc.gov/phil/PHIL_Images/12504/12504_lores.jpg" alt="G-banded karyotype showing three copies of chromosome 21 instead of the normal two; an arrow marks the extra chromosome 21." loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+          <img src="assets/images/cdc-phil-12504-trisomy21-karyotype.jpg" alt="G-banded karyotype showing three copies of chromosome 21 instead of the normal two; an arrow marks the extra chromosome 21." loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
           <div class="fig-fallback">[Image did not load] A karyotype with three copies of chromosome 21 (trisomy 21). View it at the CDC PHIL link below.</div>
         </div>
         <figcaption>
@@ -3440,20 +3444,24 @@
     {
       id:'fig8-1', status:'embedded', type:'karyogram', subject:'normal male 46,XY',
       module:'m8', figure:'8.1', bandRes:null, quality:'reference',
-      url:'https://commons.wikimedia.org/wiki/Special:FilePath/NHGRI_human_male_karyotype.png?width=1100',
+      url:'assets/images/nhgri-human-male-karyotype-46xy.png',
       sourcePage:'https://commons.wikimedia.org/wiki/File:NHGRI_human_male_karyotype.png',
       credit:'National Human Genome Research Institute (NHGRI), Human Genome Project',
       license:'Public domain (U.S. federal government work)',
-      licenseVerified:true, redistribution_ok:true, specimenSource:'unspecified'
+      licenseVerified:true, redistribution_ok:true, specimenSource:'unspecified',
+      retrievedFrom:'https://commons.wikimedia.org/wiki/Special:FilePath/NHGRI_human_male_karyotype.png?width=1100',
+      retrievedDate:'2026-07-31', sha256:'956b733178670ff972164d9dcfc2df588f13781308115a8ba1c012363469e298'
     },
     {
       id:'fig10-1', status:'embedded', type:'karyogram', subject:'trisomy 21',
       module:'m10', figure:'10.1', bandRes:null, quality:'reference',
-      url:'https://wwwn.cdc.gov/phil/PHIL_Images/12504/12504_lores.jpg',
+      url:'assets/images/cdc-phil-12504-trisomy21-karyotype.jpg',
       sourcePage:'https://phil.cdc.gov/Details.aspx?pid=12504',
       credit:'CDC / Dr. Allan J. Ebbin (1967)',
       license:'Public domain (CDC PHIL)',
-      licenseVerified:true, redistribution_ok:true, specimenSource:'patient'
+      licenseVerified:true, redistribution_ok:true, specimenSource:'patient',
+      retrievedFrom:'https://wwwn.cdc.gov/phil/PHIL_Images/12504/12504_lores.jpg',
+      retrievedDate:'2026-07-31', sha256:'0958251e8896b340c677b2ddb14436ba860ee344604f3cf08a787177daf9e995'
     },
     /* --- still needed: see the compile list. Leads are UNVERIFIED. --- */
     {id:'need-46xx',      status:'needed', type:'karyogram', subject:'normal female 46,XX',            module:'m8',  lead:'Wikimedia Commons, Category:Human karyotypes / NHGRI Image Gallery'},

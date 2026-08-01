@@ -62,6 +62,50 @@ test("external page resources use HTTPS", () => {
   assert.deepEqual(resources.filter((url) => !url.startsWith("https://")), []);
 });
 
+test("displayed fonts and embedded images are served locally, not from a remote runtime host", () => {
+  // Every @font-face src must be a local, relative path — no remote font host.
+  const fontFaceBlocks = [...html.matchAll(/@font-face\s*\{[^}]*\}/gi)].map((match) => match[0]);
+  assert.ok(fontFaceBlocks.length >= 7, "expected at least 7 @font-face rules (4 Sans weights + 3 Mono weights)");
+  const fontSrcUrls = fontFaceBlocks.flatMap((block) =>
+    [...block.matchAll(/url\((["']?)([^"')]+)\1\)/gi)].map((match) => match[2]),
+  );
+  assert.ok(fontSrcUrls.length > 0, "no @font-face src url() found");
+  for (const url of fontSrcUrls) {
+    assert.ok(!/^https?:\/\//i.test(url), `@font-face src must be local, found remote url: ${url}`);
+    assert.match(url, /^assets\/fonts\//, `@font-face src must live under assets/fonts/, found: ${url}`);
+  }
+
+  // No remaining reference to a remote font host anywhere in the document.
+  assert.doesNotMatch(html, /fonts\.googleapis\.com/i);
+  assert.doesNotMatch(html, /fonts\.gstatic\.com/i);
+
+  // The two embedded figure <img> tags must point to local assets, not a remote image host.
+  const embeddedImageLocalPaths = [
+    "assets/images/nhgri-human-male-karyotype-46xy.png",
+    "assets/images/cdc-phil-12504-trisomy21-karyotype.jpg",
+  ];
+  for (const localPath of embeddedImageLocalPaths) {
+    const imgTagPattern = new RegExp(`<img\\b[^>]*\\bsrc\\s*=\\s*["']${localPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["']`);
+    assert.match(html, imgTagPattern, `expected an <img> tag with src="${localPath}"`);
+  }
+  assert.doesNotMatch(html, /<img\b[^>]*\bsrc\s*=\s*["']https?:\/\//i, "no <img> tag may load from a remote host");
+
+  // Every local font/image asset referenced by the page must actually exist on disk with nonzero size.
+  const referencedLocalAssets = [
+    ...fontSrcUrls,
+    ...embeddedImageLocalPaths,
+  ];
+  for (const relPath of referencedLocalAssets) {
+    const absPath = path.join(root, relPath);
+    assert.ok(fs.existsSync(absPath), `referenced local asset does not exist: ${relPath}`);
+    assert.ok(fs.statSync(absPath).size > 0, `referenced local asset is empty: ${relPath}`);
+  }
+
+  // External attribution/source-page links must remain intact and external (not localized).
+  assert.match(html, /https:\/\/commons\.wikimedia\.org\/wiki\/File:NHGRI_human_male_karyotype\.png/);
+  assert.match(html, /https:\/\/phil\.cdc\.gov\/Details\.aspx\?pid=12504/);
+});
+
 const inlineScripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
   .map((match) => match[1])
   .filter((source) => source.trim());

@@ -602,6 +602,60 @@ introduced separately and each failed at a distinct, correctly-located
 assertion; all three fully reverted before commit. See the addendum to
 `docs/QUALITY_LOG.md` QL-019. No product or scientific content changed.
 
+Asset localization (branch `claude/issue-1-asset-localization`, PR #10,
+Issue #1) implements `docs/ROADMAP.md`'s "decide whether to localize remote
+fonts and the two approved images" item — one Milestone 0 item among the
+several still open (see `docs/ROADMAP.md` for the current full list; this
+entry does not claim Milestone 0 or Issue #1 is complete):
+
+- **Decision:** localize both. The two approved images (NHGRI 46,XY; CDC
+  PHIL trisomy-21) are committed to `assets/images/`, fetched byte-for-byte
+  from the exact URLs the page already displayed remotely (no re-encoding,
+  confirmed by SHA-256 and by matching the natural dimensions QL-012 already
+  observed: 1280x1003 and 700x563). The exact IBM Plex Sans (400/500/600/700)
+  and IBM Plex Mono (400/500/600) weights the course's own CSS requests are
+  self-hosted from the official `IBM/plex` GitHub release assets
+  (`@ibm/plex-sans@1.1.0`, `@ibm/plex-mono@2.5.0`) under the bundled SIL Open
+  Font License 1.1 — self-hosting was judged proportionate (7 WOFF2 files,
+  ~360KB total, no build step, no subsetting/unicode-range complexity added)
+  rather than falling back to a system-font stack, so the course's existing
+  typography is unchanged. External source-page/credit links (Wikimedia
+  Commons, `phil.cdc.gov`) are preserved unchanged; only the runtime-fetched
+  bytes moved local. Full source/hash/license record: `THIRD_PARTY_NOTICES.md`.
+- **Structural guard:** a new `tests/validate-course.mjs` check asserts every
+  `@font-face src` and both figures' `<img src>` resolve to a local
+  `assets/` path, that no `fonts.googleapis.com`/`fonts.gstatic.com`
+  reference remains anywhere in the document, that every referenced local
+  asset exists on disk with nonzero size, and that the external
+  source-page/credit links are unchanged. Mutation-verified: reverting one
+  `<img src>` and separately one `@font-face src` to their old remote URLs
+  each made the check fail with a message naming the exact remote URL found;
+  both reverted before commit.
+- **Test coverage:** `tests/e2e/local-images.spec.mjs` (new) confirms both
+  images load with nonzero natural dimensions from the local static server —
+  previously impossible to check without outbound network access, now
+  possible because the images are local. `tests/e2e-deployed/
+  remote-images.spec.mjs` was renamed to `local-images.spec.mjs` and now
+  also asserts each image's `currentSrc` resolves to the deployed page's own
+  origin, not a third-party host.
+- **Local validation:** `npm test` emits 55 checks total (14 structural +
+  36 DOM behavior + 5 deployed-revision-verifier hash checks) and all 55
+  passed, including the new structural guard above. `npm run test:e2e`
+  passed at both viewports after confirming one apparent failure
+  (`init.spec.mjs`'s `networkidle` wait timing out) was a resource-contention
+  flake from running the full suite fully parallel in this sandbox, not a
+  product regression — re-running `tests/e2e/init.spec.mjs` alone passed
+  cleanly every time, per the standing QL-007/QL-008 discipline of
+  reproducing an unexpected failure in isolation before trusting it.
+- No question, answer, explanation, exercise, case, or scientific claim was
+  altered. `docs/SCIENTIFIC_REVIEW.md`'s status record is unaffected.
+- This closes the asset-localization roadmap item tracked under Issue #1 —
+  it does not close Issue #1 itself, which stays open for its other
+  Milestone 0 items, most notably a genuine representative screen-reader
+  review and true touch-gesture testing on physical hardware, neither of
+  which this work performs or is affected by. PR #10 is the implementation
+  checkpoint for this work; see the PR for CI results and review status.
+
 ## Read these files first
 
 1. `README.md`
@@ -664,6 +718,12 @@ questions or images:
    `docs/SCIENTIFIC_REVIEW.md`. The record itself is honest that the
    underlying question-by-question review has **not** happened; do not
    read this item's completion as "content review is done." See below.
+6. ~~Decide whether to localize remote fonts and the two approved images.~~
+   Done via PR #10 (branch `claude/issue-1-asset-localization`, Issue #1) —
+   see the entry above for the decision, evidence, and validation results.
+   This closes the asset-localization roadmap item specifically, not
+   Milestone 0 or Issue #1 as a whole; the screen-reader review and
+   physical touch-hardware testing items below remain open.
 
 Do not begin the 46-question expansion or image embedding while the data
 contract and review gates remain incomplete.

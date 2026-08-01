@@ -27,11 +27,13 @@
 // - confirms the IBM Plex Sans/Mono webfonts actually reached `status:
 //   "loaded"` in `document.fonts`, not merely that `document.fonts.ready`
 //   resolved. `document.fonts.ready` resolves once font loading has
-//   *settled* — including a failed request (network error, 404, blocked)
-//   — so on its own it cannot distinguish "the font loaded" from "the font
-//   failed to load and the browser gave up." This step requires normal
-//   network access to Google Fonts and fails with a clear message if it
-//   was blocked or unavailable, rather than silently capturing a
+//   *settled* — including a failed request — so on its own it cannot
+//   distinguish "the font loaded" from "the font failed to load and the
+//   browser gave up." As of 2026-07-31 the fonts are self-hosted
+//   (`assets/fonts/`, see docs/VALIDATION.md "Asset localization"), so this
+//   check now only depends on the local static server this script itself
+//   starts, not on outbound network access to a third-party font host —
+//   it still fails with a clear message rather than silently capturing a
 //   system-font fallback and calling it done.
 // - explicit `window.scrollTo(0, 0)` so the page is always captured from
 //   the very top, regardless of any prior scroll state
