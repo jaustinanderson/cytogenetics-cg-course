@@ -134,13 +134,19 @@ the course.
   CSS rule to genuine lesson prose only. Deliberately does **not** address
   the page's dense, fully-expanded quiz/exercise disclosure; that is recorded
   below as the recommended next isolated UX task
-- [ ] Reduce quiz/exercise disclosure density — currently every quiz and
-  exercise item on a module renders fully expanded at once, producing a large
-  amount of visible content and controls per module. A follow-up isolated UX
-  task should redesign disclosure (e.g. collapsed-by-default items, a
-  progressive reveal, or per-item accordions) without changing question text,
-  answers, rationales, scoring, or progress semantics. Out of scope for
-  Issue #11; recommended as the next isolated task
+- [x] Reduce quiz/exercise disclosure density — every quiz and exercise
+  widget is now a native `<details>`/`<summary>` element, collapsed by
+  default, following the same disclosure pattern already used for
+  case-study reveal cards (`details.card`). Measured directly at 1440×900:
+  document height dropped 45.2% (110,209px → 60,386px), quiz/exercise
+  share of document height dropped from 46.6% to 2.5%, and answer buttons
+  simultaneously visible on a fresh load dropped from 636 to 0. Question
+  text, answers, rationales, scoring, completion rules, stable IDs,
+  progress storage, analytics semantics, and the public API are unchanged.
+  See `docs/QUALITY_LOG.md` QL-021 (Issue #11), including two real defects
+  (an insufficient-contrast summary color, and a print-exposure mechanism
+  that never actually worked — for the new widgets and, latently, for the
+  pre-existing case-study cards too) found and fixed before merge
 
 ### Exit criteria
 

@@ -793,6 +793,104 @@ course-overview.png`), confirmed by matching SHA-256
 (`0db3106529b8e458ff0c1880eca06221b6dba51afc9f0f20d73b64fa0f666331`) rather
 than kept as an unnecessary regenerated replacement.
 
+## Quiz/exercise progressive-disclosure suite — added 2026-08-01
+
+`tests/e2e/progressive-disclosure.spec.mjs` (Issue #11,
+`docs/QUALITY_LOG.md` QL-021) adds real-browser coverage for the quiz and
+exercise redesign: every `.quiz`/`.exer` widget is now a native
+`<details>`/`<summary>` element, collapsed by default, instead of an
+always-expanded block. Before choosing this design, the actual rendered
+behavior was measured directly at desktop, tablet, and narrow/mobile
+widths (see "Measured density" below) rather than assumed. This suite is
+complementary to disclosure-specific coverage already added to
+`tests/e2e/keyboard-navigation.spec.mjs` (Tab-reachability, visible focus,
+and keyboard-opening the summary for both a quiz and an exercise) and
+`tests/e2e/accessibility.spec.mjs` (a freshly opened, unanswered quiz
+state). It covers, across both Playwright projects:
+
+- every quiz/exercise starts collapsed with a summary communicating
+  activity type, title, item count, and a "Not started"/"In
+  progress"/"Completed" status word (in addition to the pre-existing
+  `.qh-score`/`.eh-score` "X / Y" text, kept in its exact original format)
+- click, keyboard (Enter and Space), and touch (`.tap()`) expand and
+  collapse, both directions
+- status and score stay visible on the summary while collapsed, after a
+  partial answer — the "avoid trapping a partially answered activity in an
+  unclear collapsed state" requirement
+- opening/closing a disclosure never writes to stored progress and never
+  fires a `progress` API event — confirmed by diffing `getProgress()`
+  before and after toggling every quiz and exercise on the page
+- after a real `page.reload()`, every disclosure is collapsed again (its
+  default, not persisted, matching "collapsing/expanding is not course
+  progress"), while the previously recorded answer is still present in
+  `getProgress().answers` — the quiz's own pre-existing behavior of not
+  visually restoring per-question lock state on reload is unaffected by
+  this change, confirmed directly rather than assumed
+- Reset clears progress and reloads with every disclosure collapsed and
+  every status back to "Not started"
+- print mode (`page.emulateMedia({ media: 'print' })`, not a computed-style
+  proxy — see the finding below) genuinely exposes a closed quiz's full
+  question set and a closed exercise's current item, and also a
+  pre-existing closed case-study `details.card`; a disclosure already open
+  before printing stays open afterward, never force-closed
+- the narrow-viewport summary row does not cause horizontal page overflow
+
+Existing suites that interact with quiz/exercise content
+(`tests/e2e/quiz-and-exercise.spec.mjs`, `accessibility.spec.mjs`,
+`api-print-console.spec.mjs`, `init.spec.mjs`, `keyboard-navigation.spec.mjs`,
+and `tests/e2e-deployed/identity-and-console.spec.mjs`,
+`quiz-and-persistence.spec.mjs`) were updated to open the relevant
+disclosure before interacting with content inside it, via a small
+`openDisclosure()` helper added to each suite's own `fixtures.mjs` (an
+independent copy in the local and deployed suites, matching the existing
+suite-independence convention).
+
+### A confirmed print-exposure defect — the CSS-only approach did not work
+
+The first implementation mirrored the pre-existing `details.card>
+.card-body{display:block !important}` print rule for the new
+`.quiz-body`/`.exer-body`. A mutation test on this rule passed
+unexpectedly (removing it did not make the print-exposure test fail),
+which prompted verifying the actual mechanism with
+`page.emulateMedia({ media: 'print' })` instead of trusting
+`getComputedStyle(...).display`. That direct check found closed
+`<details>` content is suppressed by Chromium via an internal rendering
+behavior: `getComputedStyle(...).display` reports `"block"` for it, and
+`getBoundingClientRect()` returns a real but stale layout box, while the
+content is genuinely not painted or visible under real print media. This
+meant the pre-existing `.card-body` print override never actually worked
+either — a latent defect this investigation surfaced, not one introduced
+by this change. Fixed by setting the real `open` property in the existing
+`beforeprint`/`afterprint` handlers (force-open every `<details>` for
+print, restore each one's true prior state afterward), verified with real
+print-media emulation, and mutation-tested (removing the fix made the
+print-exposure test fail with a clear "Expected: visible / Received:
+hidden" message). See `docs/QUALITY_LOG.md` QL-021 for the full account,
+including the WCAG contrast defect (`.qh-meta`/`.eh-meta` on the summary
+background measured 4.41:1/4.31:1 against the 4.5:1 AA threshold, found by
+the existing axe-core suite) and a dependency-free-harness incompatibility
+(`.dataset` unsupported by `tests/dom-harness.mjs`) that were also found
+and fixed before merge.
+
+### Measured density — before and after
+
+Measured with a real Chromium page against the exact pre-change merge
+commit (`197eec4b75c4f6dc3c339335c21e7680e8402434`) and this branch, same
+methodology both times: `document.documentElement.scrollHeight`, real
+`getBoundingClientRect()` heights for every `.quiz`/`.exer` element, and a
+provably-correct `.quiz[open] .qopt`/`.exer[open] .eopt` count for
+"answer buttons a user could currently see and tab to."
+
+| Viewport | Doc height before | Doc height after | Reduction | Quiz/exercise share before | Quiz/exercise share after |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 1440×900 | 110,209px | 60,386px | 45.2% | 46.6% | 2.5% |
+| 768×1024 | 114,441px | 65,478px | 42.8% | 44.1% | 2.3% |
+| 390×844 | 149,545px | 98,373px | 34.2% | 35.8% | 2.4% |
+
+Visible answer buttons on a fresh load: 636 before, 0 after, at every
+viewport. Full before/after screenshots are in the evidence artifact
+linked from the PR description (not committed to the repository).
+
 ## Gates still open
 
 ### Browser behavior

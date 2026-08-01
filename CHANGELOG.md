@@ -6,6 +6,15 @@ All notable repository changes are recorded here.
 
 ### Added
 
+- `tests/e2e/progressive-disclosure.spec.mjs`: real-browser regression
+  coverage for the quiz/exercise progressive-disclosure redesign below —
+  default collapsed state with an informative summary, click/keyboard/touch
+  expand and collapse, status staying visible while collapsed after a
+  partial answer, toggling never touching stored progress or firing a
+  `progress` event, reload/Reset behavior, print exposure (including a
+  pre-existing case-study `details.card` regression check), and no
+  narrow-viewport overflow. See `docs/QUALITY_LOG.md` QL-021 and
+  `docs/VALIDATION.md` "Quiz/exercise progressive-disclosure suite"
 - `tests/e2e/visual-polish.spec.mjs`: real-browser regression coverage (46
   runs across both Playwright projects, plus 1440×900/768×1024/360×800
   exercised directly within the file) for the visual-polish fixes below —
@@ -187,6 +196,29 @@ All notable repository changes are recorded here.
 
 ### Changed
 
+- Every quiz and exercise widget (`.quiz`, `.exer`) is now a native
+  `<details>`/`<summary>` element, collapsed by default, instead of an
+  always-fully-expanded block — the same disclosure pattern already used
+  for case-study reveal cards. The summary communicates activity type,
+  title, item count, and a "Not started"/"In progress"/"Completed" status
+  word; the pre-existing `.qh-score`/`.eh-score` "X / Y" text is unchanged.
+  Measured at 1440×900: document height dropped 45.2% (110,209px →
+  60,386px), quiz/exercise share of document height dropped from 46.6% to
+  2.5%, and answer buttons simultaneously visible on a fresh load dropped
+  from 636 to 0. Question text, answers, rationales, scoring, completion
+  rules, stable question/exercise IDs, progress storage, analytics
+  semantics, and the public API are unchanged; opening/closing a
+  disclosure is not recorded as progress and fires no API event. See
+  `docs/QUALITY_LOG.md` QL-021 and `docs/VALIDATION.md`
+  "Quiz/exercise progressive-disclosure suite"
+- Fixed a print-exposure defect affecting both the new quiz/exercise
+  disclosures and the pre-existing case-study reveal cards: the
+  `display:block !important` CSS override for closed `<details>` content
+  did not actually work under real print media (Chromium suppresses that
+  content via an internal rendering behavior, not a plain `display`
+  value). `beforeprint`/`afterprint` now force-open every `<details>` for
+  the duration of printing and restore each one's true prior state
+  afterward
 - Removed the five learner-facing "Image needed" authoring/search placeholder
   figures from Modules 8–12. No new scientific explanation was added in their
   place — where the surrounding lesson text did not already stand alone, the
@@ -261,6 +293,11 @@ All notable repository changes are recorded here.
   `.dc-body` wrapper class with flex/column layout, `display:block` on the
   title/subtitle, `flex:0 0 auto`/`white-space:nowrap` on the status). No
   scientific content changed
+- The new quiz/exercise disclosure summary text (`.qh-meta`/`.eh-meta`)
+  initially used `--ink-faint`, which measured 4.31–4.41:1 against its
+  background — just under the WCAG AA 4.5:1 threshold, found by the
+  existing axe-core suite on the very first run. Changed to `--ink-soft`
+  (6.23–6.39:1)
 
 ## [1.1.1] - 2026-07-30
 

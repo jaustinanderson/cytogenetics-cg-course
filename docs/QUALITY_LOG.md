@@ -1308,3 +1308,134 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   set of matched elements against a real DOM before trusting a global
   selector's simplicity.
 
+## QL-021 — Quiz/exercise progressive disclosure: measured density claim, and two real defects caught before shipping
+
+- **Status:** Corrected on branch `claude/issue-11-progressive-disclosure`, before merge (Issue #11)
+- **Finding:** Before choosing a design, the actual rendered behavior was
+  measured directly (not assumed): at 1440×900, quiz and exercise widgets
+  together accounted for 46.6% of the document's total scroll height
+  (110,209px), with 636 answer buttons (`.qopt`/`.eopt`) simultaneously
+  present and focusable on a single fresh page load — the concrete,
+  measured shape of the "overwhelming density" Issue #1 named. Every quiz
+  (`buildQuiz`) and exercise (`buildExercise`) widget, plus the six static
+  `<div class="exer">` mount points, was converted to a native
+  `<details>`/`<summary>` element, collapsed by default, following the
+  same disclosure pattern already established in this course for
+  case-study reveal cards (`details.card`). While implementing and testing
+  this, two real defects were found and fixed before commit, plus one
+  test-harness incompatibility caught the same way:
+  1. **A confirmed WCAG AA contrast failure**, found by the existing
+     `tests/e2e/accessibility.spec.mjs` axe-core scan on the very first run
+     against the new markup (including the unmodified "freshly loaded
+     course" state, which does not even open a disclosure): the new
+     `.qh-meta`/`.eh-meta` summary text used `--ink-faint` (`#637181`) on
+     the `--primary-050`/`--iscn-bg` summary backgrounds, measuring 4.41:1
+     and 4.31:1 against the 4.5:1 AA threshold for normal text.
+  2. **A confirmed print-exposure defect, in both the new code and a
+     pre-existing case-study pattern.** The first implementation added
+     `body.printmode .quiz-body,.exer-body{display:block !important}`,
+     mirroring the existing (pre-existing, not introduced here)
+     `details.card>.card-body{display:block !important}` print rule. A
+     mutation test on this rule passed unexpectedly, which prompted
+     checking the mechanism directly with
+     `page.emulateMedia({ media: 'print' })` rather than trusting a
+     `getComputedStyle().display` check — and found that closed
+     `<details>` content is suppressed by Chromium via an internal
+     rendering behavior, not a plain `display` value: `getComputedStyle
+     (...).display` reports `"block"` for content inside a closed
+     `<details>`, and `getBoundingClientRect()` on that content returns a
+     real, nonzero-but-stale layout box, while the content is genuinely
+     not painted, not hit-testable, and not visible under real print-media
+     emulation. This meant the `.card-body` print override — already
+     present in this codebase before this work — never actually worked
+     either; it was a latent, unverified defect this investigation
+     happened to surface, not something introduced by this change.
+  3. **A dependency-free-harness incompatibility**, caught by
+     `npm run test:behavior` immediately after adding the real fix: the
+     initial fix used `element.dataset.printReopened`, but
+     `tests/dom-harness.mjs`'s minimal `Node` class (intentionally
+     implementing only the DOM surface the course actually uses) has no
+     `dataset` getter, so the print test crashed with `Cannot set
+     properties of undefined`.
+- **Impact:** None shipped — all three were caught by the project's own
+  committed test suites or by direct verification before any commit. Had
+  finding 1 shipped, the disclosure summary text would have failed WCAG AA
+  contrast on every one of the 17 quiz and 6 exercise widgets, all now
+  visible on first paint (they were not previously flagged because the
+  text did not exist before this change). Had finding 2 shipped as
+  originally written, printing the course would have silently omitted
+  every quiz and exercise question — the exact opposite of the "print
+  output must expose all educational content regardless of on-screen
+  collapsed state" requirement — while the test guarding it would have
+  falsely reported success, and the same pre-existing gap for case-study
+  cards would have remained unnoticed and undocumented.
+- **Correct action:** Apply the same standing discipline this log already
+  uses throughout (QL-007/008/013/014): a test passing unexpectedly is as
+  worth investigating as one failing unexpectedly, and a claim about
+  what a CSS override achieves must be checked against the real rendering
+  behavior it depends on (here, real print-media emulation), not a proxy
+  (computed `display`) that turned out not to track it.
+- **Correction:**
+  1. Changed `.qh-meta`/`.eh-meta` from `--ink-faint` to `--ink-soft`
+     (`#46596d`), verified at 6.39:1 and 6.23:1 against their respective
+     backgrounds — comfortably clear of the 4.5:1 threshold, not just
+     barely passing. Re-ran the full axe-core suite (all 5 states, both
+     viewports): zero violations.
+  2. Replaced the CSS-only print override with a JavaScript fix in the
+     existing `beforeprint`/`afterprint` handlers (`wirePrintReset()`):
+     `beforeprint` records each `<details>` element's real prior state via
+     a `data-print-reopened` attribute (not `.dataset`, for harness
+     compatibility) and force-sets `.open = true`; `afterprint` restores
+     each one's genuine prior state and removes the marker attribute. This
+     is a correct fix precisely because it sets the real `open` property
+     rather than fighting the internal suppression with CSS, and it
+     uniformly covers `details.card` (fixing the pre-existing gap as a
+     side effect), `.quiz`, and `.exer` with one mechanism. Verified with
+     real `page.emulateMedia({ media: 'print' })` (not computed-style
+     checks) that: a closed quiz's questions/options are genuinely visible
+     and present under print media; a closed exercise's current
+     prompt/options are genuinely visible; a pre-existing closed
+     case-study `details.card` is also genuinely visible; and a disclosure
+     that was already open before printing (a genuine prior user action)
+     remains open afterward, not force-closed.
+  3. Switched the two attribute accesses from `.dataset.printReopened` to
+     `setAttribute('data-print-reopened', …)`/`getAttribute(…)`/
+     `removeAttribute(…)`, already fully supported by the existing harness
+     with no harness changes needed. `npm run test:behavior` passed
+     36/36 again.
+- **Measured result:** Re-measuring after the fix, on the same real page,
+  at the same viewports: document height dropped from 110,209px to
+  60,386px at 1440×900 (-45.2%), 114,441px to 65,478px at 768×1024
+  (-42.8%), and 149,545px to 98,373px at 390×844 (-34.2%); quiz/exercise
+  share of document height dropped from 44–47% to 2.3–2.5%; and visible
+  answer buttons on a fresh load dropped from 636 to 0 (provably, via a
+  `.quiz[open] .qopt`/`.exer[open] .eopt` selector — 0 widgets are open by
+  default). See the published before/after evidence artifact linked from
+  the PR description for screenshots and the full measurement table.
+- **New tests:** `tests/e2e/progressive-disclosure.spec.mjs` covers default
+  collapsed state with informative summaries, click/keyboard/touch
+  expand-and-collapse, status persisting visibly while collapsed, that
+  opening/closing never touches stored progress or fires a `progress`
+  event, reload behavior (disclosure resets, recorded answer data does
+  not), Reset, and print exposure (including the case-study regression
+  check and the already-open-stays-open check). Existing suites
+  (`quiz-and-exercise`, `accessibility`, `api-print-console`, `init`,
+  `keyboard-navigation` locally; `identity-and-console`,
+  `quiz-and-persistence` in `tests/e2e-deployed/`) were updated to open the
+  relevant disclosure before interacting with content inside it, via a
+  small `openDisclosure()` fixture helper (an independent copy in each
+  suite's own `fixtures.mjs`, matching this repository's existing
+  local/deployed suite-independence convention).
+- **Mutation-tested:** removed the `beforeprint` force-open loop entirely;
+  the print-exposure test failed immediately with `expect(locator).
+  toBeVisible() failed ... Received: hidden`; reverted, confirmed
+  `git diff index.html` showed no remaining change, and the test passed
+  again.
+- **Prevention:** When a CSS override for a "make hidden content visible"
+  claim is added, verify it against the actual rendering mode it targets
+  (real print-media emulation for print CSS, not a computed-style proxy)
+  before trusting it — the same standing discipline this log applies
+  elsewhere, now specifically naming `<details>` content suppression as a
+  case where `display`/`getBoundingClientRect()` do not reliably reflect
+  true visibility, unlike ordinary `display:none` toggles.
+

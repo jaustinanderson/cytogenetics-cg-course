@@ -30,4 +30,14 @@ export const test = base.extend({
   },
 });
 
+/**
+ * Quiz and exercise widgets (`.quiz`, `.exer`) are native `<details>`
+ * elements, collapsed by default (Issue #11 progressive-disclosure). A
+ * deliberate independent copy of the same helper in tests/e2e/fixtures.mjs,
+ * for the same reasons the rest of this file is a separate copy.
+ */
+export async function openDisclosure(locator) {
+  await locator.evaluate((el) => { el.open = true; });
+}
+
 export { expect };

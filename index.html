@@ -226,11 +226,21 @@
 
   /* ---------- Quiz ---------- */
   .quiz{border:1px solid var(--pearl-line);border-radius:13px;background:var(--surface-2);margin:1.4rem 0;overflow:hidden}
-  .quiz-head{background:var(--primary-050);padding:.7rem 1rem;display:flex;align-items:center;gap:.55rem;border-bottom:1px solid var(--pearl-line)}
-  .quiz-head .qh-ic{width:26px;height:26px;border-radius:7px;background:var(--primary);color:#fff;display:grid;place-items:center}
+  .quiz>.quiz-head::-webkit-details-marker{display:none}
+  .quiz>.quiz-head::marker{content:""}
+  .quiz-head{background:var(--primary-050);padding:.7rem 1rem;display:flex;flex-wrap:wrap;align-items:center;gap:.55rem;border-bottom:1px solid var(--pearl-line);cursor:pointer;list-style:none}
+  .quiz-head:hover{background:var(--primary-050);filter:brightness(0.98)}
+  .quiz-head .qh-ic{width:26px;height:26px;border-radius:7px;background:var(--primary);color:#fff;display:grid;place-items:center;flex:0 0 auto}
   .quiz-head .qh-ic svg{width:15px;height:15px}
+  .qh-text{display:flex;flex-direction:column;gap:.1rem;min-width:0;flex:1 1 160px}
   .quiz-head h3{margin:0;color:var(--primary-700);font-size:1.02rem;font-weight:600}
-  .quiz-head .qh-score{margin-left:auto;font-size:.8rem;font-weight:700;color:var(--ink-soft);font-family:var(--mono)}
+  .qh-meta{font-size:.74rem;color:var(--ink-soft);font-weight:500}
+  .qh-state{flex:0 0 auto;font-size:.72rem;font-weight:700;padding:.15rem .55rem;border-radius:999px;background:var(--surface);border:1px solid var(--line);color:var(--ink-soft)}
+  .qh-state.is-progress{background:var(--pearl-bg);border-color:var(--pearl-line);color:var(--pearl-ink)}
+  .qh-state.is-done{background:var(--ok-bg);border-color:var(--ok-line);color:var(--ok-ink)}
+  .quiz-head .qh-score{flex:0 0 auto;font-size:.8rem;font-weight:700;color:var(--ink-soft);font-family:var(--mono)}
+  .quiz-head::after{content:"";width:8px;height:8px;border-right:2px solid var(--primary);border-bottom:2px solid var(--primary);transform:rotate(-45deg);transition:transform .2s;flex:0 0 auto}
+  .quiz[open]>.quiz-head::after{transform:rotate(45deg)}
   .quiz-body{padding:1rem}
   .qitem{padding:.9rem 0;border-bottom:1px dashed var(--line)}
   .qitem:last-child{border-bottom:none;padding-bottom:.2rem}
@@ -254,11 +264,21 @@
 
   /* ---------- Interactive exercise ---------- */
   .exer{border:1px solid var(--iscn-line);border-radius:13px;background:var(--surface-2);margin:1.4rem 0;overflow:hidden}
-  .exer-head{background:var(--iscn-bg);padding:.7rem 1rem;display:flex;align-items:center;gap:.55rem;border-bottom:1px solid var(--iscn-line)}
-  .exer-head .eh-ic{width:26px;height:26px;border-radius:7px;background:var(--iscn-ink);color:#fff;display:grid;place-items:center}
+  .exer>.exer-head::-webkit-details-marker{display:none}
+  .exer>.exer-head::marker{content:""}
+  .exer-head{background:var(--iscn-bg);padding:.7rem 1rem;display:flex;flex-wrap:wrap;align-items:center;gap:.55rem;border-bottom:1px solid var(--iscn-line);cursor:pointer;list-style:none}
+  .exer-head:hover{filter:brightness(0.98)}
+  .exer-head .eh-ic{width:26px;height:26px;border-radius:7px;background:var(--iscn-ink);color:#fff;display:grid;place-items:center;flex:0 0 auto}
   .exer-head .eh-ic svg{width:15px;height:15px}
+  .eh-text{display:flex;flex-direction:column;gap:.1rem;min-width:0;flex:1 1 160px}
   .exer-head h4{margin:0;color:var(--iscn-ink)}
-  .exer-head .eh-score{margin-left:auto;font-size:.8rem;font-weight:700;color:var(--iscn-ink);font-family:var(--mono)}
+  .eh-meta{font-size:.74rem;color:var(--ink-soft);font-weight:500}
+  .eh-state{flex:0 0 auto;font-size:.72rem;font-weight:700;padding:.15rem .55rem;border-radius:999px;background:var(--surface);border:1px solid var(--iscn-line);color:var(--iscn-ink)}
+  .eh-state.is-progress{background:var(--iscn-bg);border-color:var(--iscn-line);color:var(--iscn-ink)}
+  .eh-state.is-done{background:var(--ok-bg);border-color:var(--ok-line);color:var(--ok-ink)}
+  .exer-head .eh-score{flex:0 0 auto;font-size:.8rem;font-weight:700;color:var(--iscn-ink);font-family:var(--mono)}
+  .exer-head::after{content:"";width:8px;height:8px;border-right:2px solid var(--iscn-ink);border-bottom:2px solid var(--iscn-ink);transform:rotate(-45deg);transition:transform .2s;flex:0 0 auto}
+  .exer[open]>.exer-head::after{transform:rotate(45deg)}
   .exer-body{padding:1rem}
   .exer-stage{display:flex;justify-content:center;margin:.2rem 0 .9rem}
   .exer-stage svg{max-width:100%;height:auto}
@@ -386,8 +406,7 @@
     .content{max-width:none;padding:0}
     .module,.quiz,.exer,.case,.flash-wrap,.weight-card,.hero{box-shadow:none;break-inside:avoid}
     .hero{background:#123a63 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    details.card{open:true}
-    details.card>.card-body{display:block !important}
+    .quiz-head::after,.exer-head::after{display:none}
     .qfb,.exer-fb{display:block !important}
     .flash-card{break-inside:avoid}
     .flash-inner{transform:none !important}
@@ -396,7 +415,6 @@
     a[href]::after{content:"" }
     *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   }
-  body.printmode details.card>.card-body{display:block !important}
   body.printmode .qfb,body.printmode .exer-fb{display:block !important}
 </style>
 </head>
@@ -1085,7 +1103,7 @@
 
       <div class="callout co-lab"><span class="co-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3v6l-5 9a2 2 0 0 0 1.8 3h12.4A2 2 0 0 0 20 18l-5-9V3"/><path d="M8 3h8M7.5 14h9"/></svg>Lab Reality</span><p>For mosaicism you must resist selecting only the prettiest cells. <strong>Scoring only clean metaphases can bias against an abnormal clone</strong> (which may grow or spread differently). Count across the slide&mdash;including less photogenic cells&mdash;and never exclude a cell simply because it carries the abnormality you're evaluating.</p></div>
 
-      <div class="exer" data-exer="ex7"></div>
+      <details class="exer" data-exer="ex7"></details>
 
       <div class="quiz-mount" data-quiz="m7"></div>
 
@@ -1275,8 +1293,8 @@
 
       <div class="callout co-iscn"><span class="co-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2M9 20h6M12 4v16"/></svg>ISCN Rule / Normal variants</span><p><strong>Heteromorphisms are normal polymorphisms, not abnormalities.</strong> Variation in <code>1qh</code>, <code>9qh</code>, <code>16qh</code>, satellite size, and <strong>Yqh</strong> length is common and benign. When reported, ISCN uses heteromorphism notation (e.g., a larger 9q heterochromatin) rather than an abnormality term. Do not write a gain/deletion for a bigger qh block.</p></div>
 
-      <div class="exer" data-exer="ex9group"></div>
-      <div class="exer" data-exer="ex9chrom"></div>
+      <details class="exer" data-exer="ex9group"></details>
+      <details class="exer" data-exer="ex9chrom"></details>
 
       <div class="callout co-pit"><span class="co-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>Common Pitfall</span><p>Relying on <strong>size alone</strong> within the C-group, or assuming higher number = smaller chromosome (21/22 break that). Always confirm with banding. And don't let a large <strong>9qh</strong> or long <strong>Yq</strong> trick you into calling extra material&mdash;those are variants.</p></div>
 
@@ -1372,7 +1390,7 @@
 
       <div class="callout co-pit"><span class="co-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>Common Pitfall</span><p>Three traps: <strong>(1)</strong> writing <code>45,XO</code> (the correct form is <code>45,X</code>); <strong>(2)</strong> calling a monosomy from one or two cells&mdash;random loss mimics it; <strong>(3)</strong> confusing <strong>triploidy (69)</strong> with <strong>tetraploidy (92)</strong>. Tetraploidy in particular can be a <em>culture artifact</em> (endoreduplication), so correlate before reporting.</p></div>
 
-      <div class="exer" data-exer="ex10"></div>
+      <details class="exer" data-exer="ex10"></details>
 
       <div class="callout co-lab"><span class="co-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3v6l-5 9a2 2 0 0 0 1.8 3h12.4A2 2 0 0 0 20 18l-5-9V3"/><path d="M8 3h8M7.5 14h9"/></svg>Lab Reality</span><p>A consistent extra or missing chromosome <strong>in a clone of cells</strong> is biology; a single odd count among many normal cells is usually technique. When monosomy or low-level mosaicism is the question, labs <strong>count additional cells</strong> (and may add FISH) rather than calling it off a handful of spreads.</p></div>
 
@@ -1764,7 +1782,7 @@
 
       <div class="callout co-lab"><span class="co-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3v6l-5 9a2 2 0 0 0 1.8 3h12.4A2 2 0 0 0 20 18l-5-9V3"/><path d="M8 3h8M7.5 14h9"/></svg>Lab Reality</span><p>Production labs keep the <strong>current ISCN reference</strong> at hand and follow internal style for edge cases; exact FISH/array string formats are validated per assay. Learn the <em>logic and symbols</em> here&mdash;then defer to the current ISCN edition and your laboratory's conventions for precise formatting.</p></div>
 
-      <div class="exer" data-exer="ex14"></div>
+      <details class="exer" data-exer="ex14"></details>
 
       <div class="quiz-mount" data-quiz="m14"></div>
 
@@ -1873,7 +1891,7 @@
 
       <div class="callout co-lab"><span class="co-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3v6l-5 9a2 2 0 0 0 1.8 3h12.4A2 2 0 0 0 20 18l-5-9V3"/><path d="M8 3h8M7.5 14h9"/></svg>Lab Reality</span><p>Cutoffs, the number of nuclei scored, and section thickness are <strong>validated per probe/assay and set by SOP</strong>. Labs commonly reflex between methods&mdash;array finds a deletion, FISH confirms/locates it; banding finds a translocation, FISH confirms the fusion. Treat any specific scoring number here as an example.</p></div>
 
-      <div class="exer" data-exer="ex15"></div>
+      <details class="exer" data-exer="ex15"></details>
 
       <div class="quiz-mount" data-quiz="m15"></div>
 
@@ -3473,9 +3491,14 @@
     var qs = QUIZZES[key];
     if(!qs){ return; }
     var title = (key==='final') ? 'Final cumulative exam' : 'Quick check';
-    var total = qs.length, score = 0;
+    var total = qs.length, score = 0, answered = 0;
     var icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>';
-    var html = '<div class="quiz"><div class="quiz-head"><span class="qh-ic">'+icon+'</span><h3>'+title+'</h3><span class="qh-score">0 / '+total+'</span></div><div class="quiz-body">';
+    var html = '<details class="quiz"><summary class="quiz-head">'
+      + '<span class="qh-ic" aria-hidden="true">'+icon+'</span>'
+      + '<span class="qh-text"><h3>'+title+'</h3><span class="qh-meta">Quiz &middot; '+total+' question'+(total===1?'':'s')+'</span></span>'
+      + '<span class="qh-state" data-role="state">Not started</span>'
+      + '<span class="qh-score">0 / '+total+'</span>'
+      + '</summary><div class="quiz-body">';
     qs.forEach(function(item, qi){
       html += '<div class="qitem" data-qi="'+qi+'"><div class="qnum">Question '+(qi+1)+' of '+total+'</div><div class="qtext">'+esc(item.q)+'</div><div class="qopts">';
       item.o.forEach(function(opt, oi){
@@ -3483,9 +3506,10 @@
       });
       html += '</div><div class="qfb"><span class="fb-h"></span><span class="fb-d"></span><span class="fb-x"></span></div></div>';
     });
-    html += '</div></div>';
+    html += '</div></details>';
     mount.innerHTML = html;
     var scoreEl = $('.qh-score', mount);
+    var stateEl = $('.qh-state', mount);
     $all('.qitem', mount).forEach(function(item){
       var qi = +item.getAttribute('data-qi');
       var data = qs[qi];
@@ -3495,6 +3519,7 @@
         btn.addEventListener('click', function(){
           if(item.getAttribute('data-done')){ return; }
           item.setAttribute('data-done','1');
+          answered++;
           var chosen = +btn.getAttribute('data-oi');
           var correct = data.a;
           opts.forEach(function(b){ b.disabled = true; });
@@ -3510,6 +3535,9 @@
           fb.classList.add('show', good?'good':'bad');
           if(good){ score++; }
           scoreEl.textContent = score + ' / ' + total;
+          stateEl.textContent = (answered>=total) ? 'Completed' : 'In progress';
+          stateEl.classList.toggle('is-done', answered>=total);
+          stateEl.classList.toggle('is-progress', answered>0 && answered<total);
           recordAnswer(data.id, good);
         });
       });
@@ -3524,11 +3552,16 @@
     var items = ex.items, total = items.length, idx = 0, score = 0;
     var answered = [];
     var icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
-    host.innerHTML = '<div class="exer-head"><span class="eh-ic">'+icon+'</span><h4>'+esc(ex.title)+'</h4><span class="eh-score">0 / '+total+'</span></div>'
+    host.innerHTML = '<summary class="exer-head">'
+      + '<span class="eh-ic" aria-hidden="true">'+icon+'</span>'
+      + '<span class="eh-text"><h4>'+esc(ex.title)+'</h4><span class="eh-meta">Exercise &middot; '+total+' item'+(total===1?'':'s')+'</span></span>'
+      + '<span class="eh-state" data-role="state">Not started</span>'
+      + '<span class="eh-score">0 / '+total+'</span>'
+      + '</summary>'
       + '<div class="exer-body"><div class="exer-stage"></div><div class="exer-prompt"></div><div class="exer-opts cols"></div><div class="exer-fb"></div>'
       + '<div class="exer-nav"><button type="button" class="btn btn-primary exer-next">Next</button><span class="exer-prog"></span></div></div>';
     var stage=$('.exer-stage',host), prompt=$('.exer-prompt',host), optWrap=$('.exer-opts',host),
-        fb=$('.exer-fb',host), nextBtn=$('.exer-next',host), prog=$('.exer-prog',host), scoreEl=$('.eh-score',host);
+        fb=$('.exer-fb',host), nextBtn=$('.exer-next',host), prog=$('.exer-prog',host), scoreEl=$('.eh-score',host), stateEl=$('.eh-state',host);
 
     function lockAndShow(){
       var it = items[idx];
@@ -3551,6 +3584,10 @@
       nextBtn.disabled = false;
       scoreEl.textContent = score + ' / ' + total;
       prog.textContent = 'Item ' + (idx+1) + ' of ' + total + ' \u00b7 Score ' + score;
+      var answeredCount = answered.filter(Boolean).length;
+      stateEl.textContent = (answeredCount>=total) ? 'Completed' : 'In progress';
+      stateEl.classList.toggle('is-done', answeredCount>=total);
+      stateEl.classList.toggle('is-progress', answeredCount>0 && answeredCount<total);
     }
     function render(){
       var it = items[idx];
@@ -3850,8 +3887,27 @@
   /* ============================ PRINT + RESET ============================ */
   function wirePrintReset(){
     var p=$('#printBtn'); if(p){ p.addEventListener('click', function(){ window.print(); }); }
-    window.addEventListener('beforeprint', function(){ document.body.classList.add('printmode'); });
-    window.addEventListener('afterprint', function(){ document.body.classList.remove('printmode'); });
+    // Closed <details> content (case-study reveal cards, and quiz/exercise
+    // disclosures) is suppressed by the browser's native rendering model for
+    // the element, not by an author-overridable `display` value on its
+    // children -- confirmed directly with page.emulateMedia({media:'print'})
+    // before relying on it: a `display:block !important` override on the
+    // content wrapper does NOT make it appear under real print media. Setting
+    // the real `open` property is the only mechanism that actually works, so
+    // beforeprint force-opens every <details> and afterprint restores each
+    // one's real prior state -- never treating "was open for print" as if it
+    // were a genuine user action.
+    window.addEventListener('beforeprint', function(){
+      document.body.classList.add('printmode');
+      $all('details').forEach(function(d){ d.setAttribute('data-print-reopened', d.open ? '0' : '1'); d.open = true; });
+    });
+    window.addEventListener('afterprint', function(){
+      document.body.classList.remove('printmode');
+      $all('details').forEach(function(d){
+        if(d.getAttribute('data-print-reopened') === '1'){ d.open = false; }
+        d.removeAttribute('data-print-reopened');
+      });
+    });
     var r=$('#resetBtn'); if(r){ r.addEventListener('click', function(){
       if(window.confirm('Reset your saved progress and reload the course? This cannot be undone.')){
         try{ localStorage.removeItem(PKEY); localStorage.removeItem(PKEY_V1); }catch(e){}
