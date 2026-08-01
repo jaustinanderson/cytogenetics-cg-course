@@ -454,6 +454,154 @@ committed, so no product, screenshot, or scientific content changed — only
 `scripts/capture-readme-screenshot.mjs`'s documentation. See
 `docs/QUALITY_LOG.md` QL-017.
 
+A scientific-review status record was added 2026-07-31 (branch
+`claude/issue-1-scientific-review-status`, Issue #1):
+
+- `docs/SCIENTIFIC_REVIEW.md` records, honestly and with evidence, that
+  **no question, exercise, flashcard, or case content currently has an
+  independently recorded scientific review** — all of it is Draft per
+  `docs/CONTENT_GOVERNANCE.md`'s content-state definitions. The one
+  exception: the exam blueprint's domain names and published target ranges
+  (four ASCP BOC domains) are Source-checked against the dated, linked
+  ASCP BOC CG content guideline. That is a precise, narrow claim: it means
+  the guideline is identified and dated, not that the course's current
+  148-question distribution (33/91/14/10) matches or is validated by it.
+  The distribution is a separate, mechanically measured fact — only the
+  specimen domain currently falls within its published range; analysis is
+  overrepresented and molecular/operations are both underrepresented (see
+  `README.md` "Course coverage").
+- The record explicitly separates five things that are easy to conflate:
+  scientific/content review, software validation, accessibility testing,
+  source/provenance review, and image/licensing (rights) review — each
+  with its own current status and a pointer to where its evidence actually
+  lives (this new file, `docs/VALIDATION.md`, or
+  `THIRD_PARTY_NOTICES.md`). It states plainly that passing automated
+  tests establishes structural/behavioral consistency, not scientific
+  correctness.
+- Covers all 17 modules and the separate 42-question final-cumulative-exam
+  pool in a status table. Per-module and pool question counts were read
+  directly from the committed course data via
+  `window.CytoCourse.getQuestions(id)` in a sandboxed `vm` context (the
+  same technique `tests/validate-course.mjs` uses) — not estimated, and
+  reconciled to sum to exactly 153 (111 across modules + 42 in the final
+  pool), matching the domain totals `tests/validate-course.mjs` already
+  asserts.
+- Does **not** claim the credentialed author's review of their own
+  authored content is equivalent to independent review — per
+  `docs/CONTENT_GOVERNANCE.md`, authored content is Draft until reviewed
+  regardless of the author's credentials, and this record holds itself to
+  that standard explicitly.
+- Includes a practical per-item review checklist (adapted directly from
+  `docs/CONTENT_GOVERNANCE.md`'s existing question-review requirements)
+  and a reusable review-log table format (content ID, type, domain,
+  reviewer, date, scope, source(s) cited, status, notes) for recording
+  future reviews as an append-only audit trail.
+- A structural check in `tests/validate-course.mjs` parses the status
+  table and verifies: the module-ID set exactly matches the live
+  `getModules()` set (no missing module, no stale extra row); every
+  table title matches `module.short`; every per-module question count
+  matches `getQuestions(module.id).length`; exactly one final-pool row
+  exists and its count matches `getQuestions("final").length`; and module
+  counts plus the final-pool count reconcile to the live total. Reading
+  the module list dynamically (not a hardcoded count) means it catches
+  drift if a module is ever added, removed, or renamed without updating
+  the record.
+- One self-caught mistake during drafting, corrected before commit: an
+  early draft misattributed a quoted sentence ("Structurally validated
+  beta; full scientific and accessibility review is in progress") to
+  `README.md`'s current status text; it is actually
+  `docs/VALIDATION.md`'s "Release language" guidance for a *future*
+  release, not the project's current wording. Caught by re-checking the
+  literal source text before committing the quote. See
+  `docs/QUALITY_LOG.md` QL-018.
+- No question, answer, explanation, exercise, case, image, or scientific
+  claim was altered — this is a documentation-only addition. `index.html`
+  is untouched.
+- This closes "record the current scientific-review status" in
+  `docs/ROADMAP.md` and Issue #1, as the status *record*, not as the
+  underlying review — the review itself remains undone, and the beta
+  warning in `README.md` is unchanged. Do not check Issue #1's item, or
+  read this as removing the beta warning's basis, before independent
+  review of this record.
+
+Independent review of that record found and prompted correcting several
+claim-to-evidence and terminology problems, applied 2026-07-31 on the same
+branch:
+
+1. **A row-explanation mismatch.** The document's "Five separate review
+   types" section said it "only speaks to the first and third rows" of a
+   five-row table, which didn't correspond to any consistent pairing.
+   Rewritten to name the review types directly ("Scientific/content review
+   and Source/provenance review") so the claim can't drift out of sync
+   with the table again.
+2. **A silent policy change.** `docs/CONTENT_GOVERNANCE.md` defines
+   SME-reviewed as review **by Austin** specifically; the record had
+   quietly broadened this to "a named subject-matter expert" and used
+   "independently reviewed" throughout without reconciling the two.
+   Corrected to reproduce `docs/CONTENT_GOVERNANCE.md`'s definition
+   verbatim and add an explicit distinction the four states alone don't
+   make: authored content vs. Austin's documented SME review (which
+   satisfies the current SME-reviewed state) vs. independent second-person
+   review (a stronger claim SME-reviewed as currently defined does not
+   require). States plainly that a future Austin review would satisfy
+   SME-reviewed but would not itself be independent second-person review.
+3. **An overclaimed source-checked scope.** The record had implied the
+   course's current 33/91/14/10 question distribution was itself
+   "Source-checked" against the ASCP BOC guideline. Narrowed to state that
+   only the guideline's domain names and published target ranges are
+   Source-checked (the guideline is identified and dated); the current
+   distribution against those ranges is a separate, mechanically measured
+   comparison, and the record now states plainly — matching
+   `README.md`'s own "Course coverage" table — that only the specimen
+   domain is currently within its published range, while analysis is
+   overrepresented and molecular/operations are both underrepresented.
+4. **Ambiguous inventory wording.** "153 questions... across 17 modules,
+   plus a 42-question... pool" could read as 153 module questions plus 42
+   more (195 total). Reworded to "153 total questions: 111 assigned across
+   the 17 modules, plus the separate 42-question final cumulative pool"
+   with the arithmetic stated explicitly (111 + 42 = 153).
+5. **Structural validation strengthened to match its claims.** The
+   previous check only confirmed each module ID appeared somewhere in the
+   document text. Replaced with a real table parser that verifies the
+   module-ID set exactly equals the live set (no missing or stale rows),
+   every title matches `getModules()`, every count matches
+   `getQuestions()`, the final-pool row exists with a matching count, and
+   module counts plus the final-pool count reconcile to the live total.
+   The per-module table's "Title" column was switched from the fuller
+   `<h2>` heading text to the exact `module.short` string the public API
+   returns, specifically so this comparison is an exact string match, not
+   an approximation.
+6. **Mutation-tested**: a missing module row, a stale extra module row, an
+   incorrect module title, and an incorrect question count were each
+   introduced one at a time and confirmed to fail the check for the
+   specific, correct reason (shown in the assertion's `actual`/`expected`
+   output), then fully reverted before commit. A fifth mutation (wrong
+   final-pool count) was also verified as a bonus check on that part of
+   the logic.
+7. See `docs/QUALITY_LOG.md` for the corresponding entry. No question,
+   answer, explanation, exercise, case, image, or scientific claim was
+   altered in this correction round either; `index.html` remains
+   untouched, and Issue #1 was not modified.
+
+A third, narrower correction followed the same day: a second independent
+review of the round-2 structural check found it was still gameable in two
+ways. Its `Set`/`Map`-based module-ID comparison silently collapsed
+duplicate rows (two rows for the same module ID looked identical to one),
+and its final-pool row was identified only by exclusion ("doesn't look
+like `m<number>`"), so a renamed or fabricated non-module identifier with
+the right count would pass, and the pool row's own title was never
+checked. Fixed surgically in `tests/validate-course.mjs`: an assertion
+that total rows equal the live module count plus exactly one, an
+assertion that the module-row count alone equals the live module count, an
+explicit array-length-vs-`Set`-size uniqueness check before building the
+lookup `Map`, an exact `*(pool)*` identifier match for the final-pool row
+instead of exclusion, and a new assertion that the final-pool title is
+exactly `"Final cumulative exam"`. Mutation-verified: a duplicated module
+row, a renamed pool identifier, and a changed pool title were each
+introduced separately and each failed at a distinct, correctly-located
+assertion; all three fully reverted before commit. See the addendum to
+`docs/QUALITY_LOG.md` QL-019. No product or scientific content changed.
+
 ## Read these files first
 
 1. `README.md`
@@ -510,8 +658,12 @@ questions or images:
    2026-07-31 (branch `claude/issue-1-readme-screenshot`, Issue #1) —
    `docs/assets/course-overview.png`, reproducible via `npm run
    capture:readme-screenshot`. See below.
-5. Record a documented scientific-review status rather than treating structural
-   validation as content validation.
+5. ~~Record a documented scientific-review status rather than treating
+   structural validation as content validation.~~ Done 2026-07-31 (branch
+   `claude/issue-1-scientific-review-status`, Issue #1) —
+   `docs/SCIENTIFIC_REVIEW.md`. The record itself is honest that the
+   underlying question-by-question review has **not** happened; do not
+   read this item's completion as "content review is done." See below.
 
 Do not begin the 46-question expansion or image embedding while the data
 contract and review gates remain incomplete.

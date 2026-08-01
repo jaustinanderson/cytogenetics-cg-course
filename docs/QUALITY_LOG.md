@@ -881,3 +881,222 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   existing should create that directory itself (`mktemp -d`), not assume
   the reader's environment happens to have it.
 
+## QL-018 — A quoted source was misattributed while drafting the scientific-review record
+
+- **Status:** Corrected before commit; nothing incorrect shipped
+- **Finding:** While drafting `docs/SCIENTIFIC_REVIEW.md` (Issue #1), a
+  draft passage quoted the phrase "Structurally validated beta; full
+  scientific and accessibility review is in progress" and attributed it to
+  `README.md`'s current beta-status blockquote. Checking the actual text of
+  both files before committing showed that phrase does not appear in
+  `README.md` at all — it is `docs/VALIDATION.md`'s "Release language"
+  section, describing *recommended future release wording*, not the
+  project's current status text. `README.md`'s actual current blockquote
+  reads: "Status: beta baseline. The application is functional and
+  structurally validated. The full question bank has not yet completed a
+  documented, question-by-question scientific review for public release."
+- **Impact:** None shipped — caught by `grep`-verifying the exact quoted
+  text against both files before committing, not after. Had it shipped, a
+  document whose entire purpose is recording accurate, evidence-based
+  status would have contained an inaccurate quotation about the project's
+  own current status — a direct contradiction of its own stated standard.
+- **Cause:** Both passages are short, thematically similar sentences about
+  the same beta/review status, drafted from memory of prior reading in this
+  session rather than re-checked against the source files at the moment of
+  writing the quote.
+- **Correct action:** Verify any quoted text against the literal source
+  file at the time of writing it down, especially in a document whose
+  purpose is asserting what is and is not established — the same standing
+  discipline this log already applies to test claims, tool defaults, and
+  documented commands (QL-007, QL-008, QL-013, QL-014, QL-017), extended
+  here to quotations.
+- **Correction:** Reworded the passage to quote `README.md`'s actual
+  current text, and added a separate sentence correctly attributing the
+  "Structurally validated beta..." phrase to `docs/VALIDATION.md`'s
+  Release language section as future-release guidance, not current status.
+- **Prevention:** Any quotation in committed documentation should be
+  produced by copying the literal source text (or grep-verified against
+  it) at the point of writing, not reproduced from recollection of an
+  earlier read in the same session.
+
+## QL-019 — Independent review found claim-to-evidence and terminology problems in the scientific-review record
+
+- **Status:** Corrected on branch `claude/issue-1-scientific-review-status`
+  (Issue #1), before merge; no scientific content changed
+- **Finding:** Independent review of `docs/SCIENTIFIC_REVIEW.md` (QL-018's
+  document) found five distinct problems, none of them scientific-content
+  errors but all of them exactly the kind of claim-to-evidence gap this
+  document exists to prevent everywhere else in the repository:
+  1. The "Five separate review types" section stated it "only speaks to
+     the first and third rows" of a five-row table. That ordinal reference
+     did not correspond to any consistent pairing a reader could verify
+     against the table — it was true only if the reader guessed which
+     rows the author meant, which defeats the purpose of a document whose
+     entire value is being independently checkable.
+  2. `docs/CONTENT_GOVERNANCE.md` defines **SME-reviewed** specifically as
+     review **by Austin**. The new document silently broadened this to
+     "a named subject-matter expert" in its own restatement of the four
+     content states, and used "independently reviewed" throughout without
+     ever reconciling the two — a documentation task had, without
+     authorization or discussion, redefined a piece of project governance
+     policy.
+  3. The document implied the course's current 33/91/14/10 question
+     distribution was itself "Source-checked" against the ASCP BOC
+     guideline. Source-checked, per `docs/CONTENT_GOVERNANCE.md`, means an
+     identified authoritative source exists — it does not mean the
+     content has been validated against that source. The guideline being
+     dated and cited is a fact about the guideline; whether the current
+     distribution falls within its ranges is a separate, mechanically
+     measured comparison, and (per `README.md`'s own "Course coverage"
+     table, already committed before this document existed) three of the
+     four domains currently fall *outside* their published ranges. The
+     original wording did not surface that.
+  4. The inventory summary read "153 questions... across 17 modules, plus
+     a 42-question... pool," which a reader could parse as 153 module
+     questions with 42 more on top (195 total) rather than the intended
+     153 = 111 (modules) + 42 (pool).
+  5. The structural check added by QL-018 only confirmed each module ID
+     appeared somewhere in the document's text — it did not verify titles,
+     per-module counts, the final-pool row, or that the numbers reconciled
+     to the live total, despite the document's surrounding prose reading
+     as though the table were fully verified against live data.
+- **Impact:** None shipped to `index.html` or any scientific content —
+  every issue was in the documentation layer describing review status, not
+  in the underlying (already honestly "Draft") content itself. The impact
+  was to the document's own credibility: a record whose stated purpose is
+  precise, evidence-backed claims about review status contained an
+  unverifiable ordinal reference, a silent governance-policy change, and
+  an overclaimed source-checked scope — exactly the categories of error
+  the document exists to catch in the *course content*, now found in the
+  document about the course content.
+- **Cause:** (1) and (4) were imprecise prose written without re-reading
+  the table/arithmetic it described. (2) came from generalizing
+  `docs/CONTENT_GOVERNANCE.md`'s specific, named definition into more
+  generic language without checking the source definition first — the
+  same category of drift QL-013 already logged for a different claim
+  ("independently reviewed" reads as an obviously correct phrase in
+  isolation, which made it easy to use loosely without checking it against
+  the one place project policy actually defines the adjacent term
+  "SME-reviewed"). (3) conflated "a source exists and is cited" with "the
+  content matches the source" — two different claims that share the word
+  "checked." (5) was scoped to what was easy to implement first (existence
+  of an ID substring) rather than to what the document's own prose claimed
+  the check established.
+- **Correct action:** State claims using the same names/definitions as
+  their authoritative source (`docs/CONTENT_GOVERNANCE.md` for content
+  states) rather than paraphrasing them; keep a "Source-checked" claim
+  scoped to exactly what was checked (the source's existence/currency, not
+  content conformance to it) unless conformance was also actually
+  verified; and make a structural check's claims and its actual assertions
+  match exactly — the same discipline QL-005/QL-006's open items and
+  QL-011's second addendum already establish for other parts of this
+  repository, extended here to a document about review status itself.
+- **Correction:**
+  1. Rewrote the row-explanation to name review types directly
+     ("Scientific/content review and Source/provenance review") instead of
+     ordinal row numbers, so the claim cannot silently drift out of sync
+     with the table again.
+  2. Reproduced `docs/CONTENT_GOVERNANCE.md`'s SME-reviewed definition
+     verbatim and added an explicit three-way distinction: authored
+     content (Draft) vs. Austin's documented SME review (satisfies the
+     current SME-reviewed state) vs. independent second-person review (a
+     stronger claim SME-reviewed as currently defined does not require).
+     States plainly that a future Austin review would satisfy SME-reviewed
+     but would not itself be independent second-person review. Added a
+     matching rule to the reusable review-log format: recording
+     SME-reviewed requires the Reviewer field to be Austin; any other
+     reviewer must be logged and labeled as independent second-person
+     review instead.
+  3. Narrowed the source-checked claim to the guideline's domain names and
+     published ranges only, and added the actual current-share-vs-range
+     comparison table (reproduced from `README.md`) with the explicit
+     statement that only specimen is within range while analysis,
+     molecular, and operations are not.
+  4. Reworded the inventory summary to "153 total questions: 111 assigned
+     across the 17 modules, plus the separate 42-question final cumulative
+     pool," with the arithmetic (111 + 42 = 153) stated explicitly.
+  5. Replaced the existence-only structural check in
+     `tests/validate-course.mjs` with a real table parser that verifies:
+     the module-ID set exactly equals the live `getModules()` set (no
+     missing module, no stale extra row); every table title equals
+     `module.short`; every per-module count equals
+     `getQuestions(module.id).length`; exactly one final-pool row exists
+     with a count equal to `getQuestions("final").length`; and module
+     counts plus the final-pool count reconcile to the live total question
+     count. The per-module table's "Title" column was switched from the
+     fuller `<h2>` heading text to the exact `module.short` string, so the
+     title comparison is an exact string match rather than an
+     approximation the test would have to fuzz.
+  6. Mutation-verified against the corrected check: a missing module row,
+     a stale extra module row (a fabricated "m18"), an incorrect module
+     title, and an incorrect question count were each introduced
+     one at a time; each failed with a Node `assert` `actual`/`expected`
+     mismatch naming the specific problem (e.g. the module-ID-set
+     comparison for the missing/extra-row cases, the title string for the
+     wrong-title case, the count for the wrong-count case). A fifth
+     mutation (wrong final-pool count) was also verified. All were fully
+     reverted before commit; `npm test` passed cleanly afterward.
+- **Prevention:** When a new document restates or summarizes definitions
+  that already exist elsewhere in the repository (content states, review
+  scope, terminology), reproduce them verbatim or link to them — do not
+  paraphrase from memory, because paraphrasing is exactly how a silent
+  policy change or scope-broadening slips in unnoticed. When a structural
+  check's surrounding prose claims it verifies something specific (titles,
+  counts, reconciliation), the check's actual assertions must cover that
+  exact claim, verified by mutation-testing each specific claim
+  separately — not just the easiest sub-claim to implement first.
+
+### Addendum — a second independent pass found the ID-set check itself was gameable
+
+- **Status:** Corrected before merge, same branch
+- **Finding:** A second independent review of the corrected check (item 5
+  above) found it still had two gaps, both in the same
+  "verify what the prose claims" category as the original finding:
+  1. **Duplicate rows went undetected.** The check compared module IDs as
+     `Set`s (`new Set(moduleRows.map(...))`) and looked them up via a
+     `Map`. Both collapse duplicate keys silently — a table with the m9
+     row listed twice would produce the same ID `Set` and the same `Map`
+     lookup result as a table with it listed once, so nothing about the
+     "matches the live module set" comparison could ever notice the
+     duplication, no matter how many extra copies of a row existed.
+  2. **The final-pool row was identified too loosely.** It was defined as
+     "any row whose Module cell doesn't match `m<number>`," so a renamed
+     or entirely fabricated non-module identifier with a coincidentally
+     correct question count would be silently accepted as *the* pool row
+     — and the pool row's own title was never checked at all.
+- **Impact:** None shipped — caught by review before merge, not by the
+  check failing in CI on real content. Had either gap gone uncorrected, a
+  future edit that duplicated a module row, or renamed/mistyped the pool
+  identifier while keeping the right count, would have passed a check
+  whose own name and surrounding prose claimed to catch exactly that.
+- **Correct action:** When a check's purpose is "detect an exact-count or
+  exact-identity mismatch," verify count and identity with assertions that
+  cannot silently absorb a duplicate (array length compared to `Set` size,
+  not `Set` membership alone) or a substitute (an exact identifier match,
+  not "doesn't look like the other category").
+- **Correction:** Added, in `tests/validate-course.mjs`: (a) an assertion
+  that the table's total row count equals the live module count plus
+  exactly one; (b) an assertion that the module-row count alone equals the
+  live module count; (c) an explicit uniqueness check comparing the parsed
+  module-ID array's length against a `Set` built from it, before
+  constructing the `Map` used for per-module lookups; (d) the final-pool
+  row is now matched by the exact Module-cell string `*(pool)*` rather
+  than "not shaped like `m<number>`"; (e) a new assertion that the
+  final-pool row's title is exactly `"Final cumulative exam"`. The
+  existing live-count and full-total reconciliation checks were kept
+  unchanged. Mutation-verified: a duplicated module row, a renamed
+  final-pool identifier, and a changed final-pool title were each
+  introduced separately and each failed with a distinct, correctly-located
+  assertion (row-count mismatch, pool-row-count mismatch, and title
+  mismatch respectively); all three were fully reverted before commit.
+- **Prevention:** For any check built on `Set`/`Map` deduplication, ask
+  explicitly whether the property being verified is "this set of distinct
+  values is correct" (which `Set` equality suffices for) or "this exact
+  list of rows is correct" (which requires a length/count assertion first,
+  since `Set`/`Map` construction is where duplicates silently vanish). For
+  any check that identifies "the one row that isn't the others" by
+  exclusion, prefer identifying it by an exact, positive match instead —
+  exclusion-based identification accepts anything that merely fails to
+  look like the excluded category, which is a much weaker claim than the
+  surrounding prose usually intends.
+
