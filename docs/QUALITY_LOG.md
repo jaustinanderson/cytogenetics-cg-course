@@ -1046,3 +1046,57 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   exact claim, verified by mutation-testing each specific claim
   separately — not just the easiest sub-claim to implement first.
 
+### Addendum — a second independent pass found the ID-set check itself was gameable
+
+- **Status:** Corrected before merge, same branch
+- **Finding:** A second independent review of the corrected check (item 5
+  above) found it still had two gaps, both in the same
+  "verify what the prose claims" category as the original finding:
+  1. **Duplicate rows went undetected.** The check compared module IDs as
+     `Set`s (`new Set(moduleRows.map(...))`) and looked them up via a
+     `Map`. Both collapse duplicate keys silently — a table with the m9
+     row listed twice would produce the same ID `Set` and the same `Map`
+     lookup result as a table with it listed once, so nothing about the
+     "matches the live module set" comparison could ever notice the
+     duplication, no matter how many extra copies of a row existed.
+  2. **The final-pool row was identified too loosely.** It was defined as
+     "any row whose Module cell doesn't match `m<number>`," so a renamed
+     or entirely fabricated non-module identifier with a coincidentally
+     correct question count would be silently accepted as *the* pool row
+     — and the pool row's own title was never checked at all.
+- **Impact:** None shipped — caught by review before merge, not by the
+  check failing in CI on real content. Had either gap gone uncorrected, a
+  future edit that duplicated a module row, or renamed/mistyped the pool
+  identifier while keeping the right count, would have passed a check
+  whose own name and surrounding prose claimed to catch exactly that.
+- **Correct action:** When a check's purpose is "detect an exact-count or
+  exact-identity mismatch," verify count and identity with assertions that
+  cannot silently absorb a duplicate (array length compared to `Set` size,
+  not `Set` membership alone) or a substitute (an exact identifier match,
+  not "doesn't look like the other category").
+- **Correction:** Added, in `tests/validate-course.mjs`: (a) an assertion
+  that the table's total row count equals the live module count plus
+  exactly one; (b) an assertion that the module-row count alone equals the
+  live module count; (c) an explicit uniqueness check comparing the parsed
+  module-ID array's length against a `Set` built from it, before
+  constructing the `Map` used for per-module lookups; (d) the final-pool
+  row is now matched by the exact Module-cell string `*(pool)*` rather
+  than "not shaped like `m<number>`"; (e) a new assertion that the
+  final-pool row's title is exactly `"Final cumulative exam"`. The
+  existing live-count and full-total reconciliation checks were kept
+  unchanged. Mutation-verified: a duplicated module row, a renamed
+  final-pool identifier, and a changed final-pool title were each
+  introduced separately and each failed with a distinct, correctly-located
+  assertion (row-count mismatch, pool-row-count mismatch, and title
+  mismatch respectively); all three were fully reverted before commit.
+- **Prevention:** For any check built on `Set`/`Map` deduplication, ask
+  explicitly whether the property being verified is "this set of distinct
+  values is correct" (which `Set` equality suffices for) or "this exact
+  list of rows is correct" (which requires a length/count assertion first,
+  since `Set`/`Map` construction is where duplicates silently vanish). For
+  any check that identifies "the one row that isn't the others" by
+  exclusion, prefer identifying it by an exact, positive match instead —
+  exclusion-based identification accepts anything that merely fails to
+  look like the excluded category, which is a much weaker claim than the
+  surrounding prose usually intends.
+

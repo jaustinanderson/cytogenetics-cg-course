@@ -583,6 +583,25 @@ branch:
    altered in this correction round either; `index.html` remains
    untouched, and Issue #1 was not modified.
 
+A third, narrower correction followed the same day: a second independent
+review of the round-2 structural check found it was still gameable in two
+ways. Its `Set`/`Map`-based module-ID comparison silently collapsed
+duplicate rows (two rows for the same module ID looked identical to one),
+and its final-pool row was identified only by exclusion ("doesn't look
+like `m<number>`"), so a renamed or fabricated non-module identifier with
+the right count would pass, and the pool row's own title was never
+checked. Fixed surgically in `tests/validate-course.mjs`: an assertion
+that total rows equal the live module count plus exactly one, an
+assertion that the module-row count alone equals the live module count, an
+explicit array-length-vs-`Set`-size uniqueness check before building the
+lookup `Map`, an exact `*(pool)*` identifier match for the final-pool row
+instead of exclusion, and a new assertion that the final-pool title is
+exactly `"Final cumulative exam"`. Mutation-verified: a duplicated module
+row, a renamed pool identifier, and a changed pool title were each
+introduced separately and each failed at a distinct, correctly-located
+assertion; all three fully reverted before commit. See the addendum to
+`docs/QUALITY_LOG.md` QL-019. No product or scientific content changed.
+
 ## Read these files first
 
 1. `README.md`

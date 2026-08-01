@@ -215,14 +215,46 @@ test("the scientific-review status record's per-module table matches the live co
   assert.ok(rows.length > 0, "expected at least one data row in the per-module status table");
 
   // Column order: [Module, Title, Blueprint domain, Quiz questions, Scientific review status].
-  const moduleRows = rows.filter((row) => /^m\d+$/.test(row[0]));
-  const poolRows = rows.filter((row) => !/^m\d+$/.test(row[0]));
-
   const modules = api.getModules();
+
+  // Checked before splitting into module/pool rows: the table must contain
+  // exactly one row per live module plus exactly one final-pool row — no
+  // more, no fewer. This catches a duplicated or fabricated row that a
+  // Set-based ID comparison alone would miss (Set collapses duplicates).
+  assert.equal(
+    rows.length,
+    modules.length + 1,
+    `docs/SCIENTIFIC_REVIEW.md's per-module table has ${rows.length} data rows; expected exactly ` +
+      `${modules.length + 1} (one per live module, plus exactly one final-pool row)`,
+  );
+
+  const moduleRows = rows.filter((row) => /^m\d+$/.test(row[0]));
+  // The final-pool row must use this exact, stable identifier — not "any
+  // row whose Module cell isn't shaped like m<number>", which would let a
+  // renamed or fabricated non-module row silently stand in for it.
+  const FINAL_POOL_ID = "*(pool)*";
+  const poolRows = rows.filter((row) => row[0] === FINAL_POOL_ID);
+
+  assert.equal(
+    moduleRows.length,
+    modules.length,
+    `docs/SCIENTIFIC_REVIEW.md has ${moduleRows.length} rows matching "m<number>"; expected exactly ` +
+      `${modules.length} to match the live module count (a duplicated module row would inflate this ` +
+      "without changing the row's set of unique IDs)",
+  );
+
+  const tableIdList = moduleRows.map((row) => row[0]);
+  const tableIdSet = new Set(tableIdList);
+  assert.equal(
+    tableIdList.length,
+    tableIdSet.size,
+    `docs/SCIENTIFIC_REVIEW.md has duplicate module rows sharing an ID: ${JSON.stringify(tableIdList)} ` +
+      `(${tableIdList.length} module rows but only ${tableIdSet.size} unique IDs)`,
+  );
+
   const liveIds = new Set(modules.map((module) => module.id));
-  const tableIds = new Set(moduleRows.map((row) => row[0]));
   assert.deepEqual(
-    [...tableIds].sort(),
+    [...tableIdSet].sort(),
     [...liveIds].sort(),
     "docs/SCIENTIFIC_REVIEW.md's module rows must exactly match the live module ID set from getModules() " +
       "(no missing module and no stale extra row)",
@@ -258,7 +290,13 @@ test("the scientific-review status record's per-module table matches the live co
   assert.equal(
     poolRows.length,
     1,
-    'expected exactly one final-pool row (a Module cell not matching "m<number>") in the per-module status table',
+    `expected exactly one final-pool row identified by Module cell "${FINAL_POOL_ID}" in the per-module ` +
+      "status table (a renamed or fabricated identifier would not be recognized as the pool row)",
+  );
+  assert.equal(
+    poolRows[0][1],
+    "Final cumulative exam",
+    `final-pool row title ("${poolRows[0][1]}") must be exactly "Final cumulative exam"`,
   );
   const poolCountMatch = poolRows[0][3].match(/^(\d+)/);
   assert.ok(poolCountMatch, `final-pool row question count ("${poolRows[0][3]}") must start with a number`);
