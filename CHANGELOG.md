@@ -9,12 +9,15 @@ All notable repository changes are recorded here.
 - `tests/e2e/progressive-disclosure.spec.mjs`: real-browser regression
   coverage for the quiz/exercise progressive-disclosure redesign below —
   default collapsed state with an informative summary, click/keyboard/touch
-  expand and collapse, status staying visible while collapsed after a
-  partial answer, toggling never touching stored progress or firing a
-  `progress` event, reload/Reset behavior, print exposure (including a
-  pre-existing case-study `details.card` regression check), and no
-  narrow-viewport overflow. See `docs/QUALITY_LOG.md` QL-021 and
-  `docs/VALIDATION.md` "Quiz/exercise progressive-disclosure suite"
+  expand and collapse, status/score correctly derived from persisted
+  progress after reload (partial and completed, for both a quiz and an
+  exercise), a correctness-changing reattempt replacing rather than
+  double-counting a prior result, toggling and loading never touching
+  stored progress or firing a `progress` event, Reset behavior, print
+  exposure (including a pre-existing case-study `details.card` regression
+  check), and no narrow-viewport overflow. See `docs/QUALITY_LOG.md`
+  QL-021 and its addendum, and `docs/VALIDATION.md` "Quiz/exercise
+  progressive-disclosure suite"
 - `tests/e2e/visual-polish.spec.mjs`: real-browser regression coverage (46
   runs across both Playwright projects, plus 1440×900/768×1024/360×800
   exercised directly within the file) for the visual-polish fixes below —
@@ -202,15 +205,23 @@ All notable repository changes are recorded here.
   for case-study reveal cards. The summary communicates activity type,
   title, item count, and a "Not started"/"In progress"/"Completed" status
   word; the pre-existing `.qh-score`/`.eh-score` "X / Y" text is unchanged.
-  Measured at 1440×900: document height dropped 45.2% (110,209px →
-  60,386px), quiz/exercise share of document height dropped from 46.6% to
-  2.5%, and answer buttons simultaneously visible on a fresh load dropped
-  from 636 to 0. Question text, answers, rationales, scoring, completion
-  rules, stable question/exercise IDs, progress storage, analytics
-  semantics, and the public API are unchanged; opening/closing a
-  disclosure is not recorded as progress and fires no API event. See
-  `docs/QUALITY_LOG.md` QL-021 and `docs/VALIDATION.md`
-  "Quiz/exercise progressive-disclosure suite"
+  Because the widget is collapsed by default, this summary is the
+  learner's primary status indicator, so status and score are derived from
+  `state.answers`/`state.exercises` on every render rather than reset to
+  zero — a fresh activity reads "Not started — 0 / N," one with existing
+  records reads "In progress — X / N" or "Completed — N / N" immediately
+  on load, and reattempting a previously recorded item replaces its latest
+  result instead of double-counting it. Measured at 1440×900: document
+  height dropped 45.2% (110,209px → 60,386px), quiz/exercise share of
+  document height dropped from 46.6% to 2.5%, and answer buttons
+  simultaneously visible on a fresh load dropped from 636 to 0. Question
+  text, answers, rationales, scoring, completion rules, stable question/
+  exercise IDs, progress storage schema, analytics semantics, and the
+  public API are unchanged; opening/closing a disclosure, and loading a
+  page with existing progress records, is never recorded as new progress
+  and fires no API event. See `docs/QUALITY_LOG.md` QL-021 and its
+  addendum, and `docs/VALIDATION.md` "Quiz/exercise progressive-disclosure
+  suite"
 - Fixed a print-exposure defect affecting both the new quiz/exercise
   disclosures and the pre-existing case-study reveal cards: the
   `display:block !important` CSS override for closed `<details>` content
@@ -298,6 +309,13 @@ All notable repository changes are recorded here.
   background — just under the WCAG AA 4.5:1 threshold, found by the
   existing axe-core suite on the very first run. Changed to `--ink-soft`
   (6.23–6.39:1)
+- Independent review of the still-open, unmerged progressive-disclosure PR
+  found that a collapsed quiz/exercise summary reset to "Not started —
+  0 / N" after a page reload even when `getProgress()` still held correct
+  answer records, because `buildQuiz`/`buildExercise` always initialized
+  score/answered to zero instead of deriving them from persisted state.
+  Fixed by seeding both from `state.answers`/`state.exercises` before
+  rendering; see `docs/QUALITY_LOG.md` QL-021's addendum
 
 ## [1.1.1] - 2026-07-30
 

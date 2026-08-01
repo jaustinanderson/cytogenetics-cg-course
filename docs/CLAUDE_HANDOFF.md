@@ -797,15 +797,19 @@ the "next isolated UX task" both PR #12 and Issue #11 explicitly deferred:
      `tests/dom-harness.mjs`'s minimal `Node` class does not implement;
      switched to `setAttribute`/`getAttribute`/`removeAttribute`, already
      fully supported, no harness changes needed.
-- `tests/e2e/progressive-disclosure.spec.mjs` (new) covers default state,
-  click/keyboard/touch expand-collapse, status visible while collapsed,
-  no progress/API side effects from toggling, reload/Reset behavior, print
-  exposure (including a regression check for the pre-existing case-study
-  cards), and no narrow-viewport overflow. Existing suites that interact
-  with quiz/exercise content were updated to open the relevant disclosure
-  first, via a small `openDisclosure()` helper (independent copies in the
-  local and deployed suites' `fixtures.mjs`, matching this repository's
-  existing suite-independence convention).
+- `tests/e2e/progressive-disclosure.spec.mjs` (rewritten by the correction
+  pass below) covers default state, click/keyboard/touch expand-collapse,
+  status visible while collapsed, no progress/API side effects from
+  toggling or loading, status/score correctly derived from persisted
+  progress after reload (partial and completed, quiz and exercise),
+  correctness-changing reattempts replacing rather than double-counting a
+  prior result, Reset behavior, print exposure (including a regression
+  check for the pre-existing case-study cards), and no narrow-viewport
+  overflow. Existing suites that interact with quiz/exercise content were
+  updated to open the relevant disclosure first, via a small
+  `openDisclosure()` helper (independent copies in the local and deployed
+  suites' `fixtures.mjs`, matching this repository's existing
+  suite-independence convention).
 - Mutation-tested: removing the `beforeprint` force-open loop made the
   print-exposure test fail immediately with a clear "Expected: visible /
   Received: hidden" message; reverted before commit.
@@ -818,6 +822,60 @@ the "next isolated UX task" both PR #12 and Issue #11 explicitly deferred:
 - Before/after screenshots and the full measurement table are published as
   a hosted Artifact (no images committed to the repository), linked from
   the PR description.
+
+Independent review of that still-open, unmerged draft PR (#13) found a
+blocking defect, corrected 2026-08-01 on the same branch — full diagnosis
+and mutation-test evidence in `docs/QUALITY_LOG.md` QL-021's addendum:
+
+- **Collapsed summaries disagreed with persisted progress after reload.**
+  Reproduced against the exact reported commit
+  (`eb5ee8be2ff8d481a18825934f8f4578bd71437e`): a fresh quiz read "Not
+  started — 0 / 5," correctly updated to "In progress — 1 / 5" after
+  answering, but reset to "Not started — 0 / 5" after a real reload even
+  though `getProgress().answers` still held the correct record; the first
+  exercise had the same defect. Because these widgets are now collapsed by
+  default, the summary is the learner's primary status indicator, so this
+  was newly blocking product behavior, not the already-known per-question
+  lock-rendering gap. Root cause: `buildQuiz`/`buildExercise` always
+  initialized score/answered to zero on every render instead of deriving
+  them from `state.answers`/`state.exercises`.
+- **Fix:** both functions now seed score/answered from the persisted
+  records before rendering (read-only — confirmed to fire zero `progress`
+  events), and both answer/choice handlers now capture the prior record
+  before `recordAnswer`/`recordExercise` overwrites it, so a reattempt
+  (only reachable across a reload, since a locked item cannot be clicked
+  twice in one render) replaces the score/count delta rather than counting
+  the item as newly answered a second time.
+- **Tests:** the quiz and exercise reload tests were rewritten to expect
+  the persisted summary and score, not "Not started"; added completed-state
+  (not just partial-state) reload coverage for both; added a
+  correctness-changing reattempt test for both, asserting exactly one
+  distinct recorded item ID and its attempt count (`n`) reaching `2`; added
+  a fixed-sentinel load test proving stored records are read but never
+  rewritten and that loading plus toggling every disclosure fires zero
+  `progress` events. Removed `"singular item counts read naturally"`,
+  which asserted against a copy of the pluralization ternary inline in the
+  test itself and never touched real product code — no real quiz/exercise
+  in this course has exactly one item and the public API cannot construct
+  one, so there was no way to replace it with a test that does exercise
+  product code.
+- **Mutation-tested:** reducing the seeding loop to a no-op (the exact
+  pre-fix behavior) failed four distinct tests across both projects (8
+  runs) with specific messages, including a revealing `Received: "-1 / 6"`
+  from the reattempt test's score-decrement logic firing against a
+  wrongly-assumed-absent prior record. Reverted; confirmed a clean diff and
+  all tests passing again.
+- **The PR's unverified find-in-page claim was softened.** Native
+  `<details>` auto-expanding on a find-in-page match is real Chromium
+  behavior, but Playwright has no API surface for the browser's native
+  find bar, so it was never actually verified here. Reworded in the PR
+  body to describe expected native behavior this repository has not
+  itself verified, rather than an established fact.
+- `npm test`, `npm run test:behavior`, the focused
+  `progressive-disclosure.spec.mjs` (all passing), and the complete local
+  Playwright suite (154 passed, 4 skipped, 0 failed) were run after this
+  correction. PR #13 remains draft, open, and unmerged pending a second
+  independent review.
 
 ## Read these files first
 

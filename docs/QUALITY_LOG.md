@@ -1439,3 +1439,125 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   case where `display`/`getBoundingClientRect()` do not reliably reflect
   true visibility, unlike ordinary `display:none` toggles.
 
+### Addendum — independent review of draft PR #13 found a blocking defect: collapsed summaries disagreed with persisted progress
+
+- **Status:** Corrected on the same branch, before merge
+- **Finding:** Independent review reproduced, against the exact commit
+  `eb5ee8be2ff8d481a18825934f8f4578bd71437e`: a fresh quiz summary correctly
+  read "Not started — 0 / 5"; answering one question correctly updated it
+  to "In progress — 1 / 5" within the same session; but reloading the page
+  reset the summary to "Not started — 0 / 5" even though
+  `getProgress().answers` still held the correct, persisted record for
+  that question. The first exercise behaved identically. Root cause:
+  `buildQuiz`/`buildExercise` always initialized `score = 0, answered = 0`
+  (or the equivalent local closure variables) unconditionally on every
+  render, never reading `state.answers`/`state.exercises` first — a
+  regression this progressive-disclosure change newly exposed, because the
+  collapsed summary is now the learner's primary (often only-visible)
+  status indicator, not a pre-existing limitation that could be dismissed
+  the way the per-question visual lock-state gap already was.
+  Independently reproduced before making any change, per the standing
+  discipline in this log: fresh → "Not started | 0/5"; answered → "In
+  progress | 1/5"; reload → back to "Not started | 0/5" while
+  `getProgress().answers` correctly showed `{"c":true,"n":1,...}` for the
+  answered question, and the equivalent exercise mismatch, confirmed the
+  same way.
+- **Impact:** None shipped to a merged `main` — caught on the open draft
+  PR before merge. Had it shipped, every learner who left and returned to
+  a quiz or exercise (the normal way anyone resumes studying) would have
+  seen "Not started" on content they had already partially or fully
+  completed, directly contradicting the actual, correctly-persisted
+  progress data one API call away — exactly the "unclear collapsed state"
+  outcome this feature's own stated requirements said to avoid.
+- **Correct action:** Derive the initial summary status/score from the
+  existing `state.answers`/`state.exercises` records on every render,
+  the same source of truth `getStats()`/`getUnmastered()` already use, and
+  handle a reattempt (only reachable across a reload, since a locked item
+  cannot be clicked twice within one render) by replacing the prior
+  result rather than double-counting the item as newly answered.
+- **Correction:**
+  1. `buildQuiz` now seeds `answered`/`score` by scanning `qs` and reading
+     `state.answers[item.id]` for each question before building any
+     markup — read-only, no `recordAnswer`/`saveProgress` call, so loading
+     a quiz with existing records never fires a `progress` event.
+     `buildExercise` does the equivalent, keyed by the same
+     `key + '-' + (i+1)` id `recordExercise` already writes.
+  2. A shared `summaryStatus(answeredCount, total)` helper (`total<=0 ||
+     answeredCount<=0` → "Not started"; `answeredCount>=total` →
+     "Completed"; else "In progress") replaces the two independent inline
+     ternaries, so the initial render and every later update use
+     identical status logic.
+  3. Both click handlers now read `state.answers[data.id]` /
+     `state.exercises[thisId]` *before* calling `recordAnswer`/
+     `recordExercise` (which overwrites it), to determine whether this
+     item already had a record (`wasCounted`) and, if so, whether it was
+     previously correct (`wasCorrect`). Score is adjusted by the delta
+     between the old and new correctness (`+1` wrong→right, `-1`
+     right→wrong, unchanged same→same); `answered`/`answeredCount` is
+     incremented only when `!wasCounted`, so a reattempt updates the score
+     to the latest result without counting the question as newly
+     answered a second time.
+  4. Verified directly (not just via the new automated tests) with a
+     manual reproduction script covering fresh → answered → reload
+     (partial) → reattempt with the opposite correctness → complete → reload
+     (completed) → Reset, confirming each state exactly matches the
+     required behavior, including the score correctly decrementing on a
+     correct→wrong reattempt without the distinct-question count changing.
+- **New tests, `tests/e2e/progressive-disclosure.spec.mjs`:**
+  - Rewrote the quiz reload test (previously asserted "Not started" after
+    reload, which was actually asserting the bug) to expect "In progress"
+    and the correct score; added the equivalent exercise reload test.
+  - Added dedicated "fully answered" (Completed) reload coverage for both
+    quiz and exercise, not just "partially answered."
+  - Added a reattempt test for both quiz and exercise: answer once, reload,
+    answer the *same* item again with the opposite correctness, and assert
+    the score reflects only the latest result while exactly one distinct
+    item id is recorded (`Object.keys(...).length === 1`) and its stored
+    attempt count (`n`) is `2`, not a fresh `1`.
+  - Added a load-time test that seeds `localStorage` with fixed-value
+    sentinel records (`ts`/`n` set to arbitrary, checkable constants)
+    before navigation, then asserts those exact values are byte-for-byte
+    unchanged after load (proving the seeding code only reads, never
+    writes) and that zero `progress` events fire from either the load or
+    from toggling every disclosure on the page afterward.
+  - Removed `"singular item counts read naturally"`: it evaluated a copy
+    of the pluralization ternary inline in the test itself and asserted
+    against that copy, never touching `buildQuiz`/`buildExercise` or the
+    rendered DOM at all — a vacuous test that could not have caught a
+    regression in the real template. No real quiz or exercise in this
+    course has exactly one item, and the public API provides no way to
+    construct one, so there is no way to exercise this branch against
+    real product code without modifying the product; removed rather than
+    kept as false coverage.
+- **Mutation-tested:** temporarily reduced `buildQuiz`'s seeding loop to a
+  no-op (the exact pre-fix behavior). Four distinct tests failed
+  immediately across both projects (8 runs) with specific, correctly
+  diagnostic messages: the partial-reload test reported `Expected: "In
+  progress", Received: "Not started"`; the completed-reload test reported
+  `Expected: "Completed", Received: "Not started"`; the sentinel-seed test
+  failed on the derived summary text; and the reattempt test — reachable
+  only because the *other* tests already prove seeding is broken — reported
+  a revealing `Received: "-1 / 6"` (the reattempt's score-decrement logic
+  correctly fired for a wrongly-assumed-absent prior record, going
+  negative), an even clearer signal than a simple mismatch. Reverted;
+  confirmed `git diff index.html` showed no remaining change and all
+  tests passed again.
+- **The PR's browser find-in-page claim was unverified and has been
+  softened.** The PR description stated that native `<details>` gives
+  "browser find-in-page support for free" and is "friendlier to find-in-page
+  than the old always-expanded markup." This is a real, documented Chromium
+  behavior (auto-expanding a closed `<details>` when a find-in-page match
+  falls inside it), but it was never actually verified in this repository:
+  Playwright automates the page, not the browser's native find UI (no CDP
+  surface exposes the find bar), so this claim could not be exercised by
+  any test here. The PR body was reworded to describe this as expected
+  native `<details>` behavior this repository has not itself verified,
+  rather than an established fact.
+- **Prevention:** When a UI redesign makes a summary/status element the
+  *primary* (often only visible) indicator of state, any pre-existing gap
+  in restoring that state from persisted data stops being a dismissible,
+  already-known limitation and becomes a newly blocking defect — the
+  visibility of the gap changed even though the underlying storage logic
+  did not. Re-evaluate every "we already knew about this" claim against
+  what is now actually user-visible before waving it through unchanged.
+

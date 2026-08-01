@@ -822,12 +822,25 @@ state). It covers, across both Playwright projects:
   before and after toggling every quiz and exercise on the page
 - after a real `page.reload()`, every disclosure is collapsed again (its
   default, not persisted, matching "collapsing/expanding is not course
-  progress"), while the previously recorded answer is still present in
-  `getProgress().answers` — the quiz's own pre-existing behavior of not
-  visually restoring per-question lock state on reload is unaffected by
-  this change, confirmed directly rather than assumed
+  progress"), but the **summary status and score are derived from
+  `state.answers`/`state.exercises` on every render**, so a quiz or
+  exercise with existing persisted records reads "In progress — X / N" or
+  "Completed — N / N" immediately, never "Not started," while records
+  remain untouched (no `progress` event fires from loading a page with
+  existing data). Covered for both partially- and fully-answered persisted
+  state, for both quiz and exercise. The quiz's own pre-existing behavior
+  of not visually restoring per-question lock state on reload is
+  unaffected by this change, confirmed directly rather than assumed.
+- reattempting a previously recorded item (only reachable across a reload,
+  since a locked item cannot be clicked twice within one render session)
+  replaces its latest result rather than double-counting it: the summary
+  score reflects only the newest correctness, and the item's stable ID is
+  not counted as newly answered a second time — covered for a
+  correctness-changing reattempt on both a quiz and an exercise, asserting
+  exactly one distinct recorded ID and its stored attempt count (`n`)
+  incrementing to `2`
 - Reset clears progress and reloads with every disclosure collapsed and
-  every status back to "Not started"
+  every status back to "Not started — 0 / N"
 - print mode (`page.emulateMedia({ media: 'print' })`, not a computed-style
   proxy — see the finding below) genuinely exposes a closed quiz's full
   question set and a closed exercise's current item, and also a
@@ -871,6 +884,26 @@ background measured 4.41:1/4.31:1 against the 4.5:1 AA threshold, found by
 the existing axe-core suite) and a dependency-free-harness incompatibility
 (`.dataset` unsupported by `tests/dom-harness.mjs`) that were also found
 and fixed before merge.
+
+### A confirmed blocking defect — collapsed summaries disagreed with persisted progress after reload
+
+Independent review of the draft PR found that a fresh quiz's collapsed
+summary correctly read "Not started — 0 / 5," updated to "In progress —
+1 / 5" after answering one question, but reset back to "Not started —
+0 / 5" after a page reload — even though `getProgress().answers` still
+held the correct record. The first exercise had the same defect. Because
+these widgets are now collapsed by default, the summary is the learner's
+primary status indicator, so this is newly blocking product behavior, not
+a restatement of the pre-existing per-question lock-rendering gap noted
+above. Root cause: `buildQuiz`/`buildExercise` always initialized
+`score`/`answered` to zero on every render instead of deriving them from
+`state.answers`/`state.exercises`. Fixed by seeding both from the
+persisted records before rendering (read-only — confirmed to fire zero
+`progress` events) and by making the answer/choice handlers capture the
+prior record before overwriting it, so a reattempt updates the score to
+the latest result without counting the item as newly answered twice. See
+`docs/QUALITY_LOG.md` QL-021 addendum for the full account, including the
+mutation-test evidence.
 
 ### Measured density — before and after
 
