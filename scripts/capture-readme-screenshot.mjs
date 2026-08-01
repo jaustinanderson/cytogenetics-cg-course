@@ -126,14 +126,17 @@ const OUTPUT_PATH = path.join(REPO_ROOT, "docs", "assets", "course-overview.png"
 // only responsive breakpoints are 980px and 560px). 1430 tall is chosen,
 // not guessed, from the real rendered layout: the topbar, hero, weighting
 // chart, and the full 17-card progress dashboard grid together measure
-// ~1415.8px at this width after the dashboard-card layout fix (re-measured
-// post-fix; the pre-fix concatenated/wrapped card text had actually made
-// rows taller, at ~1477.4px, so the fix left more headroom here, not less).
-// Module 1's own section begins only ~25.6px after that (at ~1441.4px), so
-// 1430 includes the full dashboard with a small margin and stops cleanly
-// before any module content — a taller capture (e.g. 1500, used before this
-// re-measurement) cuts into module 1's header mid-way, which looks like a
-// cut-off rather than an intentional edge.
+// ~1415.8px at this width. An intermediate version of the visual-polish
+// pass (Issue #11) briefly added an unscoped `p{max-width:70ch}` that
+// re-wrapped the weighting chart's `.source-note` paragraph and pushed this
+// down to ~1463.0px; the rule was corrected to exclude callouts, case
+// studies, quick-reference cards, and `.source-note` specifically (see
+// docs/QUALITY_LOG.md QL-020's correction entry), which restored this
+// measurement to its original 1415.8px. Module 1's own section begins only
+// ~25.6px after that (at ~1441.4px), so 1430 includes the full dashboard
+// with a small margin and stops cleanly before any module content —
+// re-measure this constant again (do not assume it) after any change to
+// content above the dashboard grid.
 const VIEWPORT = { width: 1440, height: 1430 };
 
 const EXPECTED_TITLE = "Cytogenetics CG(ASCP) Mini-Course";
