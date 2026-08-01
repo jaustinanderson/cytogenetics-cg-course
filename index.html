@@ -41,7 +41,7 @@
   }
   h1,h2,h3,h4{line-height:1.22; color:var(--ink); margin:0 0 .5em; letter-spacing:-.012em; font-weight:700}
   h2{font-size:1.62rem} h3{font-size:1.2rem} h4{font-size:1.02rem; font-weight:600}
-  p{margin:0 0 1em} a{color:var(--primary); text-underline-offset:2px}
+  p{margin:0 0 1em;max-width:70ch} a{color:var(--primary); text-underline-offset:2px}
   ul,ol{margin:0 0 1em; padding-left:1.25rem} li{margin:.28em 0}
   strong{font-weight:600; color:#0b1c2e}
   code,.mono{font-family:var(--mono)}
@@ -57,11 +57,12 @@
     border-bottom:1px solid var(--line); display:flex; align-items:center; gap:.75rem;
     padding:0 clamp(.75rem,2vw,1.25rem);
   }
-  .topbar .brand{display:flex;align-items:center;gap:.6rem;min-width:0}
+  .topbar .brand{display:flex;align-items:center;gap:.6rem;min-width:0;flex:1 1 auto;overflow:hidden}
   .brand-mark{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--primary),var(--accent));display:grid;place-items:center;flex:0 0 auto;box-shadow:var(--shadow)}
   .brand-mark svg{width:21px;height:21px}
-  .brand-name{font-weight:700;font-size:1.02rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .brand-sub{font-size:.72rem;color:var(--ink-faint);font-weight:500;letter-spacing:.04em;text-transform:uppercase}
+  .brand-text{min-width:0;overflow:hidden}
+  .brand-name{display:block;font-weight:700;font-size:1.02rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .brand-sub{display:block;font-size:.72rem;color:var(--ink-faint);font-weight:500;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .topbar-progress{flex:1 1 auto;max-width:420px;margin:0 .5rem}
   .tp-track{height:9px;background:var(--line-soft);border-radius:999px;overflow:hidden;border:1px solid var(--line)}
   .tp-fill{height:100%;width:0;background:linear-gradient(90deg,var(--primary),var(--accent));transition:width .4s ease}
@@ -193,22 +194,16 @@
   figure.fig{margin:1.2rem 0;border:1px solid var(--line);border-radius:13px;overflow:hidden;background:var(--surface)}
   .fig-title{font-weight:700;font-size:.95rem;padding:.7rem 1rem .1rem}
   .fig-media{padding:1rem;display:flex;justify-content:center;background:repeating-linear-gradient(45deg,#fbfdfe,#fbfdfe 12px,#f4f8fb 12px,#f4f8fb 24px)}
-  .fig-media img{max-width:100%;height:auto;border-radius:8px;border:1px solid var(--line);background:#fff;box-shadow:var(--shadow)}
+  .fig-media img{max-width:100%;max-height:min(52vh,460px);width:auto;height:auto;border-radius:8px;border:1px solid var(--line);background:#fff;box-shadow:var(--shadow)}
   .fig-media svg{max-width:100%;height:auto}
   .fig-svg{background:var(--surface)}
-  figcaption{font-size:.82rem;color:var(--ink-soft);padding:.5rem 1rem 1rem;border-top:1px solid var(--line-soft)}
+  figcaption{font-size:.92rem;line-height:1.5;color:var(--ink-soft);padding:.5rem 1rem 1rem;border-top:1px solid var(--line-soft)}
   figcaption .notice{display:block;font-weight:600;color:var(--ink);margin-bottom:.25rem}
   figcaption .analysis{display:block;background:var(--pearl-bg);border:1px solid var(--pearl-line);border-radius:8px;padding:.45rem .65rem;margin:.5rem 0;color:var(--pearl-ink);font-weight:500}
-  figcaption .src{display:block;font-size:.74rem;color:var(--ink-faint);margin-top:.4rem}
-  figcaption .lic{display:inline-block;font-size:.68rem;font-weight:700;padding:.1rem .45rem;border-radius:5px;background:var(--ok-bg);color:var(--ok-ink);border:1px solid var(--ok-line);margin-top:.25rem}
+  figcaption .src{display:block;font-size:.85rem;color:var(--ink-soft);margin-top:.4rem}
+  figcaption .lic{display:inline-block;font-size:.78rem;font-weight:700;padding:.15rem .5rem;border-radius:5px;background:var(--ok-bg);color:var(--ok-ink);border:1px solid var(--ok-line);margin-top:.25rem}
   figcaption .lic.schem{background:var(--iscn-bg);color:var(--iscn-ink);border-color:var(--iscn-line)}
   .fig-fallback{display:none;font-size:.8rem;color:var(--ink-faint);font-style:italic;margin-top:.4rem}
-
-  .imgneeded{border:2px dashed var(--accent);background:var(--accent-050)}
-  .imgneeded .in-box{padding:1.3rem 1rem;text-align:center;color:var(--lab-ink)}
-  .imgneeded .in-box .ic{font-size:1.6rem;display:block;margin-bottom:.3rem}
-  .imgneeded .in-box .it{font-weight:700}
-  .imgneeded .in-box .iq{display:inline-block;margin-top:.5rem;font-family:var(--mono);font-size:.8rem;background:#fff;border:1px solid var(--lab-line);border-radius:7px;padding:.3rem .55rem}
 
   /* ---------- ISCN parser signature ---------- */
   .iscn-string{font-family:var(--mono);font-weight:600;font-size:1.05rem;background:#0e2236;color:#eaf3fb;border-radius:10px;padding:.7rem 1rem;display:inline-block;letter-spacing:.01em;border:1px solid #1d3b57}
@@ -366,6 +361,10 @@
     .wbar .name{flex-basis:54%;font-size:.82rem}
     .hero-stat{min-width:104px;flex:1 1 40%}
     .brand-sub{display:none}
+    .topbar{gap:.5rem}
+    .topbar-actions{gap:.3rem}
+    .topbar-actions .btn{padding:.5rem;gap:0}
+    .topbar-actions .btn span{display:none}
   }
 
   @media (prefers-reduced-motion:reduce){
@@ -406,7 +405,7 @@
     <span class="brand-mark" aria-hidden="true">
       <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M7 3c4 4 6 10 10 18M17 3C13 7 11 13 7 21"/><path d="M9.2 7.5h5.6M9.8 12h4.4M9.2 16.5h5.6"/></svg>
     </span>
-    <span>
+    <span class="brand-text">
       <span class="brand-name">Cytogenetics CG(ASCP) Course</span>
       <span class="brand-sub">Exam-aligned training portal</span>
     </span>
@@ -416,8 +415,8 @@
     <div class="tp-label"><span id="tpLabel">0 of 17 modules complete</span></div>
   </div>
   <div class="topbar-actions">
-    <button type="button" class="btn" id="printBtn" title="Open print-friendly view"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg><span>Print</span></button>
-    <button type="button" class="btn" id="resetBtn" title="Reset saved progress"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span>Reset</span></button>
+    <button type="button" class="btn" id="printBtn" aria-label="Print" title="Open print-friendly view"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg><span>Print</span></button>
+    <button type="button" class="btn" id="resetBtn" aria-label="Reset" title="Reset saved progress"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span>Reset</span></button>
   </div>
 </header>
 
@@ -1140,14 +1139,7 @@
         </figcaption>
       </figure>
 
-      <figure class="fig imgneeded">
-        <div class="in-box">
-          <span class="ic" aria-hidden="true">&#128247;</span>
-          <span class="it">Image needed: Normal human female karyotype (46,XX)</span>
-          <p>Insert an openly licensed G-banded <strong>46,XX</strong> karyogram to compare directly with Figure&nbsp;8.1 (the only difference should be two X chromosomes instead of X and Y). Verify the license on the file page before use.</p>
-          <span class="iq">Suggested sources: Wikimedia Commons &ldquo;Category:Human karyotypes&rdquo; &middot; NHGRI Image Gallery (genome.gov/image-gallery) &middot; search: <strong>normal female karyotype 46,XX G-banded public domain</strong></span>
-        </div>
-      </figure>
+      <p>A normal female karyogram (<strong>46,XX</strong>) follows the identical arrangement rules shown above, with one difference: the sex-chromosome pair is two X chromosomes instead of one X and one Y.</p>
 
       <h3 class="coreh">Arrangement conventions</h3>
       <ul>
@@ -1279,14 +1271,7 @@
 
       <div class="callout co-iscn"><span class="co-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2M9 20h6M12 4v16"/></svg>ISCN Rule / Normal variants</span><p><strong>Heteromorphisms are normal polymorphisms, not abnormalities.</strong> Variation in <code>1qh</code>, <code>9qh</code>, <code>16qh</code>, satellite size, and <strong>Yqh</strong> length is common and benign. When reported, ISCN uses heteromorphism notation (e.g., a larger 9q heterochromatin) rather than an abnormality term. Do not write a gain/deletion for a bigger qh block.</p></div>
 
-      <figure class="fig imgneeded">
-        <div class="in-box">
-          <span class="ic" aria-hidden="true">&#128247;</span>
-          <span class="it">Image needed: Karyograms at increasing band resolution (~400, ~550, ~700&ndash;850)</span>
-          <p>Insert openly licensed G-banded karyograms at different resolutions to show how higher band counts reveal finer sub-bands (longer, less-contracted chromosomes). Confirm each license on its file page.</p>
-          <span class="iq">Suggested sources: Wikimedia Commons &ldquo;Human karyotype with bands and sub-bands.svg&rdquo; &middot; NHGRI Image Gallery &middot; search: <strong>G-banded karyotype 550 band resolution open license</strong></span>
-        </div>
-      </figure>
+      <p>Band resolution (Module&nbsp;5) sets how much detail is visible: at lower resolution (~400 bands) chromosomes look shorter and more condensed with coarser bands; at higher resolution (~550&ndash;850 bands), longer, less-contracted chromosomes reveal finer sub-bands within each major band, which is why subtle structural changes often require requesting higher-resolution banding.</p>
 
       <div class="exer" data-exer="ex9group"></div>
       <div class="exer" data-exer="ex9chrom"></div>
@@ -1385,14 +1370,7 @@
 
       <div class="callout co-pit"><span class="co-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>Common Pitfall</span><p>Three traps: <strong>(1)</strong> writing <code>45,XO</code> (the correct form is <code>45,X</code>); <strong>(2)</strong> calling a monosomy from one or two cells&mdash;random loss mimics it; <strong>(3)</strong> confusing <strong>triploidy (69)</strong> with <strong>tetraploidy (92)</strong>. Tetraploidy in particular can be a <em>culture artifact</em> (endoreduplication), so correlate before reporting.</p></div>
 
-      <figure class="fig imgneeded">
-        <div class="in-box">
-          <span class="ic" aria-hidden="true">&#128247;</span>
-          <span class="it">Image needed: 45,X (Turner) and a sex-chromosome gain (e.g., 47,XXY Klinefelter)</span>
-          <p>Insert openly licensed karyograms for <strong>45,X</strong> (single X, count 45) and a sex-chromosome gain such as <strong>47,XXY</strong> to pair with the trisomy-21 example above. Verify each license on its file page.</p>
-          <span class="iq">Suggested sources: Wikimedia Commons &ldquo;Human karyotype with extra X chromosome.png&rdquo; (Klinefelter) &middot; Category:Human karyotypes &middot; search: <strong>Turner syndrome 45,X karyotype open license</strong></span>
-        </div>
-      </figure>
+      <p>Sex-chromosome aneuploidies follow the same counting logic as the trisomy&nbsp;21 example above: <strong>45,X</strong> (Turner) shows a total count of 45 with a single X and no Y or second X; <strong>47,XXY</strong> (Klinefelter) shows a total count of 47 with two X chromosomes plus a Y.</p>
 
       <div class="exer" data-exer="ex10"></div>
 
@@ -1475,15 +1453,6 @@
       <div class="callout co-pearl"><span class="co-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12c.7.7 1 1.5 1 2h6c0-.5.3-1.3 1-2a7 7 0 0 0-4-12z"/></svg>Exam Pearl</span><p>Count breakpoints to decode the type: <strong>terminal deletion = 1 break</strong>, <strong>interstitial deletion / duplication = 2 breaks</strong>, <strong>insertion = 3 breaks</strong>. A <strong>der</strong> is <em>named by the chromosome whose centromere it carries</em>. <strong>add</strong> means "extra material, origin unknown"&mdash;use it only when you truly cannot identify the source.</p></div>
 
       <div class="callout co-iscn"><span class="co-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2M9 20h6M12 4v16"/></svg>ISCN Rule</span><p>Breakpoints are written <strong>p before q</strong> and proximal-to-distal within an arm. For two-breakpoint events, list both breakpoints in the same parentheses with no comma (<code>q13q33</code>). For interchromosomal events, chromosomes go in the first parentheses, breakpoints in the second, separated by a semicolon (<code>ins(5;2)(p14;q22q32)</code>).</p></div>
-
-      <figure class="fig imgneeded">
-        <div class="in-box">
-          <span class="ic" aria-hidden="true">&#128247;</span>
-          <span class="it">Image needed: A clear deletion or isochromosome karyogram</span>
-          <p>Insert an openly licensed karyogram showing an interstitial/terminal <strong>deletion</strong> or an <strong>isochromosome</strong> (e.g., i(17q)) to pair with the nomenclature above. Confirm the license on the file page.</p>
-          <span class="iq">Suggested sources: Wikimedia Commons &ldquo;Category:Human karyotypes&rdquo; &middot; NHGRI Image Gallery &middot; search: <strong>chromosome deletion karyotype open license</strong> / <strong>isochromosome 17q karyotype</strong></span>
-        </div>
-      </figure>
 
       <div class="callout co-pit"><span class="co-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>Common Pitfall</span><p>Confusing a <strong>duplication</strong> (extra copy in place) with an <strong>insertion</strong> (segment relocated), or treating an <strong>isochromosome</strong> as a simple duplication&mdash;remember it also <em>deletes</em> the opposite arm. Reversing breakpoint order or putting q before p is a frequent nomenclature error.</p></div>
 
@@ -1587,15 +1556,6 @@
       </ul>
 
       <div class="callout co-iscn"><span class="co-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2M9 20h6M12 4v16"/></svg>ISCN Rule</span><p>In acquired karyotypes, <strong>clone-size brackets are required</strong> and the abnormality clone-size rules from Module&nbsp;10 apply (gain/structural &ge;2 cells, loss &ge;3). The normal-cell line is written last (e.g., <code>&hellip;[20]/46,XX[5]</code>). Constitutional results omit brackets unless mosaic.</p></div>
-
-      <figure class="fig imgneeded">
-        <div class="in-box">
-          <span class="ic" aria-hidden="true">&#128247;</span>
-          <span class="it">Image needed: Philadelphia chromosome t(9;22), plus an inversion and a ring</span>
-          <p>Insert openly licensed karyograms for <strong>t(9;22)</strong> (note the small der(22), the Ph chromosome), a <strong>chromosome inversion</strong>, and a <strong>ring chromosome</strong>. Verify each license on its file page before embedding.</p>
-          <span class="iq">Suggested Wikimedia Commons files (verify license): &ldquo;Philadelphia chromosome, t(9;22) translocation.jpg&rdquo; &middot; &ldquo;Human karyotype showing inversion on chromosome 11.png&rdquo; &middot; &ldquo;Human karyotype from bladder carcinoma, including ring chromosome.jpg&rdquo; &middot; &ldquo;Marcador.png&rdquo; (marker)</span>
-        </div>
-      </figure>
 
       <div class="callout co-pit"><span class="co-tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>Common Pitfall</span><p>Calling a Robertsonian carrier <code>46</code> (it's <strong>45</strong>); swapping <strong>pericentric/paracentric</strong>; and forgetting <strong>clone brackets</strong> in cancer reports. Also: don't try to "band-identify" a marker&mdash;if banding can't assign it, it's a <code>+mar</code> pending FISH/array.</p></div>
 
@@ -2337,7 +2297,7 @@
     <!-- ===================== IMAGE CREDITS & DISCLAIMER ===================== -->
     <section class="section-block anchor-offset" id="credits" aria-labelledby="credTitle">
       <h2 id="credTitle">Image credits &amp; licensing</h2>
-      <p>This course embeds only images whose public-domain status was verified. All other figures are either clearly labeled original schematics created for this course, or labeled &ldquo;Image needed&rdquo; placeholders that point to real, openly licensed sources for you to verify and insert.</p>
+      <p>This course embeds only images whose public-domain status was verified. Where no such image is embedded yet, the lesson text, tables, and ISCN notation cover the concept on their own rather than shipping an unfinished placeholder.</p>
 
       <div class="cred">
         <span class="ct">Figure 8.1 &mdash; Normal human male karyotype (46,XY)</span><br>
@@ -2352,8 +2312,8 @@
         Figures 4.1 (metaphase spread outcomes), 8.2 (karyogram layout), 9.1 (centromere morphology), and 15.1 (FISH signal patterns) are illustrative diagrams, not photomicrographs. They are simplified teaching aids.
       </div>
       <div class="cred">
-        <span class="ct">&ldquo;Image needed&rdquo; placeholders</span><br>
-        Where a real photographic karyotype would strengthen learning (normal female, deletion/isochromosome, Turner/Klinefelter, Philadelphia/inversion/ring, banding-resolution series), the course marks the spot and lists specific openly licensed sources. <strong>Confirm each file's license on its source page before embedding.</strong>
+        <span class="ct">Additional photographic karyograms under consideration</span><br>
+        A normal female (46,XX) comparison, a deletion/isochromosome example, Turner/Klinefelter karyotypes, a banding-resolution series, and Philadelphia/inversion/ring examples would strengthen these lessons further. They remain unembedded until an openly licensed, redistribution-cleared source is verified and recorded in this course's image register (see <code>docs/ROADMAP.md</code> Milestone 2B).
       </div>
 
       <hr class="soft">

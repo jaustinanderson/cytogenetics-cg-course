@@ -1110,3 +1110,91 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   look like the excluded category, which is a much weaker claim than the
   surrounding prose usually intends.
 
+## QL-020 — Five confirmed visual/responsive defects, found and fixed on a real page before editing
+
+- **Status:** Corrected on branch `claude/issue-11-visual-polish` (Issue #11)
+- **Finding:** Before making any change, each reported defect was independently
+  measured against the real rendered page (local static server, real
+  Chromium, `document.querySelector(...).getBoundingClientRect()` /
+  `getComputedStyle(...)`), per the standing discipline in this log
+  (QL-007/QL-008/QL-013) of confirming an unverified claim against real
+  behavior before trusting it. All five were confirmed real:
+  1. Five `<figure class="fig imgneeded">` blocks in Modules 8–12 rendered
+     internal authoring/search text ("Image needed: ...", suggested Wikimedia
+     search terms) directly in the learner-facing page.
+  2. Figure 8.1's embedded karyotype image rendered at 796.8×624.8px at a
+     1440px-wide desktop viewport — 81.3% of the content column's width and
+     69.4% of the viewport's height, before any caption is visible.
+  3. `figcaption` rendered at 13.12px, `.src` at 11.84px, and `.lic` at
+     10.88px (16px root font).
+  4. A module paragraph's rendered width was 830.8px at 1440px — well past a
+     65–75ch reading measure at this font size.
+  5. At 390×844 and 360×800, `.brand`'s wrapping `<span>` (holding
+     `.brand-name`/`.brand-sub`) had no `min-width:0` of its own; as a flex
+     item its default `min-width:auto` refused to shrink below its
+     ~232px-wide text content, so the brand name visually overlapped/ran
+     into the Print button. Screenshots at both widths confirmed the visible
+     truncation/overlap before any CSS changed.
+- **Impact:** None shipped incorrectly — all five were confirmed with direct
+  measurement before `index.html` changed, so no fix was applied to a
+  suspected-but-unreal defect. Left uncorrected, a learner would have seen
+  raw authoring instructions, an oversized image dominating a full screen
+  before its caption, small/faint source text, wide-uncomfortable prose
+  lines, and a header where the course name visually collided with Print.
+- **Cause:** These are rendering/layout properties (image size, font size,
+  measure, flex shrink behavior) that none of the structural validator, the
+  DOM behavior suite, axe-core, or the keyboard suite evaluate — the same
+  category of coverage gap QL-016 already found for dashboard-card layout.
+- **Correct action:** Measure the specific property each report claims
+  (rendered pixel dimensions, computed font size, bounding-box overlap) on
+  the real page before changing `index.html`, then fix narrowly and
+  re-measure to confirm.
+- **Correction:**
+  1. Removed all five `.imgneeded` placeholder figures from Modules 8–12.
+     Where the surrounding lesson text, tables, or ISCN strings did not
+     already stand alone, one short explanatory sentence was added in the
+     placeholder's place (no fabricated, generated, downloaded, or
+     newly-embedded imagery — only the two already-approved local images
+     remain embedded). Reworded the "Image credits & licensing" section's
+     two remaining "Image needed" references to describe the same unfilled
+     candidates without shipping search instructions in the learner UI. The
+     `IMAGES` data manifest (19 records, 2 embedded / 17 needed) is
+     unchanged — this is a DOM/UI change, not a change to the provenance
+     record `docs/ROADMAP.md` Milestone 2B still governs.
+  2. `.fig-media img` gained `max-height:min(52vh,460px)` (with
+     `width:auto;height:auto` preserving aspect ratio alongside the existing
+     `max-width:100%`), capping figure 8.1 to 586.5×460px (51.1% of a 900px
+     viewport height) without cropping or distorting it.
+  3. `figcaption` raised to `.92rem`/1.5 line-height, `.src` to `.85rem` and
+     recolored from `--ink-faint` to the already-AA-passing `--ink-soft`,
+     `.lic` to `.78rem` — measured after the change at 14.72px/13.6px
+     respectively (16px root).
+  4. Global `p{max-width:70ch}` added; a module paragraph's rendered width
+     dropped from 830.8px to 700px at 1440px, while table/quiz/exercise
+     containers (which use `div`/`td`, not `p`) were confirmed unaffected.
+  5. Added a `.brand-text` wrapper class (`min-width:0;overflow:hidden`) and
+     made `.brand`/`.brand-name` shrink-and-ellipsis correctly; at
+     ≤560px, `.topbar-actions .btn span` is hidden and each button gained an
+     explicit `aria-label` (`"Print"`/`"Reset"`) matching its visible text,
+     so hiding the label visually does not remove the accessible name.
+     Re-measured after the fix at 390px and 360px: `brand.right` (299.2 /
+     269.2) no longer exceeds `topbar-actions.x` (307.2 / 277.2) at either
+     width, and a full-page screenshot at both confirmed no visible overlap.
+- **New tests:** `tests/e2e/visual-polish.spec.mjs` (40 runs across both
+  Playwright projects) asserts, via real bounding boxes/computed styles —
+  not pixel snapshots: no page-level horizontal overflow at 1440×900,
+  1280×900, 768×1024, 390×844, and 360×800; no header-control overlap or
+  viewport clipping at the three narrower widths; the hamburger, Print, and
+  Reset controls are reachable by real `Tab` presses, keep their accessible
+  name, and are `.tap()`-operable; zero `.imgneeded` elements and zero
+  "Image needed" text at any tested width; both embedded figures stay within
+  60% of the viewport height and never exceed the viewport width, at all
+  five widths; each figure's caption sits within 40px of its image (still
+  visually attached); caption/`.src` font sizes stay at or above a 14px/13px
+  floor; and a module paragraph stays under 85% of the content column's
+  width while its sibling table and quiz keep the full content width.
+- **Prevention:** Same standing rule this log already applies elsewhere,
+  extended to layout/typography claims: measure the specific rendered
+  property on the real page before and after a layout fix, not just
+  "looks better."
+

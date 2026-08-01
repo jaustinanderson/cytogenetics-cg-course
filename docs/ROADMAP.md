@@ -124,6 +124,19 @@ the course.
   the status *record*, not the review itself — the underlying
   question-by-question review remains undone, and the beta warning in
   `README.md` stays exactly as it is until that changes
+- [x] Fix confirmed visual/responsive defects: learner-facing "Image needed"
+  placeholders, oversized figures with detached captions, faint caption/source
+  text, over-wide prose lines, and an overlapping/truncating mobile header —
+  `docs/QUALITY_LOG.md` QL-020 (Issue #11). Deliberately does **not** address
+  the page's dense, fully-expanded quiz/exercise disclosure; that is recorded
+  below as the recommended next isolated UX task
+- [ ] Reduce quiz/exercise disclosure density — currently every quiz and
+  exercise item on a module renders fully expanded at once, producing a large
+  amount of visible content and controls per module. A follow-up isolated UX
+  task should redesign disclosure (e.g. collapsed-by-default items, a
+  progressive reveal, or per-item accordions) without changing question text,
+  answers, rationales, scoring, or progress semantics. Out of scope for
+  Issue #11; recommended as the next isolated task
 
 ### Exit criteria
 

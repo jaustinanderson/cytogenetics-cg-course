@@ -123,18 +123,18 @@ const REPO_ROOT = path.join(__dirname, "..");
 const OUTPUT_PATH = path.join(REPO_ROOT, "docs", "assets", "course-overview.png");
 
 // 1440 wide keeps the layout solidly in the desktop CSS path (the product's
-// only responsive breakpoints are 980px and 560px). 1430 tall is chosen,
-// not guessed, from the real rendered layout: the topbar, hero, weighting
-// chart, and the full 17-card progress dashboard grid together measure
-// ~1415.8px at this width after the dashboard-card layout fix (re-measured
-// post-fix; the pre-fix concatenated/wrapped card text had actually made
-// rows taller, at ~1477.4px, so the fix left more headroom here, not less).
-// Module 1's own section begins only ~25.6px after that (at ~1441.4px), so
-// 1430 includes the full dashboard with a small margin and stops cleanly
-// before any module content — a taller capture (e.g. 1500, used before this
-// re-measurement) cuts into module 1's header mid-way, which looks like a
-// cut-off rather than an intentional edge.
-const VIEWPORT = { width: 1440, height: 1430 };
+// only responsive breakpoints are 980px and 560px). Height is chosen, not
+// guessed, from the real rendered layout: the topbar, hero, weighting chart,
+// and the full 17-card progress dashboard grid together measure ~1463.0px at
+// this width after the visual-polish pass added `p{max-width:70ch}` (Issue
+// #11), which re-wraps the weighting chart's `.source-note` paragraph onto
+// an extra line and pushes everything below it down by ~47px versus the
+// prior 1415.8px measurement. Module 1's own section begins only ~25.6px
+// after that (at ~1488.5px), so 1477 includes the full dashboard with a
+// small margin and stops cleanly before any module content — re-measure
+// this constant again (do not assume it) after any change to content above
+// the dashboard grid.
+const VIEWPORT = { width: 1440, height: 1477 };
 
 const EXPECTED_TITLE = "Cytogenetics CG(ASCP) Mini-Course";
 const EXPECTED_HERO_HEADING = "Read the slide. Name every chromosome. Write the nomenclature.";

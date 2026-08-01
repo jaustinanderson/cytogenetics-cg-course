@@ -707,6 +707,63 @@ the optimization step repeats the same check rather than trusting it by
 inference. See `docs/QUALITY_LOG.md` for the full account of all three
 corrections to this record.
 
+## Visual-polish regression suite — added 2026-08-01
+
+`tests/e2e/visual-polish.spec.mjs` (Issue #11, `docs/QUALITY_LOG.md` QL-020)
+adds real-browser layout coverage for five confirmed visual/responsive
+defects and their fixes: learner-facing "Image needed" authoring placeholders
+in Modules 8–12, oversized figures with captions that could read as detached,
+too-small/faint caption and source text, over-wide prose lines, and an
+overlapping/truncating mobile header around 390px. Each defect was
+independently measured against the real rendered page (bounding boxes,
+computed styles) before any change, per the standing discipline in
+`docs/QUALITY_LOG.md`.
+
+The suite runs across both existing Playwright projects (1280×900 desktop,
+390×844 narrow/mobile) and, per the acceptance criteria's explicit viewport
+matrix, also exercises 1440×900, 768×1024, and 360×800 directly via
+`test.use({ viewport })`/`page.setViewportSize()` within the file — 40 test
+runs total, all passing. It checks:
+
+- no page-level horizontal overflow at any of the five viewports
+- the hamburger, brand, Print, and Reset controls never overlap or get
+  clipped past the viewport edge at 768×1024, 390×844, or 360×800
+- the hamburger is reachable by real `Tab` presses (not `.focus()`), and the
+  hamburger/Print/Reset controls keep their accessible name
+  (`toHaveAccessibleName()`) and are operable via `.tap()` at the narrow
+  viewport — Print and Reset now carry an explicit `aria-label` matching
+  their visible text, so hiding the label text at ≤560px does not change
+  their accessible name
+- zero `.imgneeded` elements and zero "Image needed" text at any tested width
+- both embedded figures (Figure 8.1, Figure 10.1) stay within the viewport's
+  width and within 60% of its height at all five viewports
+- each figure's caption sits within 40px of its image (still visually
+  attached), and figcaption/`.src` font sizes stay at or above a 14px/13px
+  floor
+- a module paragraph stays under 85% of the content column's width while its
+  sibling table and quiz keep the full content width (proving the reading-
+  measure cap did not narrow full-width components)
+
+This is layout/bounding-box coverage, deliberately not pixel snapshots, for
+the reasons already stated for `tests/e2e/dashboard-layout.spec.mjs` above.
+It does not replace the still-open screen-reader review, and it does not
+address the dense, fully-expanded quiz/exercise disclosure noted as the
+recommended next isolated UX task in `docs/ROADMAP.md`.
+
+### README screenshot regenerated for the reading-measure change
+
+Global `p{max-width:70ch}` re-wraps the weighting chart's `.source-note`
+paragraph onto an extra line, which pushes the progress dashboard grid down
+by ~47px. The fixed capture height in `scripts/capture-readme-screenshot.mjs`
+was re-measured (not assumed) rather than left in place: the dashboard grid's
+bottom edge moved from ~1415.8px to ~1463.0px, so the capture viewport height
+changed from 1430 to 1477, keeping the same small margin before Module 1's
+own section begins (~1488.5px). Verified by locating `#dashboardGrid`'s
+bounding box directly in a real browser, and by visually inspecting the new
+capture to confirm all 17 dashboard cards, including cards 16/17, render
+completely rather than being cut off mid-row as they would be at the old,
+now-too-short 1430px height.
+
 ## Gates still open
 
 ### Browser behavior

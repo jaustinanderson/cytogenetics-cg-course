@@ -656,6 +656,54 @@ entry does not claim Milestone 0 or Issue #1 is complete):
   which this work performs or is affected by. PR #10 is the implementation
   checkpoint for this work; see the PR for CI results and review status.
 
+A visual-polish pass (branch `claude/issue-11-visual-polish`, Issue #11,
+opened as a new, separately-scoped issue rather than under Issue #1) fixed
+five confirmed learner-facing visual/responsive defects:
+
+- Removed the five "Image needed" authoring/search placeholder figures from
+  Modules 8–12, replacing each with a short explanatory sentence where the
+  surrounding lesson did not already stand alone on its own. No new imagery
+  was fabricated, generated, downloaded, or embedded; the image manifest and
+  its provenance records are unchanged (still 19 records, 2 embedded, 17
+  needed) — this is a UI change, not a rights-review decision, which
+  `docs/ROADMAP.md` Milestone 2B continues to govern.
+- Capped embedded figure images (`max-height:min(52vh,460px)`) so they stay
+  proportionate to surrounding content, and raised figcaption/`.src`/`.lic`
+  font sizes and `.src`'s color for comfortable reading.
+- Added a global `p{max-width:70ch}` reading-measure cap; confirmed tables,
+  quizzes, and exercises (which use `div`/`td`, not `p`) are unaffected.
+- Fixed a mobile-header flexbox bug (the brand-name wrapper's default
+  `min-width:auto` refused to shrink) that caused the course name to
+  visually overlap the Print button at 390px/360px; brand text now shrinks
+  and ellipsizes, and Print/Reset become icon-only at ≤560px with an
+  explicit `aria-label` preserving their accessible name.
+- Every defect was independently measured against the real rendered page
+  (bounding boxes, computed styles, before/after screenshots) before
+  `index.html` changed, per the standing discipline in
+  `docs/QUALITY_LOG.md`; see QL-020 for the full diagnosis and fix record.
+- `tests/e2e/visual-polish.spec.mjs` adds 40 real-browser test runs across
+  1440×900, 1280×900, 768×1024, 390×844, and 360×800 covering: no
+  horizontal overflow, no header-control overlap/clipping, keyboard- and
+  touch-accessible header controls with preserved accessible names, zero
+  "Image needed" text, figures constrained to the viewport, and captions
+  that stay attached and readable.
+- `docs/assets/course-overview.png` regenerated (1440×1477, was 1440×1430):
+  the reading-measure change re-wraps a paragraph above the dashboard grid,
+  pushing it down ~47px; the capture height was re-measured, not assumed,
+  confirming all 17 dashboard cards render completely.
+- Deliberately does **not** address the page's dense, fully-expanded
+  quiz/exercise disclosure (every quiz/exercise item renders expanded at
+  once) — recorded in `docs/ROADMAP.md` as the recommended next isolated UX
+  task, not attempted here to keep this change narrowly scoped.
+- No scientific text, question, answer, rationale, progress data, analytics
+  semantics, storage schema, or public API behavior changed. `npm test`
+  (structural + DOM behavior + deployed-revision-verifier hash checks) and
+  the full local Playwright suite (`npm run test:e2e`, including the new
+  spec) passed. The deployed suite (`npm run test:deployed`) targets the
+  live `main` URL, which this unmerged branch does not affect and which
+  this repository has no per-pull-request preview environment for (see
+  `docs/VALIDATION.md`), so it was not re-run against this branch's changes.
+
 ## Read these files first
 
 1. `README.md`
