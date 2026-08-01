@@ -745,7 +745,137 @@ in `docs/QUALITY_LOG.md` QL-020's addendum:
 
 `tests/e2e/visual-polish.spec.mjs` now runs 46 test-run instances (was 40);
 all local validation (`npm test`, full `npm run test:e2e`) passed again
-after these corrections.
+after these corrections. PR #12 merged to `main` as commit
+`197eec4b75c4f6dc3c339335c21e7680e8402434` after independent review, and
+the full post-merge chain (Validate course, Pages build/deployment,
+deployed Pages smoke test, deployment-record + live-hash match, remote
+images, console, and responsive checks) was confirmed green.
+
+A quiz/exercise progressive-disclosure redesign (branch
+`claude/issue-11-progressive-disclosure`, Issue #11 — a new, separately
+scoped isolated task, not a continuation of the merged PR #12) implements
+the "next isolated UX task" both PR #12 and Issue #11 explicitly deferred:
+
+- Diagnosed the actual rendered behavior before choosing a design: at
+  1440×900, quiz/exercise widgets accounted for 46.6% of the document's
+  scroll height (110,209px total) with 636 answer buttons simultaneously
+  present and focusable on a single fresh load.
+- Every quiz (`buildQuiz`) and exercise (`buildExercise`) widget, plus the
+  six static exercise mount points, is now a native `<details>`/
+  `<summary>` element, collapsed by default — the same pattern already
+  established in this course for case-study reveal cards. The summary
+  communicates activity type, title, item count, and a "Not
+  started"/"In progress"/"Completed" status word; the pre-existing
+  `.qh-score`/`.eh-score` "X / Y" text is unchanged (12+ existing test
+  assertions depend on that exact format).
+- Measured after the change, same methodology: document height dropped
+  45.2% at 1440×900 (110,209px → 60,386px), 42.8% at 768×1024, and 34.2%
+  at 390×844; quiz/exercise share of document height dropped to 2.3–2.5%;
+  visible answer buttons on a fresh load dropped from 636 to 0 (provably,
+  via a `.quiz[open] .qopt`/`.exer[open] .eopt` selector).
+- Two real defects were found and fixed before merge, plus one
+  test-harness incompatibility caught the same way — full diagnosis in
+  `docs/QUALITY_LOG.md` QL-021:
+  1. A confirmed WCAG AA contrast failure in the new summary text
+     (`--ink-faint` measured 4.31–4.41:1 against the summary backgrounds,
+     just under the 4.5:1 threshold), found by the existing axe-core suite
+     on the very first run. Fixed by switching to `--ink-soft`
+     (6.23–6.39:1).
+  2. A confirmed print-exposure defect: the first fix mirrored the
+     pre-existing `details.card>.card-body{display:block !important}`
+     print rule, but a mutation test passed unexpectedly, prompting direct
+     verification with `page.emulateMedia({ media: 'print' })` rather than
+     trusting `getComputedStyle().display`. That check found closed
+     `<details>` content is suppressed by Chromium via an internal
+     rendering behavior — not a plain `display` value — so the CSS
+     override never worked, and neither did the pre-existing `.card-body`
+     version it was copied from. Fixed by setting the real `open` property
+     in the existing `beforeprint`/`afterprint` handlers (force-open every
+     `<details>` for print, restore true prior state afterward), which
+     also fixes the latent pre-existing case-study gap as a side effect.
+  3. The initial fix used `element.dataset`, which
+     `tests/dom-harness.mjs`'s minimal `Node` class does not implement;
+     switched to `setAttribute`/`getAttribute`/`removeAttribute`, already
+     fully supported, no harness changes needed.
+- `tests/e2e/progressive-disclosure.spec.mjs` (rewritten by the correction
+  pass below) covers default state, click/keyboard/touch expand-collapse,
+  status visible while collapsed, no progress/API side effects from
+  toggling or loading, status/score correctly derived from persisted
+  progress after reload (partial and completed, quiz and exercise),
+  correctness-changing reattempts replacing rather than double-counting a
+  prior result, Reset behavior, print exposure (including a regression
+  check for the pre-existing case-study cards), and no narrow-viewport
+  overflow. Existing suites that interact with quiz/exercise content were
+  updated to open the relevant disclosure first, via a small
+  `openDisclosure()` helper (independent copies in the local and deployed
+  suites' `fixtures.mjs`, matching this repository's existing
+  suite-independence convention).
+- Mutation-tested: removing the `beforeprint` force-open loop made the
+  print-exposure test fail immediately with a clear "Expected: visible /
+  Received: hidden" message; reverted before commit.
+- No scientific text, question, answer, rationale, progress data, analytics
+  semantics, storage schema, stable question/exercise ID, or public API
+  behavior changed. `npm test` and the full local Playwright suite passed
+  (one `init.spec.mjs` mobile failure reproduced as the pre-existing,
+  already-documented `networkidle` resource-contention flake — QL-007/008
+  — confirmed by passing cleanly in isolation, not a regression).
+- Before/after screenshots and the full measurement table are published as
+  a hosted Artifact (no images committed to the repository), linked from
+  the PR description.
+
+Independent review of that still-open, unmerged draft PR (#13) found a
+blocking defect, corrected 2026-08-01 on the same branch — full diagnosis
+and mutation-test evidence in `docs/QUALITY_LOG.md` QL-021's addendum:
+
+- **Collapsed summaries disagreed with persisted progress after reload.**
+  Reproduced against the exact reported commit
+  (`eb5ee8be2ff8d481a18825934f8f4578bd71437e`): a fresh quiz read "Not
+  started — 0 / 5," correctly updated to "In progress — 1 / 5" after
+  answering, but reset to "Not started — 0 / 5" after a real reload even
+  though `getProgress().answers` still held the correct record; the first
+  exercise had the same defect. Because these widgets are now collapsed by
+  default, the summary is the learner's primary status indicator, so this
+  was newly blocking product behavior, not the already-known per-question
+  lock-rendering gap. Root cause: `buildQuiz`/`buildExercise` always
+  initialized score/answered to zero on every render instead of deriving
+  them from `state.answers`/`state.exercises`.
+- **Fix:** both functions now seed score/answered from the persisted
+  records before rendering (read-only — confirmed to fire zero `progress`
+  events), and both answer/choice handlers now capture the prior record
+  before `recordAnswer`/`recordExercise` overwrites it, so a reattempt
+  (only reachable across a reload, since a locked item cannot be clicked
+  twice in one render) replaces the score/count delta rather than counting
+  the item as newly answered a second time.
+- **Tests:** the quiz and exercise reload tests were rewritten to expect
+  the persisted summary and score, not "Not started"; added completed-state
+  (not just partial-state) reload coverage for both; added a
+  correctness-changing reattempt test for both, asserting exactly one
+  distinct recorded item ID and its attempt count (`n`) reaching `2`; added
+  a fixed-sentinel load test proving stored records are read but never
+  rewritten and that loading plus toggling every disclosure fires zero
+  `progress` events. Removed `"singular item counts read naturally"`,
+  which asserted against a copy of the pluralization ternary inline in the
+  test itself and never touched real product code — no real quiz/exercise
+  in this course has exactly one item and the public API cannot construct
+  one, so there was no way to replace it with a test that does exercise
+  product code.
+- **Mutation-tested:** reducing the seeding loop to a no-op (the exact
+  pre-fix behavior) failed four distinct tests across both projects (8
+  runs) with specific messages, including a revealing `Received: "-1 / 6"`
+  from the reattempt test's score-decrement logic firing against a
+  wrongly-assumed-absent prior record. Reverted; confirmed a clean diff and
+  all tests passing again.
+- **The PR's unverified find-in-page claim was softened.** Native
+  `<details>` auto-expanding on a find-in-page match is real Chromium
+  behavior, but Playwright has no API surface for the browser's native
+  find bar, so it was never actually verified here. Reworded in the PR
+  body to describe expected native behavior this repository has not
+  itself verified, rather than an established fact.
+- `npm test`, `npm run test:behavior`, the focused
+  `progressive-disclosure.spec.mjs` (all passing), and the complete local
+  Playwright suite (154 passed, 4 skipped, 0 failed) were run after this
+  correction. PR #13 remains draft, open, and unmerged pending a second
+  independent review.
 
 ## Read these files first
 

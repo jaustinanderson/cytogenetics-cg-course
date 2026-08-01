@@ -190,26 +190,45 @@ test.describe("keyboard: mobile menu", () => {
   });
 });
 
-test.describe("keyboard: quiz interaction", () => {
-  test("a quiz option is keyboard-reachable by real Tab order, has a meaningful name, is visibly focused, and Enter answers the item", async ({
+test.describe("keyboard: quiz disclosure and interaction", () => {
+  test("the quiz disclosure is keyboard-reachable, has a meaningful name reflecting its collapsed state, and Enter opens it; the option inside is then keyboard-reachable, visibly focused, and Enter answers the item", async ({
     page,
   }) => {
     test.slow(); // reaching a module-1 quiz option takes ~50 real Tab presses
     await page.goto("/");
     const mount = page.locator('.quiz-mount[data-quiz="m1"]');
     const question = await page.evaluate(() => window.CytoCourse.getQuestions("m1")[0]);
+    const quiz = mount.locator(".quiz");
+    const summary = quiz.locator("> summary");
+
+    await expect(summary).toHaveAccessibleName(/Quick check/);
+    await expect(summary).toHaveAccessibleName(/Not started/);
+
+    await tabUntilFocused(page, summary, { max: 60, label: "m1 quiz disclosure summary" });
+    await assertVisibleFocus(page, summary, { label: "m1 quiz disclosure summary" });
+
+    await expect(quiz).toHaveJSProperty("open", false);
+    await page.keyboard.press("Enter");
+    await expect(quiz).toHaveJSProperty("open", true);
+
     const item = mount.locator(".qitem").first();
     const options = item.locator(".qopt");
     const target = options.nth(question.a);
 
     await expect(target).toHaveAccessibleName(new RegExp(escapeRegExp(question.o[question.a])));
 
-    await tabUntilFocused(page, target, { max: 80, label: "m1 first question, correct option" });
+    // A fresh bounded search from wherever focus landed after the summary
+    // toggled open -- native <details> keeps focus on the summary itself
+    // after Enter, so this continues forward from there, not from the top.
+    await tabUntilFocused(page, target, { max: 30, label: "m1 first question, correct option" });
     await assertVisibleFocus(page, target, { label: "m1 first question, correct option" });
 
     await page.keyboard.press("Enter");
     await expect(target).toHaveClass(/correct/);
     await expect(mount.locator(".qh-score")).toHaveText("1 / 5");
+    // Only 1 of 5 questions is answered at this point, so the disclosure's
+    // status reads "In progress", not "Completed" -- that requires all 5.
+    await expect(summary).toHaveAccessibleName(/In progress/);
 
     // Answered options are disabled and therefore removed from the tab
     // order -- confirm that is really true rather than merely styled, so a
@@ -220,8 +239,8 @@ test.describe("keyboard: quiz interaction", () => {
   });
 });
 
-test.describe("keyboard: exercise interaction", () => {
-  test("an exercise option and the Next control are each keyboard-reachable by real Tab order, visibly focused, and keyboard-operable in sequence", async ({
+test.describe("keyboard: exercise disclosure and interaction", () => {
+  test("the exercise disclosure is keyboard-reachable, has a meaningful name reflecting its collapsed state, and Enter opens it; the option and Next control inside are then each keyboard-reachable, visibly focused, and keyboard-operable in sequence", async ({
     page,
   }) => {
     test.slow(); // the first exercise sits well into the document; ~200+ real Tab presses
@@ -229,11 +248,22 @@ test.describe("keyboard: exercise interaction", () => {
     const host = page.locator(".exer").first();
     const key = await host.getAttribute("data-exer");
     const items = await page.evaluate((k) => window.CytoCourse.getExercises()[k].items, key);
+    const summary = host.locator("> summary");
+
+    await expect(summary).toHaveAccessibleName(/Exercise/);
+    await expect(summary).toHaveAccessibleName(/Not started/);
+
+    await tabUntilFocused(page, summary, { max: 220, label: "first exercise disclosure summary" });
+    await assertVisibleFocus(page, summary, { label: "first exercise disclosure summary" });
+
+    await expect(host).toHaveJSProperty("open", false);
+    await page.keyboard.press("Enter");
+    await expect(host).toHaveJSProperty("open", true);
 
     const opt = host.locator(".eopt").nth(items[0].answer);
     await expect(opt).toHaveAccessibleName(items[0].options[items[0].answer]);
 
-    await tabUntilFocused(page, opt, { max: 280, label: "first exercise, correct option" });
+    await tabUntilFocused(page, opt, { max: 20, label: "first exercise, correct option" });
     await assertVisibleFocus(page, opt, { label: "first exercise, correct option" });
 
     await page.keyboard.press("Enter");

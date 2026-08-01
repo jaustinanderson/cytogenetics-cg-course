@@ -1308,3 +1308,256 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   set of matched elements against a real DOM before trusting a global
   selector's simplicity.
 
+## QL-021 — Quiz/exercise progressive disclosure: measured density claim, and two real defects caught before shipping
+
+- **Status:** Corrected on branch `claude/issue-11-progressive-disclosure`, before merge (Issue #11)
+- **Finding:** Before choosing a design, the actual rendered behavior was
+  measured directly (not assumed): at 1440×900, quiz and exercise widgets
+  together accounted for 46.6% of the document's total scroll height
+  (110,209px), with 636 answer buttons (`.qopt`/`.eopt`) simultaneously
+  present and focusable on a single fresh page load — the concrete,
+  measured shape of the "overwhelming density" Issue #1 named. Every quiz
+  (`buildQuiz`) and exercise (`buildExercise`) widget, plus the six static
+  `<div class="exer">` mount points, was converted to a native
+  `<details>`/`<summary>` element, collapsed by default, following the
+  same disclosure pattern already established in this course for
+  case-study reveal cards (`details.card`). While implementing and testing
+  this, two real defects were found and fixed before commit, plus one
+  test-harness incompatibility caught the same way:
+  1. **A confirmed WCAG AA contrast failure**, found by the existing
+     `tests/e2e/accessibility.spec.mjs` axe-core scan on the very first run
+     against the new markup (including the unmodified "freshly loaded
+     course" state, which does not even open a disclosure): the new
+     `.qh-meta`/`.eh-meta` summary text used `--ink-faint` (`#637181`) on
+     the `--primary-050`/`--iscn-bg` summary backgrounds, measuring 4.41:1
+     and 4.31:1 against the 4.5:1 AA threshold for normal text.
+  2. **A confirmed print-exposure defect, in both the new code and a
+     pre-existing case-study pattern.** The first implementation added
+     `body.printmode .quiz-body,.exer-body{display:block !important}`,
+     mirroring the existing (pre-existing, not introduced here)
+     `details.card>.card-body{display:block !important}` print rule. A
+     mutation test on this rule passed unexpectedly, which prompted
+     checking the mechanism directly with
+     `page.emulateMedia({ media: 'print' })` rather than trusting a
+     `getComputedStyle().display` check — and found that closed
+     `<details>` content is suppressed by Chromium via an internal
+     rendering behavior, not a plain `display` value: `getComputedStyle
+     (...).display` reports `"block"` for content inside a closed
+     `<details>`, and `getBoundingClientRect()` on that content returns a
+     real, nonzero-but-stale layout box, while the content is genuinely
+     not painted, not hit-testable, and not visible under real print-media
+     emulation. This meant the `.card-body` print override — already
+     present in this codebase before this work — never actually worked
+     either; it was a latent, unverified defect this investigation
+     happened to surface, not something introduced by this change.
+  3. **A dependency-free-harness incompatibility**, caught by
+     `npm run test:behavior` immediately after adding the real fix: the
+     initial fix used `element.dataset.printReopened`, but
+     `tests/dom-harness.mjs`'s minimal `Node` class (intentionally
+     implementing only the DOM surface the course actually uses) has no
+     `dataset` getter, so the print test crashed with `Cannot set
+     properties of undefined`.
+- **Impact:** None shipped — all three were caught by the project's own
+  committed test suites or by direct verification before any commit. Had
+  finding 1 shipped, the disclosure summary text would have failed WCAG AA
+  contrast on every one of the 17 quiz and 6 exercise widgets, all now
+  visible on first paint (they were not previously flagged because the
+  text did not exist before this change). Had finding 2 shipped as
+  originally written, printing the course would have silently omitted
+  every quiz and exercise question — the exact opposite of the "print
+  output must expose all educational content regardless of on-screen
+  collapsed state" requirement — while the test guarding it would have
+  falsely reported success, and the same pre-existing gap for case-study
+  cards would have remained unnoticed and undocumented.
+- **Correct action:** Apply the same standing discipline this log already
+  uses throughout (QL-007/008/013/014): a test passing unexpectedly is as
+  worth investigating as one failing unexpectedly, and a claim about
+  what a CSS override achieves must be checked against the real rendering
+  behavior it depends on (here, real print-media emulation), not a proxy
+  (computed `display`) that turned out not to track it.
+- **Correction:**
+  1. Changed `.qh-meta`/`.eh-meta` from `--ink-faint` to `--ink-soft`
+     (`#46596d`), verified at 6.39:1 and 6.23:1 against their respective
+     backgrounds — comfortably clear of the 4.5:1 threshold, not just
+     barely passing. Re-ran the full axe-core suite (all 5 states, both
+     viewports): zero violations.
+  2. Replaced the CSS-only print override with a JavaScript fix in the
+     existing `beforeprint`/`afterprint` handlers (`wirePrintReset()`):
+     `beforeprint` records each `<details>` element's real prior state via
+     a `data-print-reopened` attribute (not `.dataset`, for harness
+     compatibility) and force-sets `.open = true`; `afterprint` restores
+     each one's genuine prior state and removes the marker attribute. This
+     is a correct fix precisely because it sets the real `open` property
+     rather than fighting the internal suppression with CSS, and it
+     uniformly covers `details.card` (fixing the pre-existing gap as a
+     side effect), `.quiz`, and `.exer` with one mechanism. Verified with
+     real `page.emulateMedia({ media: 'print' })` (not computed-style
+     checks) that: a closed quiz's questions/options are genuinely visible
+     and present under print media; a closed exercise's current
+     prompt/options are genuinely visible; a pre-existing closed
+     case-study `details.card` is also genuinely visible; and a disclosure
+     that was already open before printing (a genuine prior user action)
+     remains open afterward, not force-closed.
+  3. Switched the two attribute accesses from `.dataset.printReopened` to
+     `setAttribute('data-print-reopened', …)`/`getAttribute(…)`/
+     `removeAttribute(…)`, already fully supported by the existing harness
+     with no harness changes needed. `npm run test:behavior` passed
+     36/36 again.
+- **Measured result:** Re-measuring after the fix, on the same real page,
+  at the same viewports: document height dropped from 110,209px to
+  60,386px at 1440×900 (-45.2%), 114,441px to 65,478px at 768×1024
+  (-42.8%), and 149,545px to 98,373px at 390×844 (-34.2%); quiz/exercise
+  share of document height dropped from 44–47% to 2.3–2.5%; and visible
+  answer buttons on a fresh load dropped from 636 to 0 (provably, via a
+  `.quiz[open] .qopt`/`.exer[open] .eopt` selector — 0 widgets are open by
+  default). See the published before/after evidence artifact linked from
+  the PR description for screenshots and the full measurement table.
+- **New tests:** `tests/e2e/progressive-disclosure.spec.mjs` covers default
+  collapsed state with informative summaries, click/keyboard/touch
+  expand-and-collapse, status persisting visibly while collapsed, that
+  opening/closing never touches stored progress or fires a `progress`
+  event, reload behavior (disclosure resets, recorded answer data does
+  not), Reset, and print exposure (including the case-study regression
+  check and the already-open-stays-open check). Existing suites
+  (`quiz-and-exercise`, `accessibility`, `api-print-console`, `init`,
+  `keyboard-navigation` locally; `identity-and-console`,
+  `quiz-and-persistence` in `tests/e2e-deployed/`) were updated to open the
+  relevant disclosure before interacting with content inside it, via a
+  small `openDisclosure()` fixture helper (an independent copy in each
+  suite's own `fixtures.mjs`, matching this repository's existing
+  local/deployed suite-independence convention).
+- **Mutation-tested:** removed the `beforeprint` force-open loop entirely;
+  the print-exposure test failed immediately with `expect(locator).
+  toBeVisible() failed ... Received: hidden`; reverted, confirmed
+  `git diff index.html` showed no remaining change, and the test passed
+  again.
+- **Prevention:** When a CSS override for a "make hidden content visible"
+  claim is added, verify it against the actual rendering mode it targets
+  (real print-media emulation for print CSS, not a computed-style proxy)
+  before trusting it — the same standing discipline this log applies
+  elsewhere, now specifically naming `<details>` content suppression as a
+  case where `display`/`getBoundingClientRect()` do not reliably reflect
+  true visibility, unlike ordinary `display:none` toggles.
+
+### Addendum — independent review of draft PR #13 found a blocking defect: collapsed summaries disagreed with persisted progress
+
+- **Status:** Corrected on the same branch, before merge
+- **Finding:** Independent review reproduced, against the exact commit
+  `eb5ee8be2ff8d481a18825934f8f4578bd71437e`: a fresh quiz summary correctly
+  read "Not started — 0 / 5"; answering one question correctly updated it
+  to "In progress — 1 / 5" within the same session; but reloading the page
+  reset the summary to "Not started — 0 / 5" even though
+  `getProgress().answers` still held the correct, persisted record for
+  that question. The first exercise behaved identically. Root cause:
+  `buildQuiz`/`buildExercise` always initialized `score = 0, answered = 0`
+  (or the equivalent local closure variables) unconditionally on every
+  render, never reading `state.answers`/`state.exercises` first — a
+  regression this progressive-disclosure change newly exposed, because the
+  collapsed summary is now the learner's primary (often only-visible)
+  status indicator, not a pre-existing limitation that could be dismissed
+  the way the per-question visual lock-state gap already was.
+  Independently reproduced before making any change, per the standing
+  discipline in this log: fresh → "Not started | 0/5"; answered → "In
+  progress | 1/5"; reload → back to "Not started | 0/5" while
+  `getProgress().answers` correctly showed `{"c":true,"n":1,...}` for the
+  answered question, and the equivalent exercise mismatch, confirmed the
+  same way.
+- **Impact:** None shipped to a merged `main` — caught on the open draft
+  PR before merge. Had it shipped, every learner who left and returned to
+  a quiz or exercise (the normal way anyone resumes studying) would have
+  seen "Not started" on content they had already partially or fully
+  completed, directly contradicting the actual, correctly-persisted
+  progress data one API call away — exactly the "unclear collapsed state"
+  outcome this feature's own stated requirements said to avoid.
+- **Correct action:** Derive the initial summary status/score from the
+  existing `state.answers`/`state.exercises` records on every render,
+  the same source of truth `getStats()`/`getUnmastered()` already use, and
+  handle a reattempt (only reachable across a reload, since a locked item
+  cannot be clicked twice within one render) by replacing the prior
+  result rather than double-counting the item as newly answered.
+- **Correction:**
+  1. `buildQuiz` now seeds `answered`/`score` by scanning `qs` and reading
+     `state.answers[item.id]` for each question before building any
+     markup — read-only, no `recordAnswer`/`saveProgress` call, so loading
+     a quiz with existing records never fires a `progress` event.
+     `buildExercise` does the equivalent, keyed by the same
+     `key + '-' + (i+1)` id `recordExercise` already writes.
+  2. A shared `summaryStatus(answeredCount, total)` helper (`total<=0 ||
+     answeredCount<=0` → "Not started"; `answeredCount>=total` →
+     "Completed"; else "In progress") replaces the two independent inline
+     ternaries, so the initial render and every later update use
+     identical status logic.
+  3. Both click handlers now read `state.answers[data.id]` /
+     `state.exercises[thisId]` *before* calling `recordAnswer`/
+     `recordExercise` (which overwrites it), to determine whether this
+     item already had a record (`wasCounted`) and, if so, whether it was
+     previously correct (`wasCorrect`). Score is adjusted by the delta
+     between the old and new correctness (`+1` wrong→right, `-1`
+     right→wrong, unchanged same→same); `answered`/`answeredCount` is
+     incremented only when `!wasCounted`, so a reattempt updates the score
+     to the latest result without counting the question as newly
+     answered a second time.
+  4. Verified directly (not just via the new automated tests) with a
+     manual reproduction script covering fresh → answered → reload
+     (partial) → reattempt with the opposite correctness → complete → reload
+     (completed) → Reset, confirming each state exactly matches the
+     required behavior, including the score correctly decrementing on a
+     correct→wrong reattempt without the distinct-question count changing.
+- **New tests, `tests/e2e/progressive-disclosure.spec.mjs`:**
+  - Rewrote the quiz reload test (previously asserted "Not started" after
+    reload, which was actually asserting the bug) to expect "In progress"
+    and the correct score; added the equivalent exercise reload test.
+  - Added dedicated "fully answered" (Completed) reload coverage for both
+    quiz and exercise, not just "partially answered."
+  - Added a reattempt test for both quiz and exercise: answer once, reload,
+    answer the *same* item again with the opposite correctness, and assert
+    the score reflects only the latest result while exactly one distinct
+    item id is recorded (`Object.keys(...).length === 1`) and its stored
+    attempt count (`n`) is `2`, not a fresh `1`.
+  - Added a load-time test that seeds `localStorage` with fixed-value
+    sentinel records (`ts`/`n` set to arbitrary, checkable constants)
+    before navigation, then asserts those exact values are byte-for-byte
+    unchanged after load (proving the seeding code only reads, never
+    writes) and that zero `progress` events fire from either the load or
+    from toggling every disclosure on the page afterward.
+  - Removed `"singular item counts read naturally"`: it evaluated a copy
+    of the pluralization ternary inline in the test itself and asserted
+    against that copy, never touching `buildQuiz`/`buildExercise` or the
+    rendered DOM at all — a vacuous test that could not have caught a
+    regression in the real template. No real quiz or exercise in this
+    course has exactly one item, and the public API provides no way to
+    construct one, so there is no way to exercise this branch against
+    real product code without modifying the product; removed rather than
+    kept as false coverage.
+- **Mutation-tested:** temporarily reduced `buildQuiz`'s seeding loop to a
+  no-op (the exact pre-fix behavior). Four distinct tests failed
+  immediately across both projects (8 runs) with specific, correctly
+  diagnostic messages: the partial-reload test reported `Expected: "In
+  progress", Received: "Not started"`; the completed-reload test reported
+  `Expected: "Completed", Received: "Not started"`; the sentinel-seed test
+  failed on the derived summary text; and the reattempt test — reachable
+  only because the *other* tests already prove seeding is broken — reported
+  a revealing `Received: "-1 / 6"` (the reattempt's score-decrement logic
+  correctly fired for a wrongly-assumed-absent prior record, going
+  negative), an even clearer signal than a simple mismatch. Reverted;
+  confirmed `git diff index.html` showed no remaining change and all
+  tests passed again.
+- **The PR's browser find-in-page claim was unverified and has been
+  softened.** The PR description stated that native `<details>` gives
+  "browser find-in-page support for free" and is "friendlier to find-in-page
+  than the old always-expanded markup." This is a real, documented Chromium
+  behavior (auto-expanding a closed `<details>` when a find-in-page match
+  falls inside it), but it was never actually verified in this repository:
+  Playwright automates the page, not the browser's native find UI (no CDP
+  surface exposes the find bar), so this claim could not be exercised by
+  any test here. The PR body was reworded to describe this as expected
+  native `<details>` behavior this repository has not itself verified,
+  rather than an established fact.
+- **Prevention:** When a UI redesign makes a summary/status element the
+  *primary* (often only visible) indicator of state, any pre-existing gap
+  in restoring that state from persisted data stops being a dismissible,
+  already-known limitation and becomes a newly blocking defect — the
+  visibility of the gap changed even though the underlying storage logic
+  did not. Re-evaluate every "we already knew about this" claim against
+  what is now actually user-visible before waving it through unchanged.
+

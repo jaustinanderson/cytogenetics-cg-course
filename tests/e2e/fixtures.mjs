@@ -30,4 +30,17 @@ export const test = base.extend({
   },
 });
 
+/**
+ * Quiz and exercise widgets (`.quiz`, `.exer`) are native `<details>`
+ * elements, collapsed by default (Issue #11 progressive-disclosure). Content
+ * inside a closed `<details>` is not visible/actionable, so any test that
+ * only needs the content open as setup -- not testing the toggle itself --
+ * should open it this way rather than duplicating a click-the-summary step.
+ * Tests that specifically verify the disclosure control (keyboard/touch
+ * activation, accessible state) open it through a real interaction instead.
+ */
+export async function openDisclosure(locator) {
+  await locator.evaluate((el) => { el.open = true; });
+}
+
 export { expect };

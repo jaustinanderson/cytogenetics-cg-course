@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures.mjs";
+import { test, expect, openDisclosure } from "./fixtures.mjs";
 
 test.describe("page initialization and rendered mounts", () => {
   test("the course loads, renders its mounts, and reports the documented API version", async ({
@@ -41,8 +41,11 @@ test.describe("page initialization and rendered mounts", () => {
     // exercise answer are the interactions most likely to surface a runtime
     // warning that the DOM harness cannot observe (real event wiring, real
     // focus/scroll side effects).
-    await page.locator(".quiz-mount").first().locator(".qopt").first().click();
+    const firstQuizMount = page.locator(".quiz-mount").first();
+    await openDisclosure(firstQuizMount.locator(".quiz"));
+    await firstQuizMount.locator(".qopt").first().click();
     const exer = page.locator(".exer").first();
+    await openDisclosure(exer);
     await exer.locator(".eopt").first().click();
     const toggle = page.locator("#navToggle");
     if (await toggle.isVisible()) await toggle.click();

@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures.mjs";
+import { test, expect, openDisclosure } from "./fixtures.mjs";
 
 test.describe("deployed page identity, content counts, and console cleanliness", () => {
   test("the deployed page responds over HTTPS with the expected title and heading", async ({ page }) => {
@@ -44,8 +44,12 @@ test.describe("deployed page identity, content counts, and console cleanliness",
   }) => {
     await page.goto("./");
 
-    await page.locator(".quiz-mount").first().locator(".qopt").first().click();
-    await page.locator(".exer").first().locator(".eopt").first().click();
+    const firstQuizMount = page.locator(".quiz-mount").first();
+    await openDisclosure(firstQuizMount.locator(".quiz"));
+    await firstQuizMount.locator(".qopt").first().click();
+    const exer = page.locator(".exer").first();
+    await openDisclosure(exer);
+    await exer.locator(".eopt").first().click();
     const toggle = page.locator("#navToggle");
     if (await toggle.isVisible()) {
       await toggle.tap();

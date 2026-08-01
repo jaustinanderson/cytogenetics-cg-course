@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { test, expect } from "./fixtures.mjs";
+import { test, expect, openDisclosure } from "./fixtures.mjs";
 
 /**
  * Automated WCAG scanning via axe-core, run against the real, fully rendered
@@ -52,10 +52,21 @@ test.describe("automated WCAG scanning (axe-core)", () => {
     expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
   });
 
+  test("a freshly opened, unanswered quiz has no detectable axe-core violations", async ({ page }) => {
+    await page.goto("/");
+    const mount = page.locator('.quiz-mount[data-quiz="m1"]');
+    await mount.locator(".quiz > summary").click();
+    await expect(mount.locator(".quiz")).toHaveJSProperty("open", true);
+
+    const results = await new AxeBuilder({ page }).analyze();
+    expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+  });
+
   test("an answered quiz item has no detectable axe-core violations", async ({ page }) => {
     await page.goto("/");
     const mount = page.locator('.quiz-mount[data-quiz="m1"]');
     const question = await page.evaluate(() => window.CytoCourse.getQuestions("m1")[0]);
+    await openDisclosure(mount.locator(".quiz"));
     await mount.locator(".qitem").first().locator(".qopt").nth(question.a).click();
     await expect(mount.locator(".qh-score")).toHaveText("1 / 5");
 
@@ -68,6 +79,7 @@ test.describe("automated WCAG scanning (axe-core)", () => {
     const host = page.locator(".exer").first();
     const key = await host.getAttribute("data-exer");
     const items = await page.evaluate((k) => window.CytoCourse.getExercises()[k].items, key);
+    await openDisclosure(host);
     await host.locator(".eopt").nth(items[0].answer).click();
     await expect(host.locator(".exer-fb")).toHaveClass(/show/);
 

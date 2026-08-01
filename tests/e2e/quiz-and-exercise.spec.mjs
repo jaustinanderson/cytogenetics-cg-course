@@ -1,10 +1,11 @@
-import { test, expect } from "./fixtures.mjs";
+import { test, expect, openDisclosure } from "./fixtures.mjs";
 
 test.describe("quiz and exercise interaction", () => {
   test("a correct quiz answer scores, locks the item, and shows the rationale", async ({ page }) => {
     await page.goto("/");
     const mount = page.locator('.quiz-mount[data-quiz="m1"]');
     const question = await page.evaluate(() => window.CytoCourse.getQuestions("m1")[0]);
+    await openDisclosure(mount.locator(".quiz"));
     const item = mount.locator(".qitem").first();
     const options = item.locator(".qopt");
 
@@ -27,6 +28,7 @@ test.describe("quiz and exercise interaction", () => {
     const mount = page.locator('.quiz-mount[data-quiz="m2"]');
     const question = await page.evaluate(() => window.CytoCourse.getQuestions("m2")[0]);
     const wrongIndex = question.a === 0 ? 1 : 0;
+    await openDisclosure(mount.locator(".quiz"));
     const item = mount.locator(".qitem").first();
     const options = item.locator(".qopt");
 
@@ -44,6 +46,7 @@ test.describe("quiz and exercise interaction", () => {
     await page.goto("/");
     const mount = page.locator('.quiz-mount[data-quiz="m1"]');
     const question = await page.evaluate(() => window.CytoCourse.getQuestions("m1")[0]);
+    await openDisclosure(mount.locator(".quiz"));
     const item = mount.locator(".qitem").first();
     const options = item.locator(".qopt");
 
@@ -62,6 +65,7 @@ test.describe("quiz and exercise interaction", () => {
     const host = page.locator(".exer").first();
     const key = await host.getAttribute("data-exer");
     const items = await page.evaluate((k) => window.CytoCourse.getExercises()[k].items, key);
+    await openDisclosure(host);
 
     await expect(host.locator(".exer-prompt")).toHaveText(items[0].prompt);
     await expect(host.locator(".exer-next")).toBeDisabled();
@@ -83,6 +87,7 @@ test.describe("quiz and exercise interaction", () => {
     const host = page.locator(".exer").first();
     const key = await host.getAttribute("data-exer");
     const items = await page.evaluate((k) => window.CytoCourse.getExercises()[k].items, key);
+    await openDisclosure(host);
 
     for (let index = 0; index < items.length; index += 1) {
       await host.locator(".eopt").nth(items[index].answer).click();

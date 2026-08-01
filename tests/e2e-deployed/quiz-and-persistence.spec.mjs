@@ -1,4 +1,4 @@
-import { test, expect, V2_KEY } from "./fixtures.mjs";
+import { test, expect, V2_KEY, openDisclosure } from "./fixtures.mjs";
 
 test.describe("deployed quiz interaction and reload persistence", () => {
   test("a representative quiz interaction works through emulated touch", async ({ page }) => {
@@ -10,6 +10,9 @@ test.describe("deployed quiz interaction and reload persistence", () => {
     await page.goto("./");
     const mount = page.locator('.quiz-mount[data-quiz="m1"]');
     const question = await page.evaluate(() => window.CytoCourse.getQuestions("m1")[0]);
+    const quiz = mount.locator(".quiz");
+    await quiz.locator("summary").tap();
+    await expect(quiz).toHaveJSProperty("open", true);
     const item = mount.locator(".qitem").first();
     const options = item.locator(".qopt");
 

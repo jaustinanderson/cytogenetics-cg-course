@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures.mjs";
+import { test, expect, openDisclosure } from "./fixtures.mjs";
 
 test.describe("public API, import/export, and print", () => {
   test("the public API exposes its documented surface and read methods return copies", async ({ page }) => {
@@ -41,8 +41,9 @@ test.describe("public API, import/export, and print", () => {
     });
 
     const question = await page.evaluate(() => window.CytoCourse.getQuestions("m1")[0]);
-    await page
-      .locator('.quiz-mount[data-quiz="m1"]')
+    const quizMount = page.locator('.quiz-mount[data-quiz="m1"]');
+    await openDisclosure(quizMount.locator(".quiz"));
+    await quizMount
       .locator(".qitem")
       .first()
       .locator(".qopt")
@@ -52,6 +53,7 @@ test.describe("public API, import/export, and print", () => {
     const host = page.locator(".exer").first();
     const key = await host.getAttribute("data-exer");
     const items = await page.evaluate((k) => window.CytoCourse.getExercises()[k].items, key);
+    await openDisclosure(host);
     await host.locator(".eopt").nth(items[0].answer).click();
 
     await page.evaluate(() => {
@@ -77,8 +79,9 @@ test.describe("public API, import/export, and print", () => {
     await page.goto("/");
     await page.locator('.mark-complete[data-mod="m1"]').click();
     const question = await page.evaluate(() => window.CytoCourse.getQuestions("m9")[0]);
-    await page
-      .locator('.quiz-mount[data-quiz="m9"]')
+    const m9Mount = page.locator('.quiz-mount[data-quiz="m9"]');
+    await openDisclosure(m9Mount.locator(".quiz"));
+    await m9Mount
       .locator(".qitem")
       .first()
       .locator(".qopt")
