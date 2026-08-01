@@ -32,6 +32,8 @@ itemized record of what has and has not been independently reviewed.
 - Print-friendly course output
 - A documented `window.CytoCourse` integration API
 - A 19-entry image manifest with separate license and redistribution fields
+- Self-hosted IBM Plex Sans/Mono webfonts and locally embedded approved images
+  (no third-party font/image host requested at runtime)
 - Automated structural and content-contract validation
 
 ## Run the course
@@ -83,14 +85,15 @@ The application is client-only:
 - Export and import are exposed through the public API.
 - There is no course account, telemetry system, or progress server.
 
-Progress and answer history are not transmitted. The current page does request
-Google Fonts and two public-domain images from external hosts, so those hosts
-receive ordinary web-request metadata such as an IP address and user agent.
-A 2026-07-31 deployed-suite run observed both images completing delivery with
-nonzero natural dimensions from one development environment's network (see
-[Validation](./docs/VALIDATION.md)); that is one successful observation, not
-a guarantee for every visitor's network. Localizing those assets is still an
-open roadmap decision.
+Progress and answer history are not transmitted. As of 2026-07-31, the IBM
+Plex Sans/Mono webfonts and the two approved public-domain images are
+committed to this repository (`assets/fonts/`, `assets/images/`) and served
+from the page's own origin — the page no longer requests any third-party
+font or image host at runtime. Only the figures' source-page/credit links
+(Wikimedia Commons, the CDC Public Health Image Library) remain external,
+click-through references, which send no request until a visitor follows them.
+See [Third-party notices](./THIRD_PARTY_NOTICES.md) for exact upstream
+sources, retrieval dates, licenses, and file hashes.
 
 ## Integration API
 
@@ -224,19 +227,20 @@ open/close/backdrop/module-link behavior driven by Playwright's
 touch-emulated `.tap()` (with `aria-expanded` checked against the sidebar's
 actual on-canvas position, not just its class name), a touch-emulated quiz
 interaction, reload persistence in an isolated browser context, and the
-actual decoded natural dimensions of the two approved remote images. The
-target URL is configurable via `DEPLOYED_BASE_URL`. This suite is separate
-from `npm test` and `npm run test:e2e` on purpose — it requires outbound
-internet access and must never make an ordinary local or PR run depend on
-it. `scripts/verify-deployed-revision.mjs` guards against testing a stale
-deployment by combining two checks — GitHub's own deployments API record for
-the target commit, and a cache-busted SHA-256 comparison of the live
-`index.html` against the checked-out one — instead of assuming a fixed wait
-was long enough. Each check proves something narrower than "this is
+actual decoded natural dimensions of the two approved images, now served
+locally from this deployment's own origin rather than a third-party image
+host. The target URL is configurable via `DEPLOYED_BASE_URL`. This suite is
+separate from `npm test` and `npm run test:e2e` on purpose — it requires
+outbound internet access and must never make an ordinary local or PR run
+depend on it. `scripts/verify-deployed-revision.mjs` guards against testing a
+stale deployment by combining two checks — GitHub's own deployments API
+record for the target commit, and a cache-busted SHA-256 comparison of the
+live `index.html` against the checked-out one — instead of assuming a fixed
+wait was long enough. Each check proves something narrower than "this is
 definitely the currently served commit" on its own; see
 [Validation](./docs/VALIDATION.md) for the precise scope of each, the exact
-remote-image result observed, and the distinction between touch *emulation*
-and physical touch hardware.
+image-delivery result observed, and the distinction between touch
+*emulation* and physical touch hardware.
 
 Passing these tests does **not** establish scientific correctness. Scientific
 review, rights review, a representative screen-reader review, and release
@@ -258,6 +262,9 @@ input, it does not exercise real touch hardware or a mobile OS/browser.
 ├── package.json
 ├── playwright.config.mjs         # Real-browser (Chromium) smoke-test config
 ├── playwright.deployed.config.mjs # Deployed HTTPS Pages smoke-test config
+├── assets/
+│   ├── images/                   # Locally embedded, approved public-domain course images
+│   └── fonts/                    # Self-hosted IBM Plex Sans/Mono webfonts (SIL OFL 1.1)
 ├── scripts/
 │   ├── verify-deployed-revision.mjs # Deployment-record + live-hash check before testing
 │   └── capture-readme-screenshot.mjs # Regenerates docs/assets/course-overview.png

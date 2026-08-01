@@ -98,17 +98,32 @@ or roadmap statement is not a contract unless a committed test proves it.
 
 ## External resources
 
-The production page currently requests:
+As of 2026-07-31, the production page requests **no third-party font or
+image host at runtime**. It previously requested IBM Plex Sans/Mono from
+Google Fonts and the two approved images (NHGRI, CDC PHIL) from their
+respective hosts; both are now committed to this repository:
 
-- IBM Plex Sans and IBM Plex Mono from Google Fonts
-- one public-domain NHGRI image through Wikimedia Commons
-- one public-domain CDC PHIL image
+- `assets/fonts/ibm-plex-sans/` and `assets/fonts/ibm-plex-mono/` — the exact
+  IBM Plex Sans (400/500/600/700) and IBM Plex Mono (400/500/600) weights the
+  course actually uses, as WOFF2 files sourced from the official
+  [IBM/plex](https://github.com/IBM/plex) GitHub release assets, under the
+  bundled SIL Open Font License 1.1
+- `assets/images/` — the same two approved public-domain images the course
+  already displayed (NHGRI 46,XY karyotype; CDC PHIL trisomy-21 karyotype),
+  fetched from the exact URLs previously used at runtime
+
+See [Third-party notices](../THIRD_PARTY_NOTICES.md) for exact upstream
+source URLs, retrieval dates, licenses, and file hashes for every localized
+asset. Only the figures' source-page/credit links remain external,
+click-through references — they send no request until a visitor follows
+them.
 
 No external JavaScript is executed. The former Tailwind browser-CDN script was
 unused and removed in v1.1.1.
 
-The course runs without the remote images because each has an explanatory
-fallback. Font and asset localization remains an explicit roadmap decision.
+The course runs without the two images because each has an explanatory
+fallback (now guarding against a local file-delivery failure rather than a
+third-party network failure).
 
 ## Restructuring trigger
 

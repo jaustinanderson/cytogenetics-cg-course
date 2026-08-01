@@ -101,7 +101,18 @@ the course.
   regenerated after the fix. Reproducibility (same environment) is
   verified by comparing SHA-256 hashes of the raw capture across two runs,
   not by file size
-- [ ] Decide whether to localize remote fonts and the two approved images
+- [ ] Decide whether to localize remote fonts and the two approved images —
+  decided and implemented 2026-07-31 on branch
+  `claude/issue-1-asset-localization` (Issue #1), **not yet merged**: both
+  approved images (NHGRI 46,XY; CDC PHIL trisomy-21) are committed to
+  `assets/images/` byte-for-byte as previously served remotely, and the
+  exact IBM Plex Sans/Mono weights the course uses are self-hosted from the
+  official `IBM/plex` GitHub release assets under SIL OFL 1.1, replacing the
+  Google Fonts request. Source-page/credit links remain external. See
+  `THIRD_PARTY_NOTICES.md` for exact sources, hashes, and license text, and
+  `docs/VALIDATION.md` for the new structural guard and updated
+  local/deployed Playwright coverage. Leave this checkbox unchecked until
+  the draft PR is independently reviewed and merged
 - [x] Record a question-by-question scientific review status before removing
   the beta warning — `docs/SCIENTIFIC_REVIEW.md` records the current status
   honestly: **no independently reviewed question, exercise, flashcard, or

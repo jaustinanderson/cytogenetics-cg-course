@@ -6,6 +6,29 @@ All notable repository changes are recorded here.
 
 ### Added
 
+- `assets/images/`: the two previously remote, approved course images —
+  `nhgri-human-male-karyotype-46xy.png` and
+  `cdc-phil-12504-trisomy21-karyotype.jpg` — committed byte-for-byte as
+  fetched from the exact URLs the page already displayed remotely (no
+  re-encoding or editing). See `THIRD_PARTY_NOTICES.md` for retrieval dates,
+  SHA-256 hashes, and license basis
+- `assets/fonts/ibm-plex-sans/` and `assets/fonts/ibm-plex-mono/`: the exact
+  IBM Plex Sans (400/500/600/700) and IBM Plex Mono (400/500/600) weights
+  the course uses, as unmodified WOFF2 files from the official
+  [IBM/plex](https://github.com/IBM/plex) GitHub release assets
+  (`@ibm/plex-sans@1.1.0`, `@ibm/plex-mono@2.5.0`), under the bundled SIL
+  Open Font License 1.1 (license text and file hashes recorded in
+  `THIRD_PARTY_NOTICES.md`)
+- A structural check (`tests/validate-course.mjs`) proving every `@font-face`
+  `src` and both embedded figures' `<img src>` resolve to a local
+  `assets/` path, that no reference to `fonts.googleapis.com`/
+  `fonts.gstatic.com` remains, that every referenced local asset actually
+  exists on disk with nonzero size, and that the figures' external
+  source-page/credit links are unchanged. Mutation-tested
+- `tests/e2e/local-images.spec.mjs`: a local real-browser check (both
+  viewport projects) that both embedded images load with nonzero natural
+  dimensions from the local static server — previously untestable without
+  network access, now possible because the images are local
 - `docs/SCIENTIFIC_REVIEW.md`: the current scientific-review status record.
   States plainly that no question, exercise, flashcard, or case content has
   an independently recorded scientific review yet (Draft, per
@@ -150,6 +173,21 @@ All notable repository changes are recorded here.
 
 ### Changed
 
+- The course no longer requests any third-party font or image host at
+  runtime: the Google Fonts `<link>`/`preconnect` tags are replaced with
+  local `@font-face` rules, and both figures' `<img src>` and the
+  `IMAGES` data array now point at the local `assets/images/` files
+  (external source-page/credit links are unchanged). See
+  `docs/ARCHITECTURE.md` "External resources" and `docs/VALIDATION.md`
+  "Asset localization"
+- `tests/e2e-deployed/remote-images.spec.mjs` renamed to
+  `local-images.spec.mjs` and updated to assert same-origin delivery, now
+  that the images it checks are localized rather than third-party
+- `docs/assets/course-overview.png` regenerated after self-hosting the
+  fonts: a pixel-buffer diff against the previous version showed only
+  text-glyph anti-aliasing differences (a different font binary rendering
+  the same text), no layout/content change — see `docs/VALIDATION.md`
+  "README screenshot"
 - `npm test` now runs structural validation followed by 36 DOM behavior checks
 - Validation documentation now distinguishes the DOM harness from the
   real-browser Playwright suite, and both from the accessibility, screen-reader,
