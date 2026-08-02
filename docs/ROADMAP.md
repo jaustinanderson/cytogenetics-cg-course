@@ -174,7 +174,7 @@ review status stable before adding 46 questions.
 
 - [x] Add explicit stable IDs to every exercise item; stop deriving progress
   identity from array position — branch `claude/issue-2-stable-exercise-ids`
-  (Issue #2, PR TBD): every one of the 30 exercise items across the 6
+  (Issue #2, PR #16): every one of the 30 exercise items across the 6
   exercise sets now carries an explicit, literal `id` field (`EXERCISES.*`
   in `index.html`), and `migrateExerciseIds()` deterministically and
   idempotently renames any surviving legacy position-derived key
