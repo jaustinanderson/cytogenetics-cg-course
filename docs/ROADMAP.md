@@ -196,7 +196,7 @@ review status stable before adding 46 questions.
   normalization, and broader API contract tests) is explicitly out of
   scope for that PR and stays open
 - [x] Define and validate a versioned progress-import schema — branch
-  `claude/issue-2-import-hardening` (Issue #2, PR TBD): `importJSON()` now
+  `claude/issue-2-import-hardening` (Issue #2, PR #17): `importJSON()` now
   validates the complete envelope and every nested `modules`/`answers`/
   `exercises` entry against an exact, documented schema before anything
   observable changes, rejects unsupported schema versions and any
