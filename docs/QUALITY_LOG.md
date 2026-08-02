@@ -2424,3 +2424,164 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   the exact same special-casing a hostile-input test is trying to
   exercise.
 
+
+## QL-024 — Stale question/exercise ID policy defined, and a real contamination bug found and fixed while defining it
+
+- **Status:** Corrected on branch `claude/issue-2-stale-id-policy`
+  (Issue #2), before merge.
+- **Finding:** Neither this course nor its documentation had ever defined
+  what happens when a `modules`/`answers`/`exercises` key in persisted or
+  imported progress no longer corresponds to anything in the current
+  `MODULES`/`QUIZZES`/`EXERCISES` data — the roadmap tracked "decide how
+  stale question/exercise IDs are handled during import" as an explicitly
+  open item. While auditing every consumer of `state.answers`/
+  `state.exercises`/`state.modules` to design that policy, found that
+  `getStats()`'s top-level `questionsAnswered`, `questionsCorrect`, and
+  `overallPct` counted **every** key in `state.answers`, with no check
+  against currently authored content — unlike `tally()` (the `byDomain`/
+  `byTopic`/`byDifficulty` breakdown a few lines away in the same file),
+  which already filtered via `if(!q){ return; }`. Confirmed as a real,
+  working bug by direct execution before writing any fix: importing a
+  state whose *only* `answers` entry was a fabricated id
+  (`"totally-fake-question-id"`) produced `{questionsAnswered:1,
+  questionsCorrect:1, overallPct:100}` — a fully fabricated 100% accuracy
+  figure from a record that does not correspond to any real, current
+  question.
+- **Impact:** None shipped as a *new* defect — this bug already existed on
+  `main` (inherited unchanged from the original `getStats()`
+  implementation, predating this branch) and was caught and fixed within
+  this same branch before merge, as part of defining the policy that
+  would otherwise have needed to explain away this exact contamination.
+  Had a stale-ID policy been documented without first finding and fixing
+  this, the policy's own "cannot count toward current... accuracy...
+  figures" guarantee would have been false the moment it was written.
+- **Cause:** `getStats()` and `tally()` were written at different times
+  (`tally()` already existed; the top-level `questionsAnswered`/
+  `questionsCorrect`/`overallPct` fields were added to `getStats()`
+  separately) and never audited against each other for consistency — both
+  read `state.answers`, but only one of the two checked membership against
+  current content before counting.
+- **Correct action:** When multiple functions read the same underlying
+  store for related purposes, audit them side by side for the same
+  filtering discipline, not just individually for internal correctness —
+  `tally()`'s own correctness didn't surface `getStats()`'s inconsistency
+  until both were read together against the same adversarial input.
+- **Correction — the policy, in full:** **Preserve the record, filter at
+  read.** A stale key is never deleted, moved, quarantined, or rejected by
+  `loadProgress()`, `migrateExerciseIds()`, or `importJSON()` — it stays
+  in the ordinary `modules`/`answers`/`exercises` map under its original
+  id. "Is this id current" is instead decided fresh, at read time, by
+  every current-facing consumer checking membership in the live
+  `MODULES`/`QUIZZES`/`EXERCISES` data — which `doneCount()`, `tally()`,
+  `getUnmastered()`, `getWeakAreas()`, and every quiz/exercise render
+  already did; `getStats()`'s three top-level fields were fixed to match,
+  mirroring `tally()`'s exact `if(!q){ return; }` pattern via the same
+  `questionIndex()` lookup. A stale record therefore cannot count toward
+  completion/mastery/accuracy/attempt figures, render as a current item,
+  attach itself to a different item after reordering (identity is always
+  the id string an item carries, never its array position), or fire a
+  misleading `answer`/`exercise` event (load/import never call
+  `recordAnswer()`/`recordExercise()`). **Reintroduction revives history**
+  automatically and with zero migration code, since staleness is a
+  computed property of an id, never a stored flag, and a record is never
+  moved anywhere — the moment an id becomes current again, its preserved
+  record is picked up by every consumer above.
+
+  **Alternatives considered and rejected:** rejecting the entire
+  imported/loaded state on any stale id (would destroy every learner's
+  entire progress on the next load after any ordinary content change —
+  the opposite of protecting valid progress); stripping stale records on
+  load/import (loses history permanently for no safety benefit over
+  preserving it, given preserve-and-filter-at-read already guarantees zero
+  contamination); quarantining stale records in a separate state field
+  (would need new migration code to move records in and out as an id
+  flips between known/unknown, a `SCHEMA_V`-relevant shape addition, and
+  corresponding `validateImportedState()` changes, for no isolation
+  benefit beyond what read-time filtering already proves it provides).
+
+  **Runtime-injected-question boundary**, explicitly *not* resolving the
+  separate content-pack decision: a runtime-injected question's answer
+  becomes stale the moment its session ends without re-injection (session-
+  only content is documented, pre-existing behavior) — this policy only
+  defines what happens to the already-recorded progress (preserved,
+  excluded from stats, revived if the same id is reintroduced by any
+  mechanism, including a future content pack); it does not decide whether
+  or how injected content should persist.
+
+  `markModule()` already rejecting an unknown module id outright
+  (Milestone 0) is a *different* guarantee — a write-time guard against
+  ever *creating* a new record for an id that was never valid — kept
+  explicitly distinct from this *read-time* policy for an *existing*
+  record whose id *used to be* valid; a dedicated test proves both hold
+  simultaneously without conflict.
+
+  **`SCHEMA_V` stays `2`:** no stored field's shape or meaning changes, no
+  new top-level state field is introduced, and nothing previously accepted
+  becomes rejected — only which records *count* toward current-facing
+  figures changes, correcting a silent inconsistency rather than imposing
+  a new restriction.
+
+  13 new tests in `tests/dom-behavior.mjs` (101 → 114 checks): known and
+  stale question records together in one state; known and stale exercise
+  records together (checked via a fresh boot's rendered `.eh-score`, since
+  re-rendering exercise widgets after `importJSON()` is a separate,
+  still-open Milestone 1 item this correction deliberately does not
+  implement); a state containing only stale records across all three maps;
+  an orphaned (non-migratable) legacy exercise key surviving migration
+  inert alongside a real legacy→stable migration in the same state;
+  reordering the live `QUIZZES` array and, separately,
+  `EXERCISES.ex7.items` (via the same script-injection technique QL-005
+  established) with a stale record present in each case; reload idempotency
+  after stale-state normalization (byte-identical storage across two
+  successive loads, and `getStats()` agreement, compared via
+  `JSON.stringify` rather than `assert.deepEqual` — see the note on
+  cross-realm object comparison below); a full export/import round trip
+  preserving a stale record value-for-value while excluding it from
+  reported stats on both sides; confirmation that loading/importing a
+  stale-only state fires no `answer`/`exercise` events, only the ordinary
+  `progress` event; import atomicity and storage-failure behavior holding
+  unchanged when stale ids are present alongside genuinely malformed data;
+  the `getProgress()`/`exportJSON()`-preserves vs. `getStats()`-excludes
+  vs. `markModule()`-still-guards distinction; and the runtime-injected-
+  question boundary test described above, including its reintroduction
+  half.
+
+  **A test-authoring pitfall caught while writing this suite:**
+  `assert.deepEqual`/`deepStrictEqual` (from `node:assert/strict`) checks
+  prototype identity, not just structural/enumerable-property equality.
+  `getStats()`'s `byDomain`/`byTopic`/`byDifficulty` fields, and `tally()`
+  generally, are built via raw object-literal syntax (`var out = {}`)
+  *inside* the app's own `vm` sandbox realm — a genuinely different
+  intrinsic `Object.prototype` from this test file's own realm, and (since
+  each `boot()` call creates a fresh `vm.createContext()`) different again
+  from a *second* `boot()`'s realm. `assert.deepEqual(stats.byDomain, {})`
+  and `assert.deepEqual(second.api.getStats(), statsAfterFirstLoad)` both
+  failed with "Values have same structure but are not reference-equal" —
+  confirmed directly with a minimal `vm`-based reproduction before
+  concluding this was the cause, not a real product defect. Fixed by
+  comparing via `JSON.stringify(...)` instead, this codebase's established
+  pattern for exactly this class of comparison (used extensively
+  elsewhere for the same underlying reason — see QL-006's atomicity
+  helper, which already compares `JSON.stringify(getProgress())` rather
+  than the live object for the identical reason, one layer up). Values
+  that instead pass through `clone()` (`getProgress()`'s and
+  `exportJSON()`'s round-trip through the *shared* `JSON` object
+  `tests/dom-harness.mjs` injects into the sandbox) do not hit this issue,
+  since that shared `JSON.parse` call always constructs its result objects
+  using the calling script's own (outer, test-file) realm intrinsics
+  regardless of which `vm` context invoked it — confirmed directly,
+  not assumed, before relying on the distinction across this suite.
+
+  **Mutation-tested:** (1) reverting `getStats()`'s fixed computation back
+  to the original `Object.keys(state.answers).length`-based one failed
+  exactly the five tests that depend on the fix, and no others; (2)
+  introducing an accidental "strip every exercise key that isn't a current
+  stable id" cleanup pass into `migrateExerciseIds()` — i.e., accidentally
+  reintroducing the rejected "strip stale records" alternative — failed
+  exactly the six tests that depend on preservation, and no others. Both
+  mutations reverted and confirmed byte-identical to the pre-mutation file
+  via `diff`.
+- **Prevention:** `docs/ARCHITECTURE.md` "Stale question/exercise/module
+  ID policy" records the full decision, alternatives, and guarantee list;
+  `docs/VALIDATION.md` records the corrected test-coverage list;
+  `docs/ROADMAP.md` checks off the roadmap item with the same summary.

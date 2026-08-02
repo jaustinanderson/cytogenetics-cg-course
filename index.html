@@ -3802,7 +3802,75 @@
      shape above is unchanged -- only the convention for which strings
      populate `exercises`'s keys changed -- and the migration is
      unconditional, deterministic, and cheap enough (at most 30 items) to
-     simply always run rather than gate behind a new version number. */
+     simply always run rather than gate behind a new version number.
+
+     STALE-ID POLICY (Issue #2, docs/QUALITY_LOG.md QL-024): a `modules`/
+     `answers`/`exercises` key can outlive the content it once described --
+     a question renumbered or removed in a later release, an exercise item
+     dropped from EXERCISES, a module deleted from MODULES, or a
+     runtime-injected question (addQuestions()) whose session ended before
+     any persistence mechanism for it exists (that mechanism itself is the
+     separate, still-open "content-pack" roadmap item -- this policy only
+     defines what happens to a progress record already recorded against an
+     id that current content doesn't recognize; it does not decide whether
+     runtime content should ever persist).
+
+     Policy: PRESERVE THE RECORD, NEVER SPECIAL-CASE IT ON WRITE. A stale
+     key is never deleted, moved, quarantined, or rejected by loadProgress(),
+     migrateExerciseIds(), or importJSON() -- it simply continues to sit in
+     the ordinary `modules`/`answers`/`exercises` map under its original id,
+     structurally indistinguishable from a current record. "Is this id
+     current" is instead decided FRESH, every time, at READ time, by every
+     current-facing consumer (doneCount(), tally(), getStats(), getUnmastered(),
+     getWeakAreas(), and every quiz/exercise render) checking membership in
+     the live MODULES/QUIZZES/EXERCISES data before counting, displaying, or
+     otherwise acting on a record -- never by iterating a stored map's own
+     keys and trusting all of them. A record for an id current content
+     doesn't recognize therefore contributes to nothing current: not
+     completion, not mastery/accuracy, not attempt totals, not a rendered
+     quiz/exercise item (which is only ever looked up by a CURRENTLY
+     rendered item's own id, never by iterating stored keys), and it cannot
+     attach itself to a different item after reordering (identity is
+     always the id string an item itself carries, never its array
+     position -- true for questions from the start, true for exercises
+     since QL-005, and unaffected by this policy).
+
+     REINTRODUCTION: because staleness is a live, computed property of an
+     id -- never a stored flag, and the record is never moved anywhere --
+     an id that becomes current again (the exact same id string appears in
+     MODULES/QUIZZES/EXERCISES once more) has its preserved record picked
+     up automatically by every consumer above, with zero migration code:
+     prior history REVIVES. This mirrors the id-stability convention this
+     course's content already depends on (a stable id is a permanent
+     identifier for one specific item; reusing an id for a materially
+     different item is an authoring error this policy does not defend
+     against, exactly as already true for `EXERCISES.*.items[].id` and
+     `QUIZZES[key][].id` before this policy existed).
+
+     REJECTED ALTERNATIVES:
+     - Reject the entire imported/loaded state on any stale id: would make
+       ordinary content maintenance (renumbering or removing one question)
+       destroy every existing learner's entire progress record on their
+       very next load -- the opposite of "protect valid user progress."
+     - Strip stale records on load/import: loses history permanently even
+       for the common case of a temporarily removed or renamed id being
+       restored later, with no compensating safety benefit over preserving
+       it -- preserve-and-filter-at-read achieves the same "cannot
+       contaminate current progress" guarantee at zero extra loss.
+     - Quarantine stale records in a separate state field: would require
+       new migration code to move a record in when it goes stale and back
+       out when it revives (an id can flip between known and unknown
+       across releases), a `SCHEMA_V`-relevant shape addition, and
+       corresponding `validateImportedState()` changes -- for no isolation
+       benefit beyond what read-time filtering already provides once every
+       consumer is proven to filter correctly (see the dedicated
+       regression tests this policy added).
+
+     SCHEMA_V is NOT bumped for this policy: no stored field's shape or
+     meaning changes, no new top-level state field is introduced, and nothing
+     previously accepted becomes rejected -- only which records COUNT toward
+     current-facing figures changes, which was already silently wrong (see
+     the getStats() fix below) rather than newly restricted. */
   var state = null;
 
   function blankState(){ return {v:SCHEMA_V, modules:{}, answers:{}, exercises:{}, started:Date.now()}; }
@@ -4274,11 +4342,27 @@
     });
     return out;
   }
+  /* Issue #2 stale-ID policy (docs/QUALITY_LOG.md QL-024): questionsAnswered/
+     questionsCorrect/overallPct used to count every key in state.answers,
+     including one belonging to a question no longer in the current QUIZZES
+     data (removed, renumbered, or a runtime-injected id whose session
+     ended) -- so a state containing only a stale answer record reported a
+     fabricated 100% overall accuracy, confirmed as a real bug by direct
+     execution before this fix. tally() (byDomain/byTopic/byDifficulty,
+     below) already filtered correctly via `if(!q){ return; }`; this makes
+     the top-level aggregate use the exact same idx-membership check, so
+     "is this id current" is decided identically everywhere in this
+     function. See the file-level PROGRESS comment for the full policy:
+     a stale record is never deleted or moved, only excluded from every
+     current-facing figure at read time. */
   function getStats(){
     var idx = questionIndex(), totalQ = Object.keys(idx).length;
-    var answered = Object.keys(state.answers).length;
-    var correct = 0;
-    Object.keys(state.answers).forEach(function(q){ if(state.answers[q].c){ correct++; } });
+    var answered = 0, correct = 0;
+    Object.keys(state.answers).forEach(function(qid){
+      if(!idx[qid]){ return; } // stale/unknown id: excluded from current stats
+      answered++;
+      if(state.answers[qid].c){ correct++; }
+    });
     return {
       modulesComplete: doneCount(),
       modulesTotal: TOTAL_MODULES,

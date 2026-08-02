@@ -1330,6 +1330,118 @@ real-export evidence behind the two documented size limits).
 No question, answer, rationale, scoring, quiz progress, analytics
 semantics, image, styling, layout, or accessibility presentation changed.
 
+## Stale question/exercise/module ID policy — added 2026-08-02
+
+`tests/dom-behavior.mjs` (Issue #2, `docs/QUALITY_LOG.md` QL-024) adds 13
+dependency-free checks (101 → 114) covering what happens when a
+`modules`/`answers`/`exercises` key no longer corresponds to anything in
+the current `MODULES`/`QUIZZES`/`EXERCISES` data. See
+`docs/ARCHITECTURE.md` "Stale question/exercise/module ID policy" for the
+full decision record, rejected alternatives, and the exact guarantee
+list. Policy in one line: a stale record is preserved under its original
+id and simply excluded from every current-facing figure at read time —
+never deleted, moved, or quarantined. Covers:
+
+- **mixed current/stale in one state:** a real, currently-known question
+  answer alongside a fabricated question id — `getStats()` counts only
+  the real one (`questionsAnswered`, `questionsCorrect`, `overallPct`),
+  and the stale record itself is preserved value-for-value in
+  `getProgress()`; the same for a real exercise-item outcome alongside a
+  fabricated exercise id, checked via a fresh boot's rendered
+  `.eh-score` (`importJSON()` does not re-render exercise widgets on
+  success — a separate, still-open Milestone 1 item this correction does
+  not implement, so exercise-rendering coverage here deliberately goes
+  through a fresh boot from seeded storage, not through `importJSON()`
+  directly)
+- **stale-only state:** modules/answers/exercises all holding only
+  fabricated ids produces zero `modulesComplete`/`questionsAnswered`/
+  `questionsCorrect` and a `null` `overallPct`, empty `byDomain`/
+  `byTopic`/`byDifficulty`, and every current question reported
+  unmastered with zero attempts — no throw, no miscounting
+- **orphaned legacy exercise key vs. a real migration in the same
+  state:** a legacy key matching a current item's own frozen `legacyId`
+  migrates normally; a legacy-*shaped* key matching no current item's
+  `legacyId` is preserved completely untouched, in both `getProgress()`
+  and the persisted `localStorage` record, and never reaches any current
+  item's rendered score
+- **reordering with a stale record present:** the live `QUIZZES.m1`
+  array reversed via the same script-injection technique QL-005
+  established, and separately `EXERCISES.ex7.items` reversed the same
+  way, each with a fabricated stale record present — in both cases the
+  stale record survives the reorder untouched under its own id, and does
+  not attach to whatever item now occupies its former array position
+- **reload idempotency:** a state seeded with both a real
+  legacy-to-stable migration and an orphaned legacy key, loaded twice in
+  succession — the second load performs zero further writes (byte-identical
+  persisted record) and `getStats()` agrees across both loads
+- **export/import round trip:** a stale record round-trips
+  value-for-value through `exportJSON()` → `importJSON()`, present in the
+  raw exported `state` on both sides, while the exported `stats` block
+  (and the fresh instance's `getStats()` after re-import) exclude it
+  throughout
+- **event correctness:** loading/importing a stale-only state fires no
+  `answer`/`exercise` events (nothing about accepting a stale record
+  should look like the learner just interacted with something), only the
+  ordinary `progress` event a genuinely persisted change already fires
+- **atomicity unaffected:** a stale-but-structurally-valid record sitting
+  next to a genuinely malformed one still causes full atomic rejection
+  (the existing QL-006 guarantee, unaffected by this policy); a
+  persistence failure during a stale-record-containing import still
+  leaves state/storage/events completely unchanged
+- **public-API/`markModule()` distinction:** `getProgress()`/
+  `exportJSON()` preserve a stale module record raw, `getStats()`
+  excludes it from `modulesComplete`, and `markModule()` still rejects an
+  *unknown* module id outright — a dedicated test proves this is a
+  different, write-time guard (never create a new record for an id that
+  was never valid) from the read-time policy above (an existing record
+  for an id that used to be valid), not a contradiction
+- **runtime-injected-question boundary:** a question added via
+  `addQuestions()` and answered within one session becomes stale the
+  moment a second session boots from the same storage without
+  re-injecting it (`getStats()` excludes it, `getProgress()` still shows
+  it), and reviving it (calling `addQuestions()` again with the same id,
+  standing in for any future reintroduction mechanism) picks the exact
+  preserved record back up automatically — proving the boundary without
+  resolving the separate, still-open content-pack format decision
+
+**A test-authoring pitfall caught while writing this suite:**
+`assert.deepEqual`/`deepStrictEqual` checks prototype identity, not only
+structural equality. `getStats()`'s `byDomain`/`byTopic`/`byDifficulty`
+(and `tally()` generally) are built via raw object-literal syntax inside
+the app's own `vm` sandbox realm, which has a genuinely different
+intrinsic `Object.prototype` from this test file's realm (and, since each
+`boot()` creates a fresh `vm.createContext()`, from a second `boot()`'s
+realm too) — `assert.deepEqual(stats.byDomain, {})` and comparing two
+different boots' full `getStats()` output both failed with "Values have
+same structure but are not reference-equal," confirmed with a minimal
+`vm` reproduction before concluding this was a test-authoring issue, not
+a product defect. Fixed by comparing via `JSON.stringify(...)` instead —
+this codebase's established pattern for exactly this comparison class
+(see QL-006's atomicity helper). Values that pass through `clone()`
+(`getProgress()`/`exportJSON()`, which round-trip through the *shared*
+`JSON` object `tests/dom-harness.mjs` injects into the sandbox) do not
+hit this, since `JSON.parse` always builds its result using the calling
+script's own realm intrinsics regardless of which `vm` context invoked
+it — confirmed directly before relying on the distinction.
+
+**Mutation-tested**, two mutations, each reverted and confirmed
+byte-identical via `diff`: (1) reverting `getStats()`'s fixed computation
+to the original `Object.keys(state.answers).length`-based one failed
+exactly the five tests that depend on the fix; (2) introducing an
+accidental "strip every exercise key that isn't a current stable id"
+cleanup pass into `migrateExerciseIds()` — the rejected "strip stale
+records" alternative, reintroduced by mistake — failed exactly the six
+tests that depend on preservation.
+
+**Schema-version decision:** `SCHEMA_V` stays `2`. No stored field's
+shape or meaning changes and nothing previously accepted becomes
+rejected; only which records count toward current-facing figures
+changes, correcting a silent inconsistency (see the `getStats()` bug
+above) rather than imposing a new restriction.
+
+No question, answer, rationale, scoring, image, styling, layout, or
+accessibility presentation changed.
+
 ## Gates still open
 
 ### Browser behavior

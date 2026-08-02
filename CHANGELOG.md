@@ -6,6 +6,31 @@ All notable repository changes are recorded here.
 
 ### Added
 
+- Stale question/exercise/module ID policy (`index.html`, Issue #2): a
+  `modules`/`answers`/`exercises` key that no longer corresponds to
+  current `MODULES`/`QUIZZES`/`EXERCISES` data (a renumbered or removed
+  question, a dropped exercise item, a deleted module, or a
+  runtime-injected question whose session ended) is preserved under its
+  original id — never deleted, moved, or quarantined by
+  `loadProgress()`, `migrateExerciseIds()`, or `importJSON()` — and
+  simply excluded from every current-facing figure at read time, decided
+  fresh by checking membership in the live content each time rather than
+  trusting a stored map's own keys. Reintroducing the same id later
+  revives its preserved history automatically, with no migration code.
+  Fixed a real, pre-existing bug found while defining this: `getStats()`'s
+  top-level `questionsAnswered`/`questionsCorrect`/`overallPct` counted
+  every key in `state.answers` regardless of whether the course still
+  recognized it — a state holding only a fabricated question id reported
+  a fabricated 100% overall accuracy, confirmed by direct execution
+  before the fix; `tally()` (`byDomain`/`byTopic`/`byDifficulty`) already
+  filtered correctly and the fix mirrors its exact pattern. Does not
+  decide whether runtime-injected content should persist (the separate,
+  still-open content-pack item) and does not bump `SCHEMA_V` (no stored
+  field's shape or meaning changes). 13 new dependency-free regression
+  tests in `tests/dom-behavior.mjs` (101 → 114), mutation-tested across
+  two mutations. See `docs/QUALITY_LOG.md` QL-024, and
+  `docs/ARCHITECTURE.md` "Stale question/exercise/module ID policy" for
+  the full decision record and rejected alternatives (Issue #2)
 - `validateImportedState()`/`validateImportEnvelope()` in `index.html`:
   `importJSON()` now validates the complete import — either a bare state
   object or an export wrapper whose own keys are exactly

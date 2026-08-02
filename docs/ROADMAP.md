@@ -242,7 +242,38 @@ review status stable before adding 46 questions.
   content-pack decision, provenance fields, image-manifest normalization,
   and broader API
   contract tests) is explicitly out of scope for that PR and stays open
-- [ ] Decide how stale question/exercise IDs are handled during import
+- [x] Decide how stale question/exercise IDs are handled during import —
+  branch `claude/issue-2-stale-id-policy` (Issue #2, draft PR): a
+  `modules`/`answers`/`exercises` key that no longer corresponds to
+  current `MODULES`/`QUIZZES`/`EXERCISES` data (a renumbered or removed
+  question, a dropped exercise item, a deleted module, or a
+  runtime-injected question whose session ended) is never deleted, moved,
+  or quarantined by `loadProgress()`, `migrateExerciseIds()`, or
+  `importJSON()` — it stays under its original id, and every
+  current-facing consumer decides "does this id count" by checking
+  membership in the live content at read time. A real, pre-existing bug
+  was found and fixed while defining this: `getStats()`'s top-level
+  `questionsAnswered`/`questionsCorrect`/`overallPct` counted every key in
+  `state.answers` with no check against current content (unlike `tally()`,
+  a few lines away, which already filtered correctly) — a state holding
+  only a fabricated question id reported a fabricated 100% overall
+  accuracy, confirmed by direct execution before the fix. Reintroducing a
+  stale id (the same string reappearing in current content) automatically
+  revives its preserved history, with no migration code, since staleness
+  is computed at read time rather than tracked as a stored flag. Does not
+  decide whether runtime-injected content should ever persist (the
+  separate, still-open content-pack item below) — only what happens to
+  progress already recorded against an id current content doesn't
+  recognize. Does not bump `SCHEMA_V` — no stored field's shape or
+  meaning changes, only which records count toward current-facing figures
+  does. See `docs/QUALITY_LOG.md` QL-024 for the full decision record,
+  rejected alternatives (reject-entire-state, strip-on-load,
+  quarantine-in-a-separate-field), and `docs/VALIDATION.md` for test
+  coverage. This closes only this item — the remaining Milestone 1 work
+  below (Reset/import re-render, storage-failure UI, analytics semantics,
+  content-pack decision, provenance fields, image-manifest normalization,
+  and broader API contract tests) is explicitly out of scope for that PR
+  and stays open
 - [ ] Ensure API Reset and import re-render both quizzes and exercises
 - [ ] Validate and communicate `localStorage` availability instead of silently
   claiming progress was saved
