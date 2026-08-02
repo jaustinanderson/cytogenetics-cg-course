@@ -207,6 +207,35 @@ test("exercise, flashcard, and image manifests match the baseline", () => {
   }
 });
 
+test("every exercise item has complete, unique, non-colliding stable and legacy id metadata", () => {
+  // Issue #2 / QL-005: exercise progress identity depends on every item
+  // carrying both an explicit stable `id` and a literal, frozen `legacyId`
+  // (the exact position-derived key that item held before this migration
+  // existed). Missing, blank, duplicate, or colliding values here would
+  // silently break migrateExerciseIds()'s guarantees.
+  const stableIds = [];
+  const legacyIds = [];
+  Object.entries(exercises).forEach(([key, exercise]) => {
+    exercise.items.forEach((item, i) => {
+      assert.equal(typeof item.id, "string", `${key}[${i}]: missing a string id`);
+      assert.ok(item.id.trim(), `${key}[${i}]: id must not be blank`);
+      assert.equal(typeof item.legacyId, "string", `${key}[${i}]: missing a string legacyId`);
+      assert.ok(item.legacyId.trim(), `${key}[${i}]: legacyId must not be blank`);
+      stableIds.push(item.id);
+      legacyIds.push(item.legacyId);
+    });
+  });
+
+  assert.equal(stableIds.length, 30, "30 exercise items across 6 sets");
+  assert.equal(new Set(stableIds).size, 30, "every stable id must be unique");
+  assert.equal(legacyIds.length, 30);
+  assert.equal(new Set(legacyIds).size, 30, "every legacy id must be unique");
+
+  const stableSet = new Set(stableIds);
+  const legacyOverlap = legacyIds.filter((id) => stableSet.has(id));
+  assert.deepEqual(legacyOverlap, [], "no legacy id may accidentally collide with any stable id");
+});
+
 test("quiz and exercise mounts map to declared data keys", () => {
   const quizMounts = [...html.matchAll(/data-quiz=["']([^"']+)["']/g)].map((match) => match[1]);
   const exerciseMounts = [...html.matchAll(/data-exer=["']([^"']+)["']/g)].map((match) => match[1]);

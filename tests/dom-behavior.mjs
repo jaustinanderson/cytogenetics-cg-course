@@ -390,54 +390,125 @@ test("migrating exercise ids is idempotent — a second load against already-mig
   assert.deepEqual(second.api.getProgress().exercises["ex10-i4"], { c: true, n: 1, ts: 111 });
 });
 
-test("a legacy/stable exercise-id conflict merges without double-counting or discarding either record", () => {
+/* Records carry no attempt-level identifiers or provenance, so when both a
+   legacy key and its item's stable key hold a record, the two attempt
+   histories cannot be exactly reconstructed or merged -- they might be
+   disjoint, but they might just as well overlap, and nothing in the stored
+   fields can tell the two cases apart. Summing `n` would silently
+   over-count in the overlapping case (see the mixed-tab example below), so
+   migrateExerciseIds() instead keeps the ENTIRE record -- c, n, and ts
+   together, never mixed from the two sides -- from whichever key was
+   written more recently. */
+
+test("a legacy/stable conflict keeps the entire newer record instead of summing — the mixed-version-tab overlap example", () => {
+  // Two tabs, different app releases, on the same item's history: tab B
+  // (new version) already migrated an earlier snapshot of 5 attempts to
+  // the stable key; tab A (old version), still open, then recorded one
+  // MORE attempt under the legacy key, so the legacy record's own n (6)
+  // already includes everything the stable snapshot (5) does, plus one.
+  // The true number of distinct attempts is 6. Summing 6 + 5 would report
+  // 11, silently double-counting the 5 attempts both records share.
   const env = boot({
     storage: {
       [V2_KEY]: JSON.stringify({
         v: 2, modules: {}, answers: {}, started: 0,
         exercises: {
-          "ex15-2": { c: false, n: 2, ts: 1000 }, // legacy record, older
-          "ex15-i2": { c: true, n: 3, ts: 5000 }, // stable record, newer
+          "ex15-2": { c: true, n: 6, ts: 2000 }, // tab A: legacy key, written after tab B's migration
+          "ex15-i2": { c: false, n: 5, ts: 1000 }, // tab B: stable key, the earlier migrated snapshot
         },
       }),
     },
   });
   assert.deepEqual(
     env.api.getProgress().exercises["ex15-i2"],
-    { c: true, n: 5, ts: 5000 },
-    "c comes from the later ts (the true last attempt), n is the sum of both counts, ts is the max of both",
+    { c: true, n: 6, ts: 2000 },
+    "the entire newer (legacy) record wins outright — n stays 6, not 11",
   );
-  assert.equal(env.api.getProgress().exercises["ex15-2"], undefined, "the legacy key is gone after the merge");
+  assert.equal(env.api.getProgress().exercises["ex15-2"], undefined, "the legacy key is gone after resolution");
 });
 
-test("a legacy/stable conflict with equal timestamps deterministically keeps the legacy record's correctness", () => {
+test("a newer stable record wins outright over an older legacy record", () => {
   const env = boot({
     storage: {
       [V2_KEY]: JSON.stringify({
         v: 2, modules: {}, answers: {}, started: 0,
         exercises: {
-          "ex14-5": { c: true, n: 1, ts: 42 },
-          "ex14-i5": { c: false, n: 1, ts: 42 },
+          "ex15-2": { c: false, n: 2, ts: 1000 }, // legacy, older
+          "ex15-i2": { c: true, n: 3, ts: 5000 }, // stable, newer
         },
       }),
     },
   });
-  assert.deepEqual(env.api.getProgress().exercises["ex14-i5"], { c: true, n: 2, ts: 42 });
+  assert.deepEqual(
+    env.api.getProgress().exercises["ex15-i2"],
+    { c: true, n: 3, ts: 5000 },
+    "the entire newer (stable) record wins outright, not an arithmetic merge of both",
+  );
+  assert.equal(env.api.getProgress().exercises["ex15-2"], undefined);
 });
 
-test("migration idempotency holds after a legacy/stable conflict was merged", () => {
+test("a newer legacy record wins outright over an older stable record", () => {
   const env = boot({
     storage: {
       [V2_KEY]: JSON.stringify({
         v: 2, modules: {}, answers: {}, started: 0,
-        exercises: { "ex10-1": { c: false, n: 1, ts: 10 }, "ex10-i1": { c: true, n: 1, ts: 20 } },
+        exercises: {
+          "ex10-1": { c: true, n: 4, ts: 9000 }, // legacy, newer
+          "ex10-i1": { c: false, n: 1, ts: 100 }, // stable, older
+        },
+      }),
+    },
+  });
+  assert.deepEqual(
+    env.api.getProgress().exercises["ex10-i1"],
+    { c: true, n: 4, ts: 9000 },
+    "the entire newer (legacy) record wins outright",
+  );
+  assert.equal(env.api.getProgress().exercises["ex10-1"], undefined);
+});
+
+test("a legacy/stable conflict with equal timestamps deterministically keeps the canonical stable record", () => {
+  const env = boot({
+    storage: {
+      [V2_KEY]: JSON.stringify({
+        v: 2, modules: {}, answers: {}, started: 0,
+        exercises: {
+          "ex14-5": { c: true, n: 1, ts: 42 }, // legacy
+          "ex14-i5": { c: false, n: 9, ts: 42 }, // stable -- deliberately different c/n so a mix-up is detectable
+        },
+      }),
+    },
+  });
+  assert.deepEqual(
+    env.api.getProgress().exercises["ex14-i5"],
+    { c: false, n: 9, ts: 42 },
+    "equal timestamps keep the entire canonical stable-key record, not the legacy one",
+  );
+  assert.equal(env.api.getProgress().exercises["ex14-5"], undefined);
+});
+
+test("migration idempotency holds after a legacy/stable conflict was resolved", () => {
+  const env = boot({
+    storage: {
+      [V2_KEY]: JSON.stringify({
+        v: 2, modules: {}, answers: {}, started: 0,
+        exercises: { "ex10-1": { c: false, n: 1, ts: 10 }, "ex10-i1": { c: true, n: 5, ts: 20 } },
       }),
     },
   });
   const afterMerge = env.storage.getItem(V2_KEY);
+  assert.deepEqual(
+    JSON.parse(afterMerge).exercises["ex10-i1"],
+    { c: true, n: 5, ts: 20 },
+    "sanity: the newer (stable) record won outright",
+  );
   const again = boot({ storage: { [V2_KEY]: afterMerge } });
-  assert.equal(again.storage.getItem(V2_KEY), afterMerge, "re-running after a merge performs zero further writes");
-  assert.deepEqual(again.api.getProgress().exercises["ex10-i1"], { c: true, n: 2, ts: 20 });
+  assert.equal(
+    again.storage.getItem(V2_KEY),
+    afterMerge,
+    "re-running after conflict resolution performs zero further writes",
+  );
+  assert.deepEqual(again.api.getProgress().exercises["ex10-i1"], { c: true, n: 5, ts: 20 });
 });
 
 test("answering a fresh exercise item records its outcome only under the stable id, never a position-derived key", () => {
@@ -560,6 +631,90 @@ test("reordering exercise items in source cannot attach stored history to a diff
     `1 / ${reorderedItems.length}`,
     "the reordered exercise's summary score (1 correct of 2 recorded) reflects both attempts, correctly attributed by id",
   );
+});
+
+/* --- migrateExerciseIds() must key each legacy record by its item's frozen
+   `legacyId`, never by recomputing a position-derived key from the item's
+   CURRENT array index. Otherwise a learner who first loads a later release
+   after EXERCISES has been reordered could have their legacy progress
+   migrated onto whichever item now occupies that position, not the item
+   it actually belongs to (the exact regression an index-based
+   `legacyExerciseId(key, i)` computed at migration time would reintroduce,
+   silently, the moment anything is ever reordered). This reorders the real
+   EXERCISES.ex7.items array via the same script-injection technique
+   BEFORE the seeded legacy record is ever loaded/migrated, so both the
+   fixture and the migration run against the mutated array. */
+test("a legacy-format record migrates to its ORIGINAL item's stable id even if EXERCISES has since been reordered, never to whatever item now occupies that array position", () => {
+  const originalFirstId = boot().api.getExercises().ex7.items[0].id; // "ex7-i1", read from the real (unreordered) data
+  const seededLegacyKey = legacyExerciseId("ex7", 0); // "ex7-1" -- the true historical key for that same item
+
+  const anchor = "/* ============================ FLASHCARDS ============================ */";
+  const mutatedScript = inlineScript.replace(anchor, `EXERCISES.ex7.items.reverse();\n\n  ${anchor}`);
+  assert.notEqual(mutatedScript, inlineScript, "the injection must actually change the executed script");
+
+  const env = createEnvironment(staticBody, {
+    storage: {
+      [V2_KEY]: JSON.stringify({
+        v: 2, modules: {}, answers: {}, started: 0,
+        exercises: { [seededLegacyKey]: { c: true, n: 3, ts: 999 } },
+      }),
+    },
+  });
+  vm.createContext(env.sandbox);
+  vm.runInContext(mutatedScript, env.sandbox, { filename: "index.inline.reordered-before-load.js", timeout: 15_000 });
+  env.api = env.sandbox.window.CytoCourse;
+
+  const reorderedItems = env.api.getExercises().ex7.items;
+  assert.notEqual(
+    reorderedItems[0].id,
+    originalFirstId,
+    "sanity: reordering before load really did change which item sits at position 0",
+  );
+
+  const progress = env.api.getProgress().exercises;
+  assert.deepEqual(
+    progress[originalFirstId],
+    { c: true, n: 3, ts: 999 },
+    "the record followed its ORIGINAL item's stable id (via its frozen legacyId), not whatever now occupies position 0",
+  );
+  assert.equal(
+    progress[reorderedItems[0].id],
+    undefined,
+    "the item that now occupies position 0 must not inherit history that was never its own",
+  );
+  assert.equal(progress[seededLegacyKey], undefined, "the legacy key is gone");
+});
+
+test("importing a legacy-format export migrates to its ORIGINAL item's stable id even after EXERCISES has been reordered", () => {
+  const anchor = "/* ============================ FLASHCARDS ============================ */";
+  const mutatedScript = inlineScript.replace(anchor, `EXERCISES.ex7.items.reverse();\n\n  ${anchor}`);
+  assert.notEqual(mutatedScript, inlineScript);
+
+  const env = createEnvironment(staticBody, {});
+  vm.createContext(env.sandbox);
+  vm.runInContext(mutatedScript, env.sandbox, { filename: "index.inline.reordered-import.js", timeout: 15_000 });
+  env.api = env.sandbox.window.CytoCourse;
+
+  const reorderedItems = env.api.getExercises().ex7.items;
+  const originalFirstId = "ex7-i1"; // the known, literal, frozen id
+  const seededLegacyKey = "ex7-1"; // the known, literal, frozen legacyId
+  assert.notEqual(reorderedItems[0].id, originalFirstId, "sanity: the reorder changed what sits at position 0");
+
+  const legacyExport = JSON.stringify({
+    exported: new Date(0).toISOString(),
+    state: {
+      v: 2, modules: {}, answers: {}, started: 0,
+      exercises: { [seededLegacyKey]: { c: true, n: 2, ts: 555 } },
+    },
+    stats: {},
+  });
+  const result = env.api.importJSON(legacyExport);
+  assert.equal(result.ok, true);
+
+  const progress = env.api.getProgress().exercises;
+  assert.deepEqual(progress[originalFirstId], { c: true, n: 2, ts: 555 });
+  assert.equal(progress[reorderedItems[0].id], undefined);
+  assert.equal(progress[seededLegacyKey], undefined);
 });
 
 /* ============================ reset ============================ */

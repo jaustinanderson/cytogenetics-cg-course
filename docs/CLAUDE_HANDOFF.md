@@ -952,43 +952,54 @@ work list and `docs/QUALITY_LOG.md` QL-005:
   (`EXERCISES.ex7`/`ex9group`/`ex9chrom`/`ex10`/`ex14`/`ex15`) now carries
   an explicit, literal `id` field (`"<key>-i<n>"`, e.g. `"ex7-i1"`) —
   deliberately a different string format from the legacy `"<key>-<n>"`
-  form so the two can never collide and migration is genuinely meaningful.
-  `buildExercise()`'s summary-seeding loop and its `choose()` handler now
-  read/write `state.exercises[it.id]` directly instead of recomputing a
-  position-derived key from the current render index.
+  form so the two can never collide and migration is genuinely meaningful
+  — plus a second literal, frozen `legacyId` field recording the exact
+  position-derived key that item held before this change (e.g.
+  `"ex7-1"`). `buildExercise()`'s summary-seeding loop and its `choose()`
+  handler now read/write `state.exercises[it.id]` directly instead of
+  recomputing a position-derived key from the current render index.
 - **Migration:** a new `migrateExerciseIds()` renames any surviving
-  legacy-format key to its item's real stable id. It is deterministic
-  (driven entirely by the live `EXERCISES` data, never a stored
-  "already migrated" flag) and idempotent (a second run against
+  legacy-format key — read from each item's own frozen `legacyId`, never
+  recomputed from its current array index — to its item's real stable id.
+  It is deterministic and idempotent (a second run against
   already-migrated state performs zero writes, verified by exact storage
   string equality). Called unconditionally from `loadProgress()` and from
   `importJSON()`.
 - **Conflict rule:** when both a legacy key and its item's stable key
-  already hold a record, merge rather than drop either side — `c` comes
-  from whichever record has the later `ts` (the true last attempt), `n` is
-  the **sum** of both attempt counts (the two keys can only both exist by
-  recording disjoint attempt sequences, so summing counts each real
-  attempt exactly once without ever double-counting one).
+  already hold a record, these records carry no attempt-level identifiers
+  or provenance, so their histories cannot be assumed disjoint or exactly
+  merged. Migration keeps the entire record (`c`, `n`, and `ts` together)
+  from whichever key was written more recently — a conservative
+  deterministic snapshot, not an arithmetic merge — with ties keeping the
+  canonical stable-key record.
 - **Schema-version decision:** `SCHEMA_V` stays `2`. The stored record's
   shape is unchanged — only the convention for which strings populate
   `exercises`'s keys — and the migration is cheap and safe enough (at most
   30 items) to simply always run rather than gate behind a version bump.
-- **Tests:** 12 new checks in `tests/dom-behavior.mjs` cover explicit
-  unique ids, id-travels-with-item-not-position, legacy migration (memory
-  and storage), idempotency (including after a conflict merge, via exact
-  storage-string equality), the conflict-merge rule and its tie-break,
-  fresh answers recorded only under stable ids, reload/export/import
-  round-trips, and importing a legacy-format export. A dedicated
-  end-to-end test runs the real product script with
-  `EXERCISES.ex7.items.reverse()` injected into a copy of the exact inline
-  script text, answers two items with deliberately different
-  correct/incorrect outcomes, and confirms each stays correctly attributed
-  to its own id after the reorder. **Mutation-tested**: disabling the
-  migration call failed exactly the 6 migration/conflict/idempotency/export
-  tests; separately reverting the stable-id lookup back to a
-  position-derived computation failed exactly the "recorded only under the
-  stable id" and reordering tests — both reverted and confirmed
-  byte-identical to the pre-mutation file via `diff` before committing.
+- **Tests:** 17 checks in `tests/dom-behavior.mjs` plus a structural
+  completeness check in `tests/validate-course.mjs` cover explicit unique
+  ids and legacy ids with no accidental collision,
+  id-travels-with-item-not-position, legacy migration (memory and
+  storage), idempotency (including after conflict resolution, via exact
+  storage-string equality), the snapshot conflict policy (a newer stable
+  record, a newer legacy record, an equal-timestamp tie, and a
+  mixed-version-tab overlap example proving `n` stays the true attempt
+  count rather than an inflated sum), fresh answers recorded only under
+  stable ids, and reload/export/import round-trips including a
+  legacy-format export. Two dedicated end-to-end tests run the real
+  product script with `EXERCISES.ex7.items.reverse()` injected into a
+  copy of the exact inline script text: one answers two items with
+  deliberately different correct/incorrect outcomes and confirms each
+  stays correctly attributed after the reorder; the other seeds a legacy
+  record and reorders the array *before* migration ever runs, confirming
+  the record follows its original item, not whichever item now occupies
+  that position. **Mutation-tested** across four separate mutations (each
+  reverted and confirmed byte-identical via `diff`): disabling the
+  migration call; reverting the stable-id lookup to a position-derived
+  computation; reverting the legacy-key lookup inside migration back to a
+  position-derived computation; and reverting the snapshot conflict
+  policy back to summing `n`. Each failed exactly the tests that claim to
+  cover it.
 - `tests/e2e/progressive-disclosure.spec.mjs`'s existing seeded-record test
   was updated to seed under `"ex7-i1"` (the real stable id) instead of the
   legacy `"ex7-1"`, keeping its original claim (no migration needed, no
@@ -1001,6 +1012,41 @@ work list and `docs/QUALITY_LOG.md` QL-005:
   format, image-manifest normalization) were touched. See
   `docs/QUALITY_LOG.md` QL-005 and `docs/VALIDATION.md` "Stable
   exercise-item identity" for the complete record.
+
+Independent review of that draft PR (#16) found two blocking correctness
+problems, corrected 2026-08-02 on the same branch — full diagnosis,
+counterexample, and mutation-test evidence in `docs/QUALITY_LOG.md`
+QL-005's addendum:
+
+1. **Legacy IDs were recomputed from current array position, not frozen.**
+   `migrateExerciseIds()` originally computed each item's legacy key from
+   its position in `EXERCISES[key].items` *at migration time* — the same
+   bug QL-005 exists to fix, one level up. A learner who skipped a release
+   and first loaded a later one after an item was reordered could have
+   had legacy progress migrated onto whichever item currently occupied
+   that position. The original reordering test didn't catch this because
+   it reordered *after* stable ids already existed, never exercising
+   legacy migration against a reordered array. Fixed by giving every item
+   a literal, frozen `legacyId` field and reading it directly; two new
+   tests reorder the array *before* migration runs and confirm the record
+   follows the correct item regardless.
+2. **The conflict rule's "disjoint sequences" claim was false.** Summing
+   `n` was justified by claiming a legacy and stable record "can only"
+   contain disjoint attempts. Counterexample: two browser tabs on
+   different app releases — one migrates an early 5-attempt snapshot to
+   the stable key, the other (still on the legacy key) later records a
+   6th attempt that already includes the first 5. Summing 6 + 5 reports
+   11 attempts for an item genuinely attempted 6 times. Replaced with a
+   conservative deterministic snapshot policy (keep the entire newer
+   record, never reconstruct one by mixing fields) and rewrote the
+   conflict tests around this exact counterexample plus four other
+   scenarios.
+
+`docs/ARCHITECTURE.md`, `docs/ROADMAP.md`, `docs/VALIDATION.md`, and
+`CHANGELOG.md` were all updated so none retain the disproven "disjoint
+sequences," "sum," or "never double-counts" claims. `npm test` and the
+full local Playwright suite passed after this correction. PR #16 remains
+draft, open, and unmerged pending a second independent review.
 
 ## Read these files first
 
