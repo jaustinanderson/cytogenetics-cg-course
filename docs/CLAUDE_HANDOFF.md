@@ -1073,6 +1073,86 @@ and confirmed `index.html` byte-identical via `diff` before committing.
 `npm test` and the full local Playwright suite passed again. PR #16
 remains draft, open, and unmerged pending further review.
 
+PR #16 was subsequently reviewed, approved, and squash-merged to `main`
+as `0d963a56a5069801d77665172a758564ca85f7fa`. Post-merge, an incident
+was caught and corrected within the same session: the PR body's summary
+sentence "It does **not** close #2" contained the literal substring
+"close #2", which GitHub's keyword auto-linker matched despite the
+negation and auto-closed Issue #2 on merge. Caught immediately, Issue #2
+was reopened within seconds and the PR body text corrected afterward to
+remove the pattern (confirmed via the repository's
+`closingIssuesReferences` GraphQL field that no closing link remained).
+Full post-merge chain (Validate course, Pages build/deployment, deployed
+Pages smoke test, deployment-record + live-hash match, and a direct
+isolated-browser check of the deployed migration/stable-id behavior) was
+confirmed green; see the comment on Issue #2 for the complete record.
+**Lesson for future PR/commit text near any issue number: avoid the
+literal substring `close #N`/`closes #N`/`fix #N`/`fixes #N` even inside
+a grammatically negated sentence — GitHub's matcher is a plain substring
+scan, not a natural-language parser.**
+
+A progress-import hardening pass (branch
+`claude/issue-2-import-hardening`, "Part of Issue #2" — the second
+isolated Milestone 1 task, not a continuation of the exercise-identity
+work) implements the roadmap's "define and validate a versioned
+progress-import schema" and "deep-clone imported state and reject
+malformed nested values" items, and `docs/QUALITY_LOG.md` QL-006:
+
+- **Root problem:** `importJSON()` checked only the top-level `v` field
+  and trusted everything else; passing a plain object (not a JSON string)
+  made the caller's own object the live `state` by reference, so later
+  mutating that object silently corrupted course progress.
+- **Fix:** `validateImportedState()` (pure — never mutates its input,
+  never touches live `state`/`localStorage`/the DOM) checks the complete
+  envelope and every nested value against an exact schema (see
+  `docs/ARCHITECTURE.md` "Import validation"), builds an entirely new
+  deep-cloned object graph, and only `importJSON()` commits it to live
+  state after full success — atomic by construction, not by a rollback
+  step. A raw string is checked against a 256 KiB length limit *before*
+  `JSON.parse`; the parsed data against a 2000-entry cap before the more
+  expensive per-entry pass. Both limits are grounded in a real measured
+  full-course export (~8.7 KB, 200 entries), not a guess.
+- **Dangerous keys:** map keys may be any non-empty string except
+  `__proto__`/`constructor`/`prototype`, rejected wherever they appear.
+- **Schema-version decision:** `SCHEMA_V` stays `2` — the accepted record
+  shape is unchanged, only what was previously silently trusted is now
+  checked.
+- **Tests:** 27 new checks in `tests/dom-behavior.mjs` cover round-trip,
+  full detachment from the caller's source object (including after
+  mutating it post-import), missing/wrong schema version, size-before-
+  parse, the entry-count cap, one dedicated rejection case per nested-type
+  category (bad `modules`/`answers` types, non-true modules values,
+  invalid `c`/`n`/`ts` in every named way, extra/missing outcome fields,
+  unrecognized top-level fields), atomicity for every rejection case via
+  one shared helper (`getProgress()`/`localStorage`/rendered
+  label/`progress`-event count all unchanged), and no-partial-write
+  proof. **Mutation-tested** across three mutations (each reverted and
+  confirmed byte-identical via `diff`): weakening the counter validator,
+  reverting the dangerous-key defense, and writing to live state before
+  validation completes — each failed exactly the tests that claim to
+  cover it.
+- **A self-caught real bug, found while writing the `__proto__` test:**
+  the first version of the dangerous-key blocklist,
+  `{'__proto__':true, 'constructor':true, 'prototype':true}`, never
+  actually contained `__proto__` as an own key — a bareword/quoted
+  `__proto__:` entry in a JS object literal sets the prototype instead of
+  creating a property when its value isn't itself an object, and `true`
+  isn't one, so the assignment was a silent no-op. The single most
+  important entry in a three-entry blocklist was absent the entire time.
+  Confirmed directly with a Node one-liner before fixing; replaced with a
+  plain array checked via `indexOf()`, which has no such special-casing.
+  A related mistake in the test itself (trying to build the hostile
+  fixture as a JS object literal, then as a bracket assignment — both
+  equally affected by the same or a related special-casing) was also
+  caught and fixed by building the fixture from a raw JSON string via
+  `JSON.parse` instead. Full account: `docs/QUALITY_LOG.md` QL-023.
+- Strictly scoped: no question, answer, rationale, scoring, quiz
+  progress, analytics semantics, image, styling, layout, or accessibility
+  presentation changed, and none of the other Issue #2 items (stale-ID
+  policy, Reset/import exercise re-render, storage-failure UI, analytics
+  redesign, content-pack format, image-manifest normalization) were
+  touched.
+
 ## Read these files first
 
 1. `README.md`
@@ -1147,16 +1227,26 @@ contract and review gates remain incomplete.
 
 ## Known open implementation risks
 
-### Progress import
+### Progress import — mostly resolved 2026-08-02
 
-`importJSON()` currently validates the top-level version but still trusts
-malformed nested maps and outcome records. It should:
+~~`importJSON()` currently validates the top-level version but still
+trusts malformed nested maps and outcome records.~~ Done via branch
+`claude/issue-2-import-hardening` (Issue #2, QL-006):
+`validateImportedState()` now imposes a documented input-size limit
+(checked before `JSON.parse`), validates and normalizes every nested
+value, deep-clones the entire accepted object graph, and the whole import
+is atomic (a rejection touches neither live state, `localStorage`, the
+DOM, nor public API events). See `docs/ARCHITECTURE.md` "Import
+validation" and `docs/VALIDATION.md` "Progress-import validation and
+cloning" for the exact schema and test coverage.
 
-- impose a reasonable input-size limit
-- validate and normalize all nested values
-- deep-clone caller-supplied objects
-- define how stale content IDs are handled
-- have hostile/malformed fixtures and round-trip tests
+**Still open, deliberately not touched by that work:** defining how
+*stale* content IDs are handled during import — i.e. whether a
+module/question/exercise id that doesn't currently exist in the course
+should be accepted, dropped, or flagged. The new validator only checks
+that an id is a syntactically safe, non-empty string; it does not check
+whether that id is currently known. This is intentionally a separate
+roadmap item ("stale ID policy"), not a structural-validity question.
 
 ### Exercise identity — resolved 2026-08-02
 

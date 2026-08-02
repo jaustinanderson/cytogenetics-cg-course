@@ -91,9 +91,55 @@ the record shape above is unchanged, only the convention for what strings
 populate `exercises`'s keys — see `docs/QUALITY_LOG.md` QL-005 for the full
 decision record, conflict-resolution rule, and test evidence.
 
+### Import validation
+
+As of 2026-08-02 (Issue #2, `docs/QUALITY_LOG.md` QL-006),
+`CytoCourse.importJSON()` validates the complete import — top-level
+envelope, every nested `modules`/`answers`/`exercises` entry, and a
+documented size limit — before anything observable changes. The accepted
+envelope is either a full `exportJSON()`-shaped object
+(`{exported, state, stats}`; `exported`/`stats` are informational only and
+never persisted or validated) or a bare state object directly (existing,
+documented lenience). The candidate state object itself must match this
+exact schema, no more and no fewer top-level fields:
+
+```js
+{
+  v: 2,                          // must equal SCHEMA_V exactly
+  modules:   { <id>: true },     // every value literally `true`
+  answers:   { <id>: {c,n,ts} }, // see outcome-record shape below
+  exercises: { <id>: {c,n,ts} }, // see outcome-record shape below
+  started: <finite, non-negative number>,
+  migratedFrom: <positive integer>  // OPTIONAL; only ever written by v1→v2 migration
+}
+```
+
+Every outcome record (`answers`/`exercises` entries) must have EXACTLY
+`{c: <boolean>, n: <integer, 1..1000000>, ts: <finite, >=0 number>}` — no
+missing or extra fields. Map keys may be any non-empty string except
+`__proto__`, `constructor`, or `prototype`, rejected outright wherever
+they appear (see QL-006 for a self-caught bug in the first version of this
+defense). This does **not** check whether an id is a *currently known*
+module/question/exercise — that remains the separate, still-open
+"stale ID policy" item in `docs/ROADMAP.md` Milestone 1.
+
+A raw string import is also checked against a documented length limit
+(256 KiB) **before** `JSON.parse` is ever called, and the parsed entry
+count against a documented cap (2000) before the more expensive per-entry
+pass — both grounded in a real measured full-course export (~8.7 KB,
+200 entries; see QL-006). Validation builds an entirely new, deep-cloned
+object graph and never touches the live `state`, `localStorage`, or the
+DOM until every check has passed, so a caller's own object can never
+alias — and later mutate — course progress, and a rejected import leaves
+existing progress completely untouched (atomic by construction, not by a
+separate rollback step). This did **not** require a `SCHEMA_V` bump: the
+accepted record shape is unchanged from before, only what was previously
+silently trusted is now checked. Full record, test coverage, and the
+schema-version reasoning: `docs/QUALITY_LOG.md` QL-006 and
+`docs/VALIDATION.md`.
+
 Known design debt:
 
-- imported nested state is not yet fully schema-validated
 - runtime-injected questions are session-only
 - storage failure is silently tolerated
 

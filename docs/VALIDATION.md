@@ -1172,6 +1172,80 @@ cheap enough to always run rather than gate behind a version number.
 No question, answer, rationale, scoring, quiz progress, analytics
 semantics, image, styling, layout, or accessibility presentation changed.
 
+## Progress-import validation and cloning — added 2026-08-02
+
+`tests/dom-behavior.mjs` (Issue #2, `docs/QUALITY_LOG.md` QL-006) adds 27
+dependency-free checks covering `importJSON()`'s full validation and
+atomicity contract. See `docs/ARCHITECTURE.md` "Import validation" for the
+exact accepted schema. Covers:
+
+- **round-trip:** a current `exportJSON()` output (now including an
+  exercise outcome, not only a module and a quiz answer) imports correctly
+  into a fresh instance
+- **detachment:** importing a plain JS object (not a JSON string) and then
+  mutating that object afterward — at the top level, inside a nested
+  outcome record, and by adding a brand-new key — never changes live
+  `getProgress()`, proving the accepted state is a full deep clone with no
+  shared references anywhere in the graph
+- **schema version:** both a wrong version and a version field missing
+  entirely are rejected
+- **size, checked before parsing:** an oversized (300,000-character),
+  deliberately-not-valid-JSON string is rejected with a size-specific
+  error — proving the length check runs *before* `JSON.parse` is ever
+  attempted, not after a parse failure or a schema check
+- **entry-count cap:** a payload with 2,001 module entries (well past the
+  documented 2,000 cap) is rejected before the more expensive per-entry
+  structural pass
+- **nested-type rejections**, each its own test: `modules`/`answers` as an
+  array, as `null`, or as a string; a `modules` entry that isn't the
+  literal `true`; an outcome record that is `null` or an array; a
+  non-boolean `c`; a zero, negative, non-integer, or string `n`; a
+  negative or string `ts`; an outcome record with an extra unexpected
+  key; an exercises entry validated the same way as answers; an
+  unrecognized top-level field; a non-numeric `started`
+- **dangerous keys:** `constructor` in `modules` and `prototype` in
+  `exercises` are rejected as ordinary malformed-key cases; a dedicated
+  test additionally proves a `__proto__` key never actually pollutes
+  `Object.prototype` **in the course's own realm** (`vm.runInContext("({}).polluted", env.sandbox)`,
+  not this test file's own `Object`, which is a different JavaScript realm
+  entirely) — see QL-006 for a self-caught bug in the first version of
+  this specific defense, found by actually running this test rather than
+  assuming a `{'__proto__':true}`-shaped key list worked
+- **atomicity for every rejection above:** a single shared helper,
+  `assertImportRejectedAtomically()`, asserts `getProgress()`,
+  `localStorage`, the rendered module-count label, and the count of fired
+  `progress` API events are all byte-for-byte unchanged after every one of
+  the rejection cases above — not spot-checked on a few of them
+- **no partial writes:** an import with valid `modules`/`answers` fields
+  but one malformed `exercises` entry leaves `getProgress()` completely
+  unchanged, proving earlier-validated fields never leak into live state
+  before a later field fails
+
+**Mutation-tested**, three separate mutations, each reverted and confirmed
+byte-identical to the pre-mutation file via `diff`: (1) weakening
+`isValidCount()` to accept any number (removing the integer/range checks)
+failed exactly the counter-related rejection tests plus the partial-write
+test; (2) reverting `DANGEROUS_KEYS` to the broken `{'__proto__':true, ...}`
+object-literal form failed exactly the `__proto__`-pollution test; (3)
+writing `candidate.modules` into live `state` *before* `validateImportedState()`
+completes failed exactly the tests whose rejection depends on atomicity
+(wrong schema version, too many entries, the mixed valid/invalid payload,
+a bad `modules` entry, and a dangerous key in `modules`) — each of these
+mutations left a real, observable partial write that the shared atomicity
+assertion caught immediately.
+
+**Schema-version decision:** `SCHEMA_V` stays `2`. The accepted record
+shape is completely unchanged from before this work — every field that
+was ever legitimately written by this app already satisfies the new
+validator — only what was previously silently trusted is now checked.
+Gating stricter validation behind a version bump would need a real
+compatibility break to justify (there is none here; see
+`docs/QUALITY_LOG.md` QL-006 for the full reasoning and the measured
+real-export evidence behind the two documented size limits).
+
+No question, answer, rationale, scoring, quiz progress, analytics
+semantics, image, styling, layout, or accessibility presentation changed.
+
 ## Gates still open
 
 ### Browser behavior

@@ -3866,6 +3866,168 @@
     return changed;
   }
 
+  /* ============================ IMPORT VALIDATION ============================
+     Issue #2 / QL-006: importJSON() used to check only the top-level `v`
+     field and then trust the rest of the payload completely -- malformed
+     nested values could corrupt live state, and passing an object (rather
+     than a JSON string) let the caller's own object become the app's live
+     `state` by reference, so the caller mutating it later silently mutated
+     the course's progress too.
+
+     Accepted envelope: either a full exportJSON()-shaped object
+     ({exported, state, stats} -- `exported`/`stats` are informational only
+     and never persisted, so they are not validated) or a bare state object
+     directly (existing, documented lenience this course has always
+     supported). Either way, the candidate STATE object accepted below must
+     match this exact schema -- no more, no fewer top-level fields:
+
+       { v: 2,                                 // must equal SCHEMA_V exactly
+         modules:   { <id>: true, ... },        // every value literally `true`
+         answers:   { <id>: {c,n,ts}, ... },     // see outcome-record shape
+         exercises: { <id>: {c,n,ts}, ... },     // see outcome-record shape
+         started: <finite, non-negative number>,
+         migratedFrom: <positive integer>        // OPTIONAL -- only ever
+       }                                          // written by v1->v2 migration
+
+     Outcome-record shape (used for both `answers` and `exercises` entries),
+     EXACTLY these three keys, no more and no fewer:
+       { c: <boolean>, n: <integer, 1..1000000>, ts: <finite, >=0 number> }
+
+     Map keys (`modules`/`answers`/`exercises`) may be any non-empty string
+     EXCEPT `__proto__`, `constructor`, or `prototype` -- rejected outright
+     wherever they appear, rather than silently stripped, because a plain
+     object built by bracket-assignment (`out[key] = value`) can otherwise
+     be prototype-polluted by exactly those key names. This PR does not
+     check whether a module/question/exercise id is a *currently known* one
+     -- that is the separate, explicitly out-of-scope "stale ID policy" item
+     still open in docs/ROADMAP.md Milestone 1.
+
+     Every check below runs against the RAW parsed/caller-supplied data and
+     builds an entirely NEW object graph (out/modules/answers/exercises are
+     all fresh object literals, and every outcome record is rebuilt field-
+     by-field) -- nothing from the input is ever referenced by the result,
+     so mutating the caller's original object after a successful import
+     cannot affect live state. validateImportedState() itself never touches
+     the live `state`, localStorage, or the DOM, so importJSON() can run it
+     to completion before committing to anything: atomicity falls out of
+     that ordering, not from a separate rollback mechanism. */
+
+  // A real full-course export (17 modules + 153 answers + 30 exercises, all
+  // recorded) measures ~8.7 KB as of this course's current content; 256 KiB
+  // is roughly 30x that, generous headroom for the planned 46-question
+  // expansion (docs/ROADMAP.md Milestone 2A) while still bounding the cost
+  // of parsing a hostile payload. Checked against the raw string BEFORE
+  // JSON.parse is ever called.
+  var MAX_IMPORT_JSON_LENGTH = 262144;
+  // Same real export above totals 200 entries (17+153+30); 2000 is roughly
+  // 8x that, comfortable headroom for the planned expansion (199 questions
+  // + 30 exercises + 17 modules = 246). Checked before the more expensive
+  // per-entry structural validation below.
+  var MAX_IMPORT_ENTRIES = 2000;
+  // An ARRAY, deliberately not an object literal like {'__proto__':true}:
+  // a bareword or quoted `__proto__:` key in an object literal doesn't
+  // create an own property at all when its value isn't itself an object
+  // (which `true` is not) -- the assignment is a silent no-op per the
+  // object-initializer spec -- so an object-literal DANGEROUS_KEYS would
+  // never actually register '__proto__', the single most important entry.
+  // An array plus indexOf() sidesteps the whole class of footgun, since
+  // these strings are never used as object keys here.
+  var DANGEROUS_KEYS = ['__proto__', 'constructor', 'prototype'];
+  var ALLOWED_STATE_KEYS = {v:true, modules:true, answers:true, exercises:true, started:true, migratedFrom:true};
+
+  function isPlainObject(x){ return !!x && typeof x === 'object' && !Array.isArray(x); }
+  function isSafeKey(k){
+    return typeof k === 'string' && k.length > 0 && DANGEROUS_KEYS.indexOf(k) === -1;
+  }
+  function isValidCorrectness(c){ return typeof c === 'boolean'; }
+  function isValidCount(n){ return typeof n === 'number' && Number.isInteger(n) && n >= 1 && n <= 1000000; }
+  function isValidTimestamp(ts){ return typeof ts === 'number' && Number.isFinite(ts) && ts >= 0; }
+
+  /* One outcome record must be a plain object with EXACTLY {c,n,ts} -- no
+     missing fields, no extras (an extra field is itself a red flag for a
+     hand-crafted or corrupted record, and exact-shape checking is cheap
+     insurance against a dangerous key hiding as a fourth field). */
+  function isValidOutcomeRecord(rec){
+    if(!isPlainObject(rec)){ return false; }
+    var keys = Object.keys(rec);
+    if(keys.length !== 3){ return false; }
+    return isValidCorrectness(rec.c) && isValidCount(rec.n) && isValidTimestamp(rec.ts);
+  }
+
+  /* Validates and rebuilds a fresh, fully detached {id: {c,n,ts}} map (used
+     for both `answers` and `exercises`). Returns null on any problem. */
+  function normalizeOutcomeMap(src){
+    if(!isPlainObject(src)){ return null; }
+    var out = {}, keys = Object.keys(src);
+    for(var i=0;i<keys.length;i++){
+      var k = keys[i];
+      if(!isSafeKey(k)){ return null; }
+      var rec = src[k];
+      if(!isValidOutcomeRecord(rec)){ return null; }
+      out[k] = {c:rec.c, n:rec.n, ts:rec.ts};
+    }
+    return out;
+  }
+
+  /* Validates and rebuilds a fresh, fully detached {id: true} map. Every
+     value must be the literal boolean `true` -- the only value
+     markModule() ever writes; a module is otherwise simply absent. */
+  function normalizeModulesMap(src){
+    if(!isPlainObject(src)){ return null; }
+    var out = {}, keys = Object.keys(src);
+    for(var i=0;i<keys.length;i++){
+      var k = keys[i];
+      if(!isSafeKey(k)){ return null; }
+      if(src[k] !== true){ return null; }
+      out[k] = true;
+    }
+    return out;
+  }
+
+  /* Pure: never mutates its input, never touches the live `state`,
+     localStorage, or the DOM. Returns {ok:true, state:<fresh clone>} or
+     {ok:false, error:<string>}. See the file-level comment above for the
+     exact accepted schema. */
+  function validateImportedState(candidate){
+    if(!isPlainObject(candidate)){ return {ok:false, error:'imported state must be an object'}; }
+    var topKeys = Object.keys(candidate);
+    for(var i=0;i<topKeys.length;i++){
+      if(!isSafeKey(topKeys[i])){ return {ok:false, error:'imported state contains a disallowed key: ' + topKeys[i]}; }
+      if(!Object.prototype.hasOwnProperty.call(ALLOWED_STATE_KEYS, topKeys[i])){
+        return {ok:false, error:'unrecognized field in imported state: ' + topKeys[i]};
+      }
+    }
+    if(candidate.v !== SCHEMA_V){ return {ok:false, error:'schema mismatch, expected v' + SCHEMA_V}; }
+    if(!isValidTimestamp(candidate.started)){ return {ok:false, error:'started must be a finite, non-negative timestamp'}; }
+    if(!isPlainObject(candidate.modules)){ return {ok:false, error:'modules must be an object'}; }
+    if(!isPlainObject(candidate.answers)){ return {ok:false, error:'answers must be an object'}; }
+    if(!isPlainObject(candidate.exercises)){ return {ok:false, error:'exercises must be an object'}; }
+
+    // Cheap size gate BEFORE the more expensive per-entry structural pass
+    // below -- see MAX_IMPORT_ENTRIES's comment for the real-export basis.
+    var roughEntryCount = Object.keys(candidate.modules).length + Object.keys(candidate.answers).length + Object.keys(candidate.exercises).length;
+    if(roughEntryCount > MAX_IMPORT_ENTRIES){
+      return {ok:false, error:'too many progress entries (' + roughEntryCount + ' > ' + MAX_IMPORT_ENTRIES + ')'};
+    }
+
+    var modules = normalizeModulesMap(candidate.modules);
+    if(!modules){ return {ok:false, error:'modules must map ids to the literal value true'}; }
+    var answers = normalizeOutcomeMap(candidate.answers);
+    if(!answers){ return {ok:false, error:'answers must map ids to {c,n,ts} records'}; }
+    var exercises = normalizeOutcomeMap(candidate.exercises);
+    if(!exercises){ return {ok:false, error:'exercises must map ids to {c,n,ts} records'}; }
+
+    var out = {v:SCHEMA_V, modules:modules, answers:answers, exercises:exercises, started:candidate.started};
+    if(Object.prototype.hasOwnProperty.call(candidate, 'migratedFrom')){
+      var mf = candidate.migratedFrom;
+      if(typeof mf !== 'number' || !Number.isInteger(mf) || mf < 1){
+        return {ok:false, error:'migratedFrom must be a positive integer'};
+      }
+      out.migratedFrom = mf;
+    }
+    return {ok:true, state:out};
+  }
+
   function loadProgress(){
     var raw = null;
     try{ raw = JSON.parse(localStorage.getItem(PKEY)); }catch(e){ raw = null; }
@@ -4140,13 +4302,26 @@
     exportJSON:  function(){ return JSON.stringify({exported:new Date().toISOString(), state:state, stats:getStats()}, null, 2); },
 
     /* --- write --- */
+    /* Validates the ENTIRE import before anything observable changes -- see
+       validateImportedState() above for the exact accepted schema. On any
+       problem (oversized input, a parse failure, a malformed nested value,
+       a disallowed key, an unsupported schema version), returns
+       {ok:false, error} having touched neither the live state, localStorage,
+       the rendered UI, nor any public API event. The accepted result is
+       always a freshly built object graph, detached from whatever was
+       passed in, so mutating the caller's own object afterward cannot
+       affect course progress. */
     importJSON: function(json){
       try{
+        if(typeof json === 'string' && json.length > MAX_IMPORT_JSON_LENGTH){
+          return {ok:false, error:'import too large (' + json.length + ' > ' + MAX_IMPORT_JSON_LENGTH + ' characters)'};
+        }
         var o = (typeof json === 'string') ? JSON.parse(json) : json;
-        var s = o && o.state ? o.state : o;
-        if(!s || s.v !== SCHEMA_V){ return {ok:false, error:'schema mismatch, expected v' + SCHEMA_V}; }
-        state = s;
-        state.modules = state.modules || {}; state.answers = state.answers || {}; state.exercises = state.exercises || {};
+        if(!isPlainObject(o)){ return {ok:false, error:'import must be an object'}; }
+        var candidate = isPlainObject(o.state) ? o.state : o;
+        var result = validateImportedState(candidate);
+        if(!result.ok){ return result; }
+        state = result.state;
         migrateExerciseIds();
         saveProgress(); refreshProgressUI();
         $all('.quiz-mount').forEach(buildQuiz);
