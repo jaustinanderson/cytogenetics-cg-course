@@ -26,9 +26,13 @@ All notable repository changes are recorded here.
   filtered correctly and the fix mirrors its exact pattern. Does not
   decide whether runtime-injected content should persist (the separate,
   still-open content-pack item) and does not bump `SCHEMA_V` (no stored
-  field's shape or meaning changes). 13 new dependency-free regression
-  tests in `tests/dom-behavior.mjs` (101 → 114), mutation-tested across
-  two mutations. See `docs/QUALITY_LOG.md` QL-024, and
+  field's shape or meaning changes). An explicit, user-confirmed Reset
+  (`#resetBtn`/`reset()`) remains the one deliberate exception — it
+  deletes everything, current or stale, in both storage keys, as already
+  implemented; a dedicated test now proves that combination explicitly.
+  14 new dependency-free regression tests in `tests/dom-behavior.mjs`
+  (101 → 115), mutation-tested across three mutations. See
+  `docs/QUALITY_LOG.md` QL-024 and its addendum, and
   `docs/ARCHITECTURE.md` "Stale question/exercise/module ID policy" for
   the full decision record and rejected alternatives (Issue #2)
 - `validateImportedState()`/`validateImportEnvelope()` in `index.html`:

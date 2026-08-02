@@ -266,10 +266,14 @@ review status stable before adding 46 questions.
   progress already recorded against an id current content doesn't
   recognize. Does not bump `SCHEMA_V` — no stored field's shape or
   meaning changes, only which records count toward current-facing figures
-  does. See `docs/QUALITY_LOG.md` QL-024 for the full decision record,
-  rejected alternatives (reject-entire-state, strip-on-load,
-  quarantine-in-a-separate-field), and `docs/VALIDATION.md` for test
-  coverage. This closes only this item — the remaining Milestone 1 work
+  does. An explicit, user-confirmed Reset remains the one deliberate
+  exception — it deletes everything, current or stale, in both storage
+  keys, as it already did before this policy existed; a dedicated test
+  now proves that explicitly. See `docs/QUALITY_LOG.md` QL-024 and its
+  addendum for the full decision record, rejected alternatives
+  (reject-entire-state, strip-on-load, quarantine-in-a-separate-field),
+  and `docs/VALIDATION.md` for test coverage. This closes only this item
+  — the remaining Milestone 1 work
   below (Reset/import re-render, storage-failure UI, analytics semantics,
   content-pack decision, provenance fields, image-manifest normalization,
   and broader API contract tests) is explicitly out of scope for that PR

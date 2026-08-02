@@ -766,6 +766,74 @@ test("API Reset clears progress and rebuilds quiz widgets", () => {
   assert.ok(options.every((option) => !option.disabled), "the rebuilt quiz is answerable again");
 });
 
+/* --- the stale-ID policy's one deliberate exception (Issue #2 / QL-024
+   addendum): "preserve, filter at read" governs loading, migration,
+   import, export, and every ordinary read -- but an explicit,
+   user-confirmed Reset is not a read. It intentionally deletes
+   EVERYTHING, current or stale, module or answer or exercise, in either
+   storage key, precisely because that is what a learner who clicks Reset
+   and confirms the "this cannot be undone" prompt is asking for. This is
+   proven through the real #resetBtn click path (window.confirm simulated
+   via the harness's confirmResponses queue, exactly like the existing
+   Reset tests above), not by directly clearing internal state, and with
+   BOTH current and stale records seeded at every level -- module,
+   answer, and exercise -- across BOTH the v2 and legacy v1 storage keys
+   at once, which none of the existing per-scenario Reset tests above
+   combine in one seed. */
+test("an explicit, confirmed Reset removes current AND stale records everywhere, in both storage keys, and stays cleared after reload", () => {
+  const seedEnv = boot();
+  const currentQId = seedEnv.api.getQuestions("m1")[0].id;
+  const currentExId = seedEnv.api.getExercises().ex7.items[0].id;
+  const currentModId = seedEnv.api.getModules()[0].id;
+
+  const v2Seed = {
+    v: 2,
+    modules: { [currentModId]: true, "stale-module-xyz": true },
+    answers: { [currentQId]: { c: true, n: 1, ts: 1 }, "stale-question-xyz": { c: true, n: 5, ts: 2 } },
+    exercises: { [currentExId]: { c: true, n: 1, ts: 1 }, "stale-exercise-xyz": { c: false, n: 3, ts: 3 } },
+    started: 0,
+  };
+  const v1Seed = { m1: true, "stale-v1-module": true };
+
+  const env = boot({
+    storage: { [V2_KEY]: JSON.stringify(v2Seed), [V1_KEY]: JSON.stringify(v1Seed) },
+    confirmResponses: [true],
+  });
+  // Sanity: the seed really does carry both current and stale progress
+  // before Reset runs, so a passing test below is proof of clearing, not
+  // an accident of an already-empty state.
+  assert.equal(env.api.getStats().modulesComplete, 1);
+  assert.equal(env.api.getStats().questionsAnswered, 1);
+
+  env.document.getElementById("resetBtn").click();
+
+  assert.equal(env.storage.getItem(V2_KEY), null, "v2 storage key is fully removed, stale records included");
+  assert.equal(env.storage.getItem(V1_KEY), null, "legacy v1 storage key is fully removed, stale records included");
+  assert.equal(env.reloads.length, 1, "the page reloads after a confirmed reset");
+
+  // A real Reset ends in location.reload() -- a full re-fetch and
+  // re-execution of the page. A fresh boot() against whatever now
+  // remains in storage is the same simulated-reload technique the
+  // existing "progress survives a reload" test uses.
+  const afterReload = boot({ storage: { ...env.storage._raw } });
+  const progress = afterReload.api.getProgress();
+  assert.deepEqual(Object.keys(progress.modules), [], "no module record, current or stale, survives -- getProgress() is blank");
+  assert.deepEqual(Object.keys(progress.answers), [], "no answer record, current or stale, survives");
+  assert.deepEqual(Object.keys(progress.exercises), [], "no exercise record, current or stale, survives");
+
+  const stats = afterReload.api.getStats();
+  assert.equal(stats.modulesComplete, 0);
+  assert.equal(stats.questionsAnswered, 0);
+  assert.equal(stats.questionsCorrect, 0);
+  assert.equal(stats.overallPct, null);
+
+  assert.equal(afterReload.document.getElementById("tpLabel").textContent, "0 of 17 modules complete");
+  assert.ok(
+    !afterReload.body.querySelectorAll(".mark-complete")[0].classList.contains("done"),
+    "the rendered module-complete state is cleared, not just the underlying data",
+  );
+});
+
 /* ============================ import / export ============================ */
 
 test("export and import round-trip preserves progress", () => {

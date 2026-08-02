@@ -1330,10 +1330,11 @@ real-export evidence behind the two documented size limits).
 No question, answer, rationale, scoring, quiz progress, analytics
 semantics, image, styling, layout, or accessibility presentation changed.
 
-## Stale question/exercise/module ID policy — added 2026-08-02
+## Stale question/exercise/module ID policy — added 2026-08-02, corrected 2026-08-02
 
-`tests/dom-behavior.mjs` (Issue #2, `docs/QUALITY_LOG.md` QL-024) adds 13
-dependency-free checks (101 → 114) covering what happens when a
+`tests/dom-behavior.mjs` (Issue #2, `docs/QUALITY_LOG.md` QL-024 and its
+addendum) adds 14 dependency-free checks (101 → 115) covering what
+happens when a
 `modules`/`answers`/`exercises` key no longer corresponds to anything in
 the current `MODULES`/`QUIZZES`/`EXERCISES` data. See
 `docs/ARCHITECTURE.md` "Stale question/exercise/module ID policy" for the
@@ -1403,6 +1404,19 @@ never deleted, moved, or quarantined. Covers:
   standing in for any future reintroduction mechanism) picks the exact
   preserved record back up automatically — proving the boundary without
   resolving the separate, still-open content-pack format decision
+- **the Reset exception, correction added 2026-08-02:** an explicit,
+  user-confirmed Reset is the one deliberate exception to
+  "preserve, filter at read." Through the real `#resetBtn` UI click path
+  (`window.confirm` simulated via the harness's `confirmResponses` queue,
+  never by directly mutating internal state), a state seeded with both
+  current and stale records at every level — module, answer, and exercise
+  — across *both* the v2 and legacy v1 storage keys at once confirms Reset
+  removes all of it: both storage keys are fully cleared, and a simulated
+  reload afterward (a fresh `boot()` from whatever remains) shows a blank
+  `getProgress()`, zeroed `getStats()`, and a zeroed rendered progress
+  label/module-complete state — stale records included, not just current
+  ones, which none of the pre-existing per-scenario Reset tests combined
+  in one seed
 
 **A test-authoring pitfall caught while writing this suite:**
 `assert.deepEqual`/`deepStrictEqual` checks prototype identity, not only
@@ -1424,14 +1438,17 @@ hit this, since `JSON.parse` always builds its result using the calling
 script's own realm intrinsics regardless of which `vm` context invoked
 it — confirmed directly before relying on the distinction.
 
-**Mutation-tested**, two mutations, each reverted and confirmed
+**Mutation-tested**, three mutations, each reverted and confirmed
 byte-identical via `diff`: (1) reverting `getStats()`'s fixed computation
 to the original `Object.keys(state.answers).length`-based one failed
 exactly the five tests that depend on the fix; (2) introducing an
 accidental "strip every exercise key that isn't a current stable id"
 cleanup pass into `migrateExerciseIds()` — the rejected "strip stale
 records" alternative, reintroduced by mistake — failed exactly the six
-tests that depend on preservation.
+tests that depend on preservation; (3) removing either storage-key
+deletion from the `#resetBtn` handler (tried separately for `PKEY` and
+for `PKEY_V1`) each failed the new Reset-exception test, plus whichever
+pre-existing per-scenario Reset test already covered that specific key.
 
 **Schema-version decision:** `SCHEMA_V` stays `2`. No stored field's
 shape or meaning changes and nothing previously accepted becomes

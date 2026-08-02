@@ -3835,6 +3835,18 @@
      position -- true for questions from the start, true for exercises
      since QL-005, and unaffected by this policy).
 
+     RESET IS THE ONE DELIBERATE EXCEPTION: "preserve, filter at read"
+     governs loading, migration, import, export, and every ordinary read
+     -- it does NOT apply to an explicit, user-confirmed Reset (the
+     `#resetBtn` UI handler and the `reset()` API method, both in the
+     PUBLIC API section below). Reset's own job is to delete EVERYTHING,
+     current or stale, in both PKEY and PKEY_V1, precisely because that
+     is what confirming "this cannot be undone" means. Reset was already
+     implemented this way (a wholesale storage-key removal / blank-state
+     replacement, never a selective per-record strip) before this policy
+     was written; this comment and a dedicated regression test make that
+     boundary explicit rather than leaving it implicit.
+
      REINTRODUCTION: because staleness is a live, computed property of an
      id -- never a stored flag, and the record is never moved anywhere --
      an id that becomes current again (the exact same id string appears in
@@ -4488,6 +4500,10 @@
         d.removeAttribute('data-print-reopened');
       });
     });
+    // The stale-ID policy's one deliberate exception (see the PROGRESS
+    // section's file-level comment, "RESET IS THE ONE DELIBERATE
+    // EXCEPTION"): removes BOTH keys wholesale, current or stale
+    // records included -- never a selective per-record strip.
     var r=$('#resetBtn'); if(r){ r.addEventListener('click', function(){
       if(window.confirm('Reset your saved progress and reload the course? This cannot be undone.')){
         try{ localStorage.removeItem(PKEY); localStorage.removeItem(PKEY_V1); }catch(e){}
@@ -4634,6 +4650,9 @@
       saveProgress(); refreshProgressUI();
       return {ok:true};
     },
+    // Same stale-ID-policy exception as the #resetBtn UI handler above:
+    // state = blankState() wholesale-replaces state, current or stale
+    // records included, never a selective strip.
     reset: function(){
       try{ localStorage.removeItem(PKEY_V1); }catch(e){}
       state = blankState();

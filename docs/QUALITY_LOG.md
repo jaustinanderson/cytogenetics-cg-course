@@ -2585,3 +2585,62 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   ID policy" records the full decision, alternatives, and guarantee list;
   `docs/VALIDATION.md` records the corrected test-coverage list;
   `docs/ROADMAP.md` checks off the roadmap item with the same summary.
+
+### Addendum — independent review found the Reset boundary was implicit, not explicit
+
+- **Status:** Corrected on the same branch (`claude/issue-2-stale-id-policy`),
+  before merge.
+- **Finding:** QL-024's policy above ("preserve the record, filter at
+  read") correctly governs loading, migration, import, export, and every
+  ordinary read — but neither the policy comment in `index.html`, the
+  documentation, nor the 13 new tests ever explicitly established that an
+  explicit, user-confirmed Reset is an exception to it. A reader of the
+  policy alone could not tell whether Reset was expected to preserve
+  stale records (consistent with "preserve, filter at read" read too
+  literally) or delete everything (the actual, intended behavior).
+- **Impact:** Documentation/test-coverage gap only — independently
+  reproduced through the real `#resetBtn` UI click path (`window.confirm`
+  simulated, not internal state mutated directly) with both current and
+  stale module/answer/exercise records seeded across *both* the v2 and
+  legacy v1 storage keys at once before writing any fix: Reset already
+  clears both keys wholesale, and a simulated reload afterward shows a
+  fully blank `getProgress()`, zeroed `getStats()`, and zeroed rendered
+  progress. No product defect existed — `#resetBtn`'s handler and the
+  `reset()` API method both already delete/replace state wholesale
+  (`localStorage.removeItem()` for both keys; `state = blankState()`),
+  never selectively, so they were never capable of preserving a stale
+  record in the first place. Confirmed by direct execution before
+  concluding no code change was needed, per this log's standing
+  discipline of verifying rather than assuming.
+- **Cause:** The policy was written and tested from the "ordinary read"
+  side only; Reset — the one deliberate, non-read exception — was never
+  explicitly named or covered by a test that combined stale records with
+  *both* storage keys in one scenario, even though the pre-existing
+  per-scenario Reset tests (from the original import-hardening work)
+  already proved each storage key clears individually for *current*
+  progress.
+- **Correction:** Added one regression test proving Reset removes current
+  *and* stale records at every level (module, answer, exercise) from
+  *both* storage keys simultaneously, through the real UI click path,
+  and stays cleared after a simulated reload (`tests/dom-behavior.mjs`,
+  114 → 115 checks). Added a concise "RESET IS THE ONE DELIBERATE
+  EXCEPTION" paragraph to `index.html`'s PROGRESS file-level policy
+  comment, plus a one-line pointer comment at each of the two actual
+  Reset implementations (`#resetBtn`'s click handler and the `reset()`
+  API method). Added a matching "Reset is the one deliberate exception"
+  paragraph to `docs/ARCHITECTURE.md` and a coverage bullet plus updated
+  mutation count to `docs/VALIDATION.md`. No product logic changed.
+  **Mutation-tested:** removing either storage-key deletion from the
+  `#resetBtn` handler (tried separately for `PKEY` and for `PKEY_V1`)
+  each failed the new test, plus whichever pre-existing per-scenario
+  Reset test already covered that specific key — confirming the new test
+  is genuinely sensitive to both halves of the guarantee, not merely
+  duplicating existing coverage. Both mutations reverted and confirmed
+  byte-identical to the pre-mutation file via `diff`.
+- **Prevention:** When documenting a "preserve by default" policy, name
+  its exceptions explicitly in the same comment, and write at least one
+  test that exercises the exception path with the same adversarial
+  fixture (mixed current/stale, every record type, every affected storage
+  key at once) used to prove the default path — a policy statement with
+  an unstated exception is exactly as dangerous as one with an unproven
+  guarantee.

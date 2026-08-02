@@ -273,6 +273,18 @@ exercises since QL-005); or fire a misleading `answer`/`exercise` event
 `recordExercise()`, only possibly `saveProgress()`'s ordinary `progress`
 event when something genuinely persisted).
 
+**Reset is the one deliberate exception.** "Preserve, filter at read"
+governs loading, migration, import, export, and every ordinary read — it
+does not apply to an explicit, user-confirmed Reset (the `#resetBtn` UI
+handler and the `reset()` API method). Reset's job is to delete
+*everything*, current or stale, in both `PKEY` and `PKEY_V1`, because
+that is exactly what confirming "this cannot be undone" means. Reset was
+already implemented this way — a wholesale storage-key removal /
+blank-state replacement, never a selective per-record strip — before this
+policy existed; a dedicated regression test (`tests/dom-behavior.mjs`)
+now proves it holds for stale records at every level (module, answer,
+exercise) across both storage keys, not only for current ones.
+
 **Reintroduction revives history.** Because staleness is a computed
 property of an id, not a stored flag, and a record is never moved
 anywhere, an id that becomes current again (the exact same string
@@ -326,23 +338,30 @@ are not in tension, and the completion report/tests keep them distinct.
 no new top-level state field is introduced, and nothing previously
 accepted becomes rejected — only which records *count* toward
 current-facing figures changes, and that was already silently wrong
-(the `getStats()` bug above) rather than newly restricted. 13 new tests
-in `tests/dom-behavior.mjs` cover mixed current/stale states for
-questions and exercises, a state containing only stale records, an
+(the `getStats()` bug above) rather than newly restricted. 14 new tests
+in `tests/dom-behavior.mjs` (101 → 115) cover mixed current/stale states
+for questions and exercises, a state containing only stale records, an
 orphaned (non-migratable) legacy exercise key surviving migration inert
 alongside a real migration, reordering `QUIZZES`/`EXERCISES` with a stale
 record present, reload idempotency after stale-state normalization, the
 export/import round trip, event-firing correctness, import atomicity and
 storage-failure behavior with stale ids present, the public-API/
-`markModule()` distinction above, and the runtime-injected-question
-boundary. **Mutation-tested:** (1) reverting `getStats()` to the original
-`Object.keys(state.answers).length`-based computation failed exactly the
-five tests that depend on the fix; (2) introducing an accidental
-"strip unrecognized exercise keys" pass into `migrateExerciseIds()` (the
-rejected "strip stale records" alternative, reintroduced by mistake)
-failed exactly the six tests that depend on preservation — both reverted
-and confirmed byte-identical via `diff`. Full record:
-`docs/QUALITY_LOG.md` QL-024.
+`markModule()` distinction above, the runtime-injected-question boundary,
+and — through the real `#resetBtn` UI click path, not by directly
+mutating internal state — an explicit confirmed Reset removing current
+*and* stale records at every level from both storage keys, confirmed to
+stay cleared after a simulated reload. **Mutation-tested:** (1) reverting
+`getStats()` to the original `Object.keys(state.answers).length`-based
+computation failed exactly the five tests that depend on the fix; (2)
+introducing an accidental "strip unrecognized exercise keys" pass into
+`migrateExerciseIds()` (the rejected "strip stale records" alternative,
+reintroduced by mistake) failed exactly the six tests that depend on
+preservation; (3) removing either storage-key deletion from the
+`#resetBtn` handler (first `PKEY`, then separately `PKEY_V1`) each failed
+the new Reset-exception test, plus the pre-existing per-scenario Reset
+tests that already covered that specific key — each mutation reverted and
+confirmed byte-identical via `diff`. Full record: `docs/QUALITY_LOG.md`
+QL-024 and its addendum.
 
 Known design debt:
 

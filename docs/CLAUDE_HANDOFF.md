@@ -1312,7 +1312,18 @@ and implements the stale question/exercise/module ID policy, and
   policy for an existing record whose id used to be valid.
 - **`SCHEMA_V` stays `2`:** no stored field's shape or meaning changes,
   only which records count toward current-facing figures does.
-- **13 new tests** (`tests/dom-behavior.mjs`, 101 → 114 checks): mixed
+- **Reset remains the one deliberate exception**, confirmed by
+  independent review (correction, same branch, before merge): an
+  explicit, user-confirmed Reset deletes *everything*, current or stale,
+  in both storage keys — `#resetBtn`'s click handler and the `reset()`
+  API method were already implemented this way (wholesale storage-key
+  removal / blank-state replacement, never a selective per-record strip),
+  confirmed by direct execution against the real UI click path (seeding
+  both current and stale records at every level across both the v2 and
+  legacy v1 keys at once) before concluding no product code change was
+  needed. Only a regression test and a concise policy-comment addition
+  were added.
+- **14 new tests** (`tests/dom-behavior.mjs`, 101 → 115 checks): mixed
   current/stale question and exercise records in one state; a state
   containing only stale records; an orphaned (non-migratable) legacy
   exercise key surviving migration inert alongside a real migration;
@@ -1323,13 +1334,19 @@ and implements the stale question/exercise/module ID policy, and
   `answer`/`exercise` events on a stale-only load; import atomicity and
   storage-failure behavior unaffected by stale ids; the
   `getProgress()`/`exportJSON()`-preserves vs. `getStats()`-excludes vs.
-  `markModule()`-still-guards distinction; and the runtime-injected-
-  question boundary including its reintroduction half. **Mutation-tested:**
-  reverting `getStats()`'s fix failed exactly the five dependent tests;
-  introducing an accidental "strip unrecognized exercise keys" pass into
-  `migrateExerciseIds()` (the rejected quarantine/strip alternative,
-  reintroduced by mistake) failed exactly the six preservation-dependent
-  tests — each reverted and confirmed byte-identical via `diff`.
+  `markModule()`-still-guards distinction; the runtime-injected-
+  question boundary including its reintroduction half; and an explicit
+  confirmed Reset removing current and stale records from both storage
+  keys, through the real `#resetBtn` click path, staying cleared after a
+  simulated reload. **Mutation-tested:** reverting `getStats()`'s fix
+  failed exactly the five dependent tests; introducing an accidental
+  "strip unrecognized exercise keys" pass into `migrateExerciseIds()`
+  (the rejected quarantine/strip alternative, reintroduced by mistake)
+  failed exactly the six preservation-dependent tests; removing either
+  storage-key deletion from the `#resetBtn` handler each failed the new
+  Reset test plus whichever pre-existing per-scenario Reset test already
+  covered that key — each reverted and confirmed byte-identical via
+  `diff`.
 - **A test-authoring pitfall self-caught while writing this suite:**
   `assert.deepEqual` checks prototype identity; `getStats()`'s nested
   `byDomain`/`byTopic`/`byDifficulty` objects are built via raw
@@ -1339,7 +1356,7 @@ and implements the stale question/exercise/module ID policy, and
   minimal `vm` reproduction before concluding this was a test-authoring
   issue, not a product defect, and fixed via `JSON.stringify(...)`
   comparison, this codebase's established pattern for exactly this case.
-- Full record: `docs/QUALITY_LOG.md` QL-024.
+- Full record: `docs/QUALITY_LOG.md` QL-024 and its addendum.
 - Strictly scoped: no question, answer, rationale, scoring, image,
   styling, layout, or accessibility presentation changed, and none of the
   other Issue #2 items (Reset/import exercise re-render, storage-failure
