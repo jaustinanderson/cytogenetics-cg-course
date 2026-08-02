@@ -1,8 +1,8 @@
 import { test, expect } from "./fixtures.mjs";
 
 /**
- * The two approved embedded images (NHGRI normal karyotype, CDC PHIL
- * trisomy-21 karyotype; see THIRD_PARTY_NOTICES.md) are localized to
+ * The two approved embedded images (NHGRI normal karyotype, Wellcome
+ * Collection trisomy-21 karyotype; see THIRD_PARTY_NOTICES.md) are localized to
  * `assets/images/` so the course no longer depends on a third-party image
  * host at runtime. This suite proves local delivery over the same local
  * static server the rest of `tests/e2e/` uses — unlike third-party network
@@ -44,8 +44,8 @@ test.describe("local image delivery", () => {
     const nhgri = await inspectImage(
       page.locator('img[src="assets/images/nhgri-human-male-karyotype-46xy.png"]'),
     );
-    const cdc = await inspectImage(
-      page.locator('img[src="assets/images/cdc-phil-12504-trisomy21-karyotype.jpg"]'),
+    const trisomy21 = await inspectImage(
+      page.locator('img[src="assets/images/wellcome-b0000249-trisomy21-karyotype-47xy.jpg"]'),
     );
 
     expect(nhgri.complete, JSON.stringify(nhgri)).toBe(true);
@@ -53,9 +53,9 @@ test.describe("local image delivery", () => {
     expect(nhgri.naturalHeight, JSON.stringify(nhgri)).toBeGreaterThan(0);
     expect(nhgri.currentSrc).toContain("assets/images/nhgri-human-male-karyotype-46xy.png");
 
-    expect(cdc.complete, JSON.stringify(cdc)).toBe(true);
-    expect(cdc.naturalWidth, JSON.stringify(cdc)).toBeGreaterThan(0);
-    expect(cdc.naturalHeight, JSON.stringify(cdc)).toBeGreaterThan(0);
-    expect(cdc.currentSrc).toContain("assets/images/cdc-phil-12504-trisomy21-karyotype.jpg");
+    expect(trisomy21.complete, JSON.stringify(trisomy21)).toBe(true);
+    expect(trisomy21.naturalWidth, JSON.stringify(trisomy21)).toBeGreaterThan(0);
+    expect(trisomy21.naturalHeight, JSON.stringify(trisomy21)).toBeGreaterThan(0);
+    expect(trisomy21.currentSrc).toContain("assets/images/wellcome-b0000249-trisomy21-karyotype-47xy.jpg");
   });
 });

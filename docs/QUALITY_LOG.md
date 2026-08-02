@@ -1561,3 +1561,135 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   did not. Re-evaluate every "we already knew about this" claim against
   what is now actually user-visible before waving it through unchanged.
 
+## QL-022 — Figure 9.1 label overlap, and a rejected Figure 10.1 candidate caught by inspecting pixels instead of trusting a filename
+
+- **Status:** Corrected on branch `claude/figure-9-10-quality`, a new,
+  separately scoped issue (does not reopen Issue #11)
+- **Finding, Figure 9.1:** Confirmed against the live page before any
+  change: the three centromere-morphology labels ("Metacentric",
+  "Submetacentric", "Acrocentric + satellite") were embedded SVG `<text>`
+  elements inside one shared `<svg>` (`rowCard()` with `opt.labels:true`).
+  The `viewBox`'s width was computed only from the chromosome drawings'
+  geometry (`x`/`W` accumulated from `cfg.w`/`cfg.gap`), never from the
+  labels' own rendered text width. At real font sizes this made
+  "Metacentric" overlap "Submetacentric" and made "Acrocentric + satellite"
+  extend past both the `viewBox`'s right edge and the figure's own visible
+  boundary.
+- **Impact:** Every visitor to Module 9 at any width saw at least one
+  broken or overlapping label in a figure whose entire purpose is teaching
+  the visual distinction between the three morphologies.
+- **Cause:** SVG `<text>` has no intrinsic wrapping or reflow; a layout
+  computed from shape geometry alone cannot account for label width unless
+  that width is measured and fed back into the layout, which `rowCard()`
+  never did for its `labels:true` mode.
+- **Correct action:** Stop laying text out inside the SVG's fixed
+  coordinate space entirely — measure/wrap text with the tool built for it
+  (the browser's own block-text layout engine), not by hand-tuning SVG
+  coordinates to fit a fixed number of known strings, which would only
+  re-break at the next relabeling.
+- **Correction:** `index.html` gained `chromoOnlySVG()` (a single
+  chromosome drawing with no embedded label) and `morphGrid()` (a
+  responsive HTML grid of `.morph-item` cards, each pairing one
+  `chromoOnlySVG()` output with an ordinary wrapping `.morph-label` `<div>`
+  below it). New CSS: `.fig-morph-grid{display:grid;grid-template-columns:
+  repeat(auto-fit,minmax(150px,1fr));gap:1rem}`. `auto-fit`/`minmax`
+  collapses to one column once three 150px-minimum tracks stop fitting,
+  which stacks the three cards vertically at narrow widths without a new
+  hard-coded breakpoint. `injectFigures()`'s `#figMorph` mount now calls
+  `morphGrid(...)` instead of `rowCard(..., {labels:true})`.
+- **Verification:** A standalone (uncommitted) Playwright script measured
+  real bounding boxes at all five acceptance-criteria viewports
+  (1440×900, 1280×900, 768×1024, 390×844, 360×800) before the committed
+  test was written: full label containment, zero pairwise label-box
+  intersections, and no `document.documentElement.scrollWidth >
+  clientWidth` at any of the five. `tests/e2e/figure-9-1-morphology.spec.mjs`
+  (new) commits this permanently. **Mutation-tested**: with the fix
+  temporarily reverted (`git stash`, which does not affect the new,
+  untracked test file), 10 of 12 test runs failed for the correct reason
+  (`.morph-label`/`.morph-item` do not exist in the pre-fix markup, so the
+  containment/overlap assertions cannot locate their targets); restoring
+  the fix (`git stash pop`) returned all 12 to passing. See
+  `docs/VALIDATION.md` "Figure 9.1 label-layout fix and Figure 10.1
+  karyogram replacement" for the full record.
+
+- **Finding, Figure 10.1:** The embedded CDC PHIL image (#12504) had
+  unacceptable morphology/band detail for a professional study guide:
+  heavily thresholded, chromosomes grouped rather than individually
+  numbered, and — confirmed by decoding the image and reading its own
+  printed group label directly, not assumed from the filename or the
+  course's existing caption — the depicted karyotype is a **female**
+  (46,XX-derived, 47,XX,+21) specimen, which did not actually match the
+  primary `47,XY,+21` worked ISCN example the lesson text presents
+  immediately below it.
+- **A same-collection candidate was downloaded and visually rejected, not
+  filename-trusted:** searching for a replacement surfaced a Wikimedia
+  Commons file from the Josef Reischig CC BY-SA archive titled "Human
+  karyotype (263 15) ... 47, XY, +21 (Down syndrome).jpg"
+  (3,749×2,399px) — a strong-looking candidate by title, resolution, and
+  license alone, and an automated page-text summary of its Commons file
+  page described it as "an actual karyotype photograph... not a
+  schematic." Downloading and actually looking at the decoded image (per
+  the standing discipline in this log — QL-007, QL-008, QL-013 — of
+  confirming a claim against the real artifact before trusting it, here
+  extended to an image's *content* rather than a test's assertion or a
+  tool's stated behavior) showed it is a **raw, unsorted metaphase
+  spread**: overlapping, unpaired chromosomes scattered across the field,
+  with intact interphase nuclei still visible on the same slide — not an
+  arranged karyogram at all, despite its filename. It was rejected on that
+  basis, confirming this course's own prior note (`docs/ROADMAP.md`
+  Milestone 2B, written before this correction) that this specific
+  collection's images are metaphase spreads, "not direct replacements for
+  a properly arranged karyogram."
+- **Impact:** Had the Reischig file been trusted from its filename, page
+  description, or an automated text summary of that page alone, this PR
+  would have replaced one scientifically misleading image with another —
+  a raw, unpaired chromosome spread mislabeled in the course as an
+  arranged "karyotype," which is arguably a worse defect than the one
+  being fixed, since it actively misrepresents what a karyogram looks
+  like to a learner being taught to recognize one.
+- **Correct action:** Never select or approve an image asset from its
+  filename, upload description, or an AI-generated summary of its listing
+  page alone — decode and visually inspect the actual pixel content
+  against every stated acceptance criterion (arranged pairs, individually
+  numbered chromosomes, interpretable banding, no thresholding/distortion)
+  before treating it as a candidate, exactly as this log already requires
+  for test claims and tool defaults, extended here to image content.
+- **Correction:** Selected Wellcome Collection work `wmcdanw6` ("Down
+  syndrome human karyotype 47,XY,+21", Miro image `B0000249`, credit
+  "Wessex Reg. Genetics Centre") instead. Verified directly against
+  `api.wellcomecollection.org`'s catalogue JSON (not only the
+  human-readable page) as `license.id:"cc-by"` with `accessConditions[].
+  status.id:"open"`; fetched at full native resolution
+  (1176×1158px) via the IIIF Image API
+  (`https://iiif.wellcomecollection.org/image/B0000249/full/full/0/default.jpg`).
+  Visual inspection confirmed a genuinely arranged G-banded karyogram —
+  chromosomes cut, paired, and laid out in numbered rows 1–22 plus X/Y,
+  the title "47,XY,+21 TRISOMY 21 (DOWN'S SYNDROME)" printed on the plate
+  itself, and an arrow marking the third chromosome-21 copy — with no
+  patient name, date of birth, or accession/specimen number visible
+  anywhere on the plate. `assets/images/cdc-phil-12504-trisomy21-
+  karyotype.jpg` was removed; `assets/images/wellcome-b0000249-
+  trisomy21-karyotype-47xy.jpg` was added byte-for-byte as fetched, no
+  re-encoding. `index.html`'s Figure 10.1 markup (title, alt text, both
+  caption spans, the `img-credits`/`cred` section, and the `IMAGES`
+  manifest's `fig10-1` record), `THIRD_PARTY_NOTICES.md`, and every test
+  file referencing the old filename (`tests/validate-course.mjs`,
+  `tests/e2e/local-images.spec.mjs`,
+  `tests/e2e-deployed/local-images.spec.mjs`) were updated together, and
+  the full `npm test` plus local `npm run test:e2e` suites (including
+  axe-core, both figure-sizing/caption checks, and the new figure-9-1
+  suite) were re-run and passed after the change. See
+  `THIRD_PARTY_NOTICES.md` and `docs/VALIDATION.md` for the complete
+  provenance/license/verification record, including the rejected
+  candidate.
+- **Prevention:** Extend the existing "confirm before trusting" discipline
+  explicitly to image *content*: a filename, an upload title, or a page
+  description is a claim about an image, not the image itself, and an
+  automated summary of that page inherits the same limitation — it
+  describes what the page's text says, not what a human (or a
+  cytogenetics reviewer) would see by actually looking at the decoded
+  pixels. This applies with extra force to same-collection "near-lookalike"
+  candidates, where a superficially matching title is exactly the
+  situation most likely to produce a false positive if the actual image
+  content is never checked.
+

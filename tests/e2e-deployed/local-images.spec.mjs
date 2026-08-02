@@ -3,12 +3,13 @@ import { test, expect } from "./fixtures.mjs";
 /**
  * Inspects the two approved images the course embeds (see
  * THIRD_PARTY_NOTICES.md / docs/ARCHITECTURE.md): a normal karyotype credited
- * to NHGRI (source page: Wikimedia Commons) and a CDC PHIL trisomy-21
- * karyotype. Both are now served locally from this repository's own
- * `assets/images/` directory (localized so the page no longer depends on a
- * third-party image host at runtime) — only the external source-page/credit
- * links in the figure captions still point to Wikimedia Commons and
- * phil.cdc.gov. Both use `loading="lazy"`, so they are scrolled into view
+ * to NHGRI (source page: Wikimedia Commons) and a Wellcome Collection
+ * trisomy-21 karyotype (CC BY 4.0, Wessex Regional Genetics Centre). Both are
+ * now served locally from this repository's own `assets/images/` directory
+ * (localized so the page no longer depends on a third-party image host at
+ * runtime) — only the external source-page/credit links in the figure
+ * captions still point to Wikimedia Commons and wellcomecollection.org. Both
+ * use `loading="lazy"`, so they are scrolled into view
  * before checking anything, and `naturalWidth`/`naturalHeight` are checked in
  * addition to `img.complete` — per the HTML spec, `complete` becomes true
  * once loading finishes *whether it succeeded or failed*, so `complete` alone
@@ -78,13 +79,13 @@ test.describe("deployed local image delivery", () => {
       page.locator('img[src*="assets/images/nhgri-human-male-karyotype-46xy.png"]'),
       "NHGRI normal karyotype (localized)",
     );
-    const cdc = await inspectImage(
+    const trisomy21 = await inspectImage(
       page,
-      page.locator('img[src*="assets/images/cdc-phil-12504-trisomy21-karyotype.jpg"]'),
-      "CDC PHIL trisomy 21 karyotype (localized)",
+      page.locator('img[src*="assets/images/wellcome-b0000249-trisomy21-karyotype-47xy.jpg"]'),
+      "Wellcome Collection trisomy 21 karyotype (localized)",
     );
 
-    for (const result of [nhgri, cdc]) {
+    for (const result of [nhgri, trisomy21]) {
       const deliveredOk = !result.timedOut && result.complete && result.naturalWidth > 0 && result.naturalHeight > 0;
       // Recorded as a soft assertion so both images are always checked and
       // reported even if one fails, exactly as required: an exact recorded
@@ -99,7 +100,7 @@ test.describe("deployed local image delivery", () => {
     // third-party host — verify both currentSrc values resolve under the
     // page's own origin/path rather than assuming localization succeeded.
     const pageOrigin = new URL(page.url());
-    for (const result of [nhgri, cdc]) {
+    for (const result of [nhgri, trisomy21]) {
       const src = new URL(result.currentSrc);
       expect(src.origin, `${result.label}: expected same-origin delivery`).toBe(pageOrigin.origin);
     }

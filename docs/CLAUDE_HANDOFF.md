@@ -877,6 +877,67 @@ and mutation-test evidence in `docs/QUALITY_LOG.md` QL-021's addendum:
   correction. PR #13 remains draft, open, and unmerged pending a second
   independent review.
 
+A figure-quality pass (branch `claude/figure-9-10-quality`, Issue #14 — a
+new, separately scoped issue; Issue #11 was not reopened) fixed Figure 9.1's
+label overlap and replaced Figure 10.1's karyogram, based on direct review
+of the live course rather than an automated finding:
+
+- **Figure 9.1 (centromere morphology):** the three labels were embedded
+  SVG `<text>` inside one shared `<svg>` whose `viewBox` was computed from
+  chromosome-drawing geometry only, never from label width — confirmed
+  against the live page before any change. "Metacentric" overlapped
+  "Submetacentric," and "Acrocentric + satellite" extended past both the
+  viewBox and the figure's own boundary. Fixed by separating labels from
+  drawings entirely: `chromoOnlySVG()`/`morphGrid()` (new) render each
+  morphology as its own card (`.morph-item`) in a responsive CSS grid
+  (`.fig-morph-grid`, `repeat(auto-fit,minmax(150px,1fr))`), with the label
+  as ordinary wrapping HTML text below a small, label-free drawing. This
+  collapses to a single stacked column at narrow widths without a new
+  hard-coded breakpoint. The figure's "(schematic)" identification is
+  unchanged.
+- **Figure 10.1 (trisomy 21 karyotype):** the embedded CDC PHIL image had
+  unacceptable morphology/band detail (heavily thresholded, chromosomes
+  grouped not individually numbered) and — confirmed by decoding and
+  reading its own printed group label, not assumed — was actually a
+  **female** (47,XX,+21) karyotype, which did not match the course's own
+  `47,XY,+21` worked ISCN example beneath it. Removed and replaced with a
+  Wellcome Collection karyogram (CC BY 4.0, credit "Wessex Reg. Genetics
+  Centre"; 1176×1158px, fetched via the IIIF Image API at full native
+  resolution), selected only after visually inspecting the decoded image
+  directly. That same discipline caught a false lead first: a
+  same-collection, similarly titled Wikimedia Commons file (Josef Reischig
+  archive, CC BY-SA 3.0, higher pixel count) looked correct by title and an
+  automated page-text summary, but turned out on inspection to be a raw,
+  unsorted metaphase spread — overlapping unpaired chromosomes plus intact
+  interphase nuclei — not an arranged karyogram, and was rejected despite
+  its permissive license and higher resolution.
+- `tests/e2e/figure-9-1-morphology.spec.mjs` (new) proves the Figure 9.1
+  fix with real bounding-box assertions (label containment, no pairwise
+  overlap, no text clipping, no horizontal page overflow) at all five
+  acceptance-criteria viewports (1440×900, 1280×900, 768×1024, 390×844,
+  360×800). Mutation-tested against the pre-fix markup (via a temporary
+  `git stash`, which does not touch the new untracked test file): 10 of 12
+  runs failed for the correct reason before the fix, all 12 passed after.
+- `tests/validate-course.mjs`, `tests/e2e/local-images.spec.mjs`, and
+  `tests/e2e-deployed/local-images.spec.mjs` were updated to the new
+  filename and source URL; the existing `visual-polish.spec.mjs`
+  figure-sizing/caption checks (which iterate figures generically) and the
+  full axe-core accessibility scan pass unchanged against the new image.
+- Added a detailed teaching-image inventory and priority list to
+  `docs/ROADMAP.md` Milestone 2B (well-spread/over-spread/under-spread
+  metaphases, overlap artifacts, banding quality, band-resolution series,
+  normal 46,XX, structural abnormalities, mosaicism vs. culture artifact,
+  FISH signal patterns) and a merged per-asset checklist. Two new priority
+  items (mosaicism-vs-artifact, real FISH patterns) have no manifest lead
+  yet; adding one is flagged as the first concrete task for whoever picks
+  this up, deliberately not attempted as a broad replacement project here.
+  Commented on the pre-existing Issue #3 pointing at this addition.
+- No question, answer, rationale, scoring, progress, analytics, storage
+  schema, stable ID, or public API changed. See `docs/QUALITY_LOG.md`
+  QL-022 and `docs/VALIDATION.md` for the full diagnosis, rejected
+  candidate, and verification record, and `THIRD_PARTY_NOTICES.md` for the
+  complete provenance/license record of the new image.
+
 ## Read these files first
 
 1. `README.md`

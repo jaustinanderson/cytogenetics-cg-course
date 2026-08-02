@@ -100,17 +100,18 @@ or roadmap statement is not a contract unless a committed test proves it.
 
 As of 2026-07-31, the production page requests **no third-party font or
 image host at runtime**. It previously requested IBM Plex Sans/Mono from
-Google Fonts and the two approved images (NHGRI, CDC PHIL) from their
-respective hosts; both are now committed to this repository:
+Google Fonts and its two approved images from their respective hosts; both
+are now committed to this repository:
 
 - `assets/fonts/ibm-plex-sans/` and `assets/fonts/ibm-plex-mono/` — the exact
   IBM Plex Sans (400/500/600/700) and IBM Plex Mono (400/500/600) weights the
   course actually uses, as WOFF2 files sourced from the official
   [IBM/plex](https://github.com/IBM/plex) GitHub release assets, under the
   bundled SIL Open Font License 1.1
-- `assets/images/` — the same two approved public-domain images the course
-  already displayed (NHGRI 46,XY karyotype; CDC PHIL trisomy-21 karyotype),
-  fetched from the exact URLs previously used at runtime
+- `assets/images/` — the two approved images the course displays (NHGRI
+  46,XY karyotype; a Wellcome Collection 47,XY,+21 trisomy-21 karyotype,
+  CC BY 4.0 — replaced 2026-08-01, see `THIRD_PARTY_NOTICES.md`), fetched
+  from each source's own hosting at the time it was localized/updated
 
 See [Third-party notices](../THIRD_PARTY_NOTICES.md) for exact upstream
 source URLs, retrieval dates, licenses, and file hashes for every localized

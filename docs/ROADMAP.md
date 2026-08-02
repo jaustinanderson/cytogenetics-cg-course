@@ -241,30 +241,93 @@ source pages.
 
 ### Required asset record
 
+Every proposed asset needs all of the following before it can move past
+candidate status — this list reconciles the original field set below with
+the explicit per-asset checklist Austin gave when scoping this section
+(2026-08-01); the two were already close, and any field named by either is
+now required:
+
 - stable asset ID and local filename
-- subject and intended teaching purpose
-- source page, creator, and required credit
-- exact license/version or public-domain basis
+- subject and intended teaching purpose (what specific concept it teaches,
+  and why a real image rather than a schematic is the right tool for it)
+- source page, creator, and required credit (exact provenance)
+- exact license/version or public-domain basis, i.e. **explicit
+  redistribution permission or a compatible license** — not merely "looks
+  free to use"
 - evidence URL and verification date
 - modification/derivative status
-- specimen origin when known
+- specimen origin and technical context when known (culture type, banding
+  method, approximate band resolution, any other technical detail that
+  affects teaching value)
+- **confirmed absence of patient-identifying information** — no name, date
+  of birth, medical record number, or accession number visible anywhere in
+  the image, checked directly against the actual image content, not assumed
+  from its source
+- **resolution and morphology-quality assessment** — checked by decoding
+  and looking at the actual image (never inferred from filename, alt text,
+  or a listing page's description alone; see the Figure 10.1 replacement
+  below for why this step matters even for a same-collection, similarly
+  labeled candidate)
 - redistribution decision and reviewer
+- **independent cytogenetics review before publication**, distinct from the
+  redistribution/rights reviewer above — a rights-clean image is not
+  automatically a scientifically accurate or well-chosen one
+- accurate, ISCN-correct caption and accessible alternative text
 - target figure, module, and exercise
 - checksum when stored locally
 
 ML-training permission and redistribution permission remain separate. ML
 training is outside this repository's scope. An unfilled placeholder is better
-than an asset with uncertain rights.
+than an asset with uncertain rights, and a mediocre or ambiguously licensed
+image is worse than no image — remove the figure and cover the concept in
+text/ISCN notation instead (as Figure 10.1 did between the CDC PHIL removal
+and the Wellcome Collection replacement being verified, and as continues to
+apply to every "needed" row below until each is individually resolved).
 
-### Teaching-image priority
+### Teaching-image inventory and priority
 
-1. Four metaphase-quality states for real quality judgment
-2. Normal 46,XX comparison image
-3. Band-resolution series
-4. Carefully selected abnormality karyograms
+Ordered by teaching leverage — the earlier items unlock the most additional
+lessons per image acquired. An item is only removed from this list once a
+verified asset passes every field in "Required asset record" above; a
+promising lead that has not yet been visually inspected and rights-verified
+stays listed as `needed`, not `embedded`.
+
+| # | Subject | Status | Notes |
+| ---: | --- | --- | --- |
+| 1 | Representative well-spread metaphase | needed | `need-meta-good` in the `IMAGES` manifest; the baseline "good" example every quality judgment below is compared against |
+| 2 | Over-spread metaphase (chromosome loss risk) | needed | `need-meta-scat` |
+| 3 | Under-spread / short-contracted metaphase | needed | `need-meta-short`; illustrates excessive colcemid exposure |
+| 4 | Chromosome overlap and touching artifacts | needed | `need-meta-ovl`; the single most common real-world analysis obstacle, currently only taught schematically |
+| 5 | Poor vs. adequate banding, side by side | needed | `need-band-opt` / `need-band-over` / `need-band-under`; distinct from band-resolution level below — this is technical quality, not an intentional resolution choice |
+| 6 | Band-resolution series (e.g. ~400 / 550 / 700-850 band levels) | needed | `need-bandres` |
+| 7 | Normal 46,XX karyogram | needed | `need-46xx`; completes the normal-comparison pair — 46,XY is already embedded (Figure 8.1) |
+| 8 | Normal 46,XY karyogram | **embedded** | Figure 8.1, NHGRI, public domain — done before this roadmap section was written |
+| 9 | Trisomy 21 (47,XY,+21 or 47,XX,+21) | **embedded** | Figure 10.1 — replaced 2026-08-01: the prior CDC PHIL image (heavily thresholded, individually unnumbered, and on inspection an XX-derived karyotype that did not match the course's own 47,XY,+21 worked example) was removed and replaced with a Wellcome Collection karyogram (CC BY 4.0, Wessex Regional Genetics Centre) verified by direct visual inspection, not by filename or listing text alone. See `THIRD_PARTY_NOTICES.md` for the full record, including a same-collection candidate that was downloaded, inspected, and rejected for actually being an unsorted metaphase spread rather than an arranged karyogram |
+| 10 | Structural abnormality karyogram(s) (e.g. a deletion and a translocation) | needed | `need-del` / `need-iso` / `need-ph` / `need-inv` / `need-ring` / `need-mar`; prioritize one clearly interpretable example over several marginal ones |
+| 11 | Mosaicism vs. culture-artifact comparison | **not yet in the manifest** | Currently taught only in prose/ISCN notation (`mos` examples); a real side-by-side would materially strengthen Module 10. No `IMAGES` lead exists yet — adding one (with a real candidate source, not a placeholder) is itself part of this follow-up work |
+| 12 | Representative FISH signal patterns (normal, fusion, break-apart, deletion) | **not yet in the manifest** | Currently taught only via the Figure 15.1 schematic; a real fluorescence micrograph set is a distinct, additional teaching purpose, not a replacement for the schematic. No `IMAGES` lead exists yet either |
+
+Items 11 and 12 are new priority additions from this section, not restated
+from a pre-existing lead — deliberately left as prose here rather than
+inserted into the `IMAGES` array as new `needed` records in this PR, since
+that would change the structurally validated manifest count (currently 19
+records: 2 embedded, 17 needed — see `tests/validate-course.mjs` and
+`README.md`) without yet having a real candidate source behind either row.
+Adding the records and a genuine candidate lead for each is the first
+concrete task for whoever picks up this follow-up, not a documentation-only
+placeholder to insert now. Additional existing `needed` manifest leads not
+restated above (45,X Turner, 47,XXY Klinefelter) remain open at the same
+priority as item 10; see the `IMAGES` array in `index.html` for the complete
+current lead list and each entry's `lead` field.
 
 Schematics remain where their clarity teaches landmarks better than a
-photograph.
+photograph (Figures 4.1, 8.2, 9.1, and 15.1 are explicitly labeled
+"schematic" for exactly this reason). Adding a real image for a subject a
+schematic already covers is only worthwhile when recognizing *actual*
+morphology — not just the underlying concept — is itself part of the
+learning objective (per item 12 above, for example: the schematic teaches
+what a break-apart signal pattern *means*; a real micrograph teaches what
+one actually *looks like* against real background/artifact noise).
 
 ### Exit criteria
 
