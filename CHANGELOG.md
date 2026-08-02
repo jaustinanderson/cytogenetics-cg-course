@@ -6,6 +6,31 @@ All notable repository changes are recorded here.
 
 ### Added
 
+- Explicit, stable `id` fields, plus a literal frozen `legacyId` recording
+  each item's original position-derived key, on all 30 exercise items
+  (`EXERCISES.ex7`/`ex9group`/`ex9chrom`/`ex10`/`ex14`/`ex15` in
+  `index.html`), and `migrateExerciseIds()`, a deterministic, idempotent
+  migration that renames any surviving legacy key — read from each item's
+  own frozen `legacyId`, never recomputed from its current array position
+  — to its item's real stable id on every load and after every import.
+  When both a legacy and stable record already exist for the same item,
+  migration keeps the entire record (`c`, `n`, and `ts` together) from
+  whichever key was written more recently, deterministic ties favoring the
+  canonical stable-key record — a conservative snapshot policy, not an
+  arithmetic merge, because these records carry no attempt-level
+  provenance and their histories cannot be assumed disjoint. Does not
+  require a `SCHEMA_V` bump. 17 new dependency-free regression tests in
+  `tests/dom-behavior.mjs` plus a structural check in
+  `tests/validate-course.mjs` that verifies all 30 `id`/`legacyId` pairs
+  against an independently hard-coded, frozen historical mapping table —
+  exact key-for-key and value-for-value equality, not merely that every
+  value happens to be unique, which a swap between two items' `legacyId`
+  values would still satisfy. Also includes a true end-to-end reordering
+  proof and a reorder-before-migration proof that both run the real
+  product script with `EXERCISES.ex7.items.reverse()` injected into a copy
+  of the exact inline script text. Mutation-tested. See
+  `docs/QUALITY_LOG.md` QL-005 and `docs/VALIDATION.md` "Stable
+  exercise-item identity" (Issue #2)
 - `tests/e2e/figure-9-1-morphology.spec.mjs`: real-browser bounding-box
   regression coverage (not screenshots) for Figure 9.1's centromere-morphology
   labels — each label's containment inside its own card and inside the

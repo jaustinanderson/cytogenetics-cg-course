@@ -134,11 +134,11 @@ the course.
   CSS rule to genuine lesson prose only. Deliberately does **not** address
   the page's dense, fully-expanded quiz/exercise disclosure; that is recorded
   below as the recommended next isolated UX task
-- [ ] Reduce quiz/exercise disclosure density — draft PR #13, open and
-  unmerged pending a second independent review. Every quiz and exercise
-  widget is now a native `<details>`/`<summary>` element, collapsed by
-  default, following the same disclosure pattern already used for
-  case-study reveal cards (`details.card`). Measured directly at 1440×900:
+- [x] Reduce quiz/exercise disclosure density — merged via PR #13
+  (`ef93e5a`), Issue #11, closed. Every quiz and exercise widget is now a
+  native `<details>`/`<summary>` element, collapsed by default, following
+  the same disclosure pattern already used for case-study reveal cards
+  (`details.card`). Measured directly at 1440×900:
   document height dropped 45.2% (110,209px → 60,386px), quiz/exercise
   share of document height dropped from 46.6% to 2.5%, and answer buttons
   simultaneously visible on a fresh load dropped from 636 to 0. Question
@@ -172,8 +172,29 @@ review status stable before adding 46 questions.
 
 ### Work
 
-- [ ] Add explicit stable IDs to every exercise item; stop deriving progress
-  identity from array position
+- [x] Add explicit stable IDs to every exercise item; stop deriving progress
+  identity from array position — branch `claude/issue-2-stable-exercise-ids`
+  (Issue #2, PR #16): every one of the 30 exercise items across the 6
+  exercise sets now carries an explicit, literal `id` field plus a
+  second literal, frozen `legacyId` field recording its original
+  position-derived key (`EXERCISES.*` in `index.html`), and
+  `migrateExerciseIds()` deterministically and idempotently renames any
+  surviving legacy key — read from each item's own `legacyId`, never
+  recomputed from its current array position — to its item's real stable
+  id on every load and after every import. When both a legacy and stable
+  record already exist for the same item, migration keeps the entire
+  record from whichever key was written more recently (a conservative
+  deterministic snapshot, not an arithmetic merge, since these records
+  carry no provenance and their histories cannot be assumed disjoint).
+  Does not bump `SCHEMA_V`. See `docs/QUALITY_LOG.md` QL-005 (including
+  its addenda, documenting three correctness/coverage problems independent
+  review found and fixed before merge) for the full decision record, and
+  `docs/VALIDATION.md` for test coverage. This closes only this item —
+  the remaining Milestone 1 work below (import hardening, stale-ID
+  policy, Reset/import re-render, storage-failure UI, analytics
+  semantics, content-pack decision, provenance fields, image-manifest
+  normalization, and broader API contract tests) is explicitly out of
+  scope for that PR and stays open
 - [ ] Define and validate a versioned progress-import schema
 - [ ] Deep-clone imported state and reject malformed nested values
 - [ ] Decide how stale question/exercise IDs are handled during import

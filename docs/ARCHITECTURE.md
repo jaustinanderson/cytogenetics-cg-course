@@ -69,7 +69,7 @@ Schema v2 stores:
   v: 2,
   modules: { m1: true },
   answers: { "m1-q1": { c: true, n: 1, ts: 0 } },
-  exercises: { "ex7-1": { c: false, n: 1, ts: 0 } },
+  exercises: { "ex7-i1": { c: false, n: 1, ts: 0 } },
   started: 0
 }
 ```
@@ -78,9 +78,21 @@ Schema v2 stores:
 the latest timestamp. Current headline analytics use last-attempt mastery,
 not total-attempt accuracy.
 
+`exercises` keys are each item's own explicit, literal `id` field (see
+`EXERCISES.*` in `index.html`), not derived from its position in the item
+array — as of 2026-08-02 (Issue #2), stopping array position from ever
+determining progress identity. Exercise progress previously used a
+position-derived `"<key>-<n>"` string computed fresh on every render, so
+inserting or reordering an item could silently reattach a learner's saved
+history to a different item; `migrateExerciseIds()` normalizes any
+surviving legacy-format keys, deterministically and idempotently, on every
+load and after every import. This did **not** require a `SCHEMA_V` bump —
+the record shape above is unchanged, only the convention for what strings
+populate `exercises`'s keys — see `docs/QUALITY_LOG.md` QL-005 for the full
+decision record, conflict-resolution rule, and test evidence.
+
 Known design debt:
 
-- exercise outcome IDs are still position-derived
 - imported nested state is not yet fully schema-validated
 - runtime-injected questions are session-only
 - storage failure is silently tolerated

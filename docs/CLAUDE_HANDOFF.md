@@ -938,6 +938,141 @@ of the live course rather than an automated finding:
   candidate, and verification record, and `THIRD_PARTY_NOTICES.md` for the
   complete provenance/license record of the new image.
 
+A stable-exercise-identity pass (branch `claude/issue-2-stable-exercise-ids`,
+"Part of #2" — the first isolated Milestone 1 task, not a continuation of
+the prior figure-quality work) implements the first bullet of Issue #2's
+work list and `docs/QUALITY_LOG.md` QL-005:
+
+- **Root problem:** exercise-outcome storage keys
+  (`state.exercises[...]`) were a position-derived `"<key>-<n>"` string
+  recomputed from each item's array index on every render. Inserting or
+  reordering an item could silently reattach a learner's saved history to
+  a different item.
+- **Fix:** every one of the 30 items across the 6 exercise sets
+  (`EXERCISES.ex7`/`ex9group`/`ex9chrom`/`ex10`/`ex14`/`ex15`) now carries
+  an explicit, literal `id` field (`"<key>-i<n>"`, e.g. `"ex7-i1"`) —
+  deliberately a different string format from the legacy `"<key>-<n>"`
+  form so the two can never collide and migration is genuinely meaningful
+  — plus a second literal, frozen `legacyId` field recording the exact
+  position-derived key that item held before this change (e.g.
+  `"ex7-1"`). `buildExercise()`'s summary-seeding loop and its `choose()`
+  handler now read/write `state.exercises[it.id]` directly instead of
+  recomputing a position-derived key from the current render index.
+- **Migration:** a new `migrateExerciseIds()` renames any surviving
+  legacy-format key — read from each item's own frozen `legacyId`, never
+  recomputed from its current array index — to its item's real stable id.
+  It is deterministic and idempotent (a second run against
+  already-migrated state performs zero writes, verified by exact storage
+  string equality). Called unconditionally from `loadProgress()` and from
+  `importJSON()`.
+- **Conflict rule:** when both a legacy key and its item's stable key
+  already hold a record, these records carry no attempt-level identifiers
+  or provenance, so their histories cannot be assumed disjoint or exactly
+  merged. Migration keeps the entire record (`c`, `n`, and `ts` together)
+  from whichever key was written more recently — a conservative
+  deterministic snapshot, not an arithmetic merge — with ties keeping the
+  canonical stable-key record.
+- **Schema-version decision:** `SCHEMA_V` stays `2`. The stored record's
+  shape is unchanged — only the convention for which strings populate
+  `exercises`'s keys — and the migration is cheap and safe enough (at most
+  30 items) to simply always run rather than gate behind a version bump.
+- **Tests:** 17 checks in `tests/dom-behavior.mjs` plus a structural
+  completeness check in `tests/validate-course.mjs` cover explicit unique
+  ids and legacy ids with no accidental collision,
+  id-travels-with-item-not-position, legacy migration (memory and
+  storage), idempotency (including after conflict resolution, via exact
+  storage-string equality), the snapshot conflict policy (a newer stable
+  record, a newer legacy record, an equal-timestamp tie, and a
+  mixed-version-tab overlap example proving `n` stays the true attempt
+  count rather than an inflated sum), fresh answers recorded only under
+  stable ids, and reload/export/import round-trips including a
+  legacy-format export. Two dedicated end-to-end tests run the real
+  product script with `EXERCISES.ex7.items.reverse()` injected into a
+  copy of the exact inline script text: one answers two items with
+  deliberately different correct/incorrect outcomes and confirms each
+  stays correctly attributed after the reorder; the other seeds a legacy
+  record and reorders the array *before* migration ever runs, confirming
+  the record follows its original item, not whichever item now occupies
+  that position. **Mutation-tested** across four separate mutations (each
+  reverted and confirmed byte-identical via `diff`): disabling the
+  migration call; reverting the stable-id lookup to a position-derived
+  computation; reverting the legacy-key lookup inside migration back to a
+  position-derived computation; and reverting the snapshot conflict
+  policy back to summing `n`. Each failed exactly the tests that claim to
+  cover it.
+- `tests/e2e/progressive-disclosure.spec.mjs`'s existing seeded-record test
+  was updated to seed under `"ex7-i1"` (the real stable id) instead of the
+  legacy `"ex7-1"`, keeping its original claim (no migration needed, no
+  write, no `progress` event for an already-current-format record) intact.
+- Strictly scoped to this one Issue #2 work item: no question, answer,
+  rationale, scoring, quiz progress, analytics semantics, image, styling,
+  layout, or accessibility presentation changed, and none of the other
+  Issue #2 items (full import hardening, stale-ID policy, Reset/import
+  exercise re-render, storage-failure UI, analytics redesign, content-pack
+  format, image-manifest normalization) were touched. See
+  `docs/QUALITY_LOG.md` QL-005 and `docs/VALIDATION.md` "Stable
+  exercise-item identity" for the complete record.
+
+Independent review of that draft PR (#16) found two blocking correctness
+problems, corrected 2026-08-02 on the same branch — full diagnosis,
+counterexample, and mutation-test evidence in `docs/QUALITY_LOG.md`
+QL-005's addendum:
+
+1. **Legacy IDs were recomputed from current array position, not frozen.**
+   `migrateExerciseIds()` originally computed each item's legacy key from
+   its position in `EXERCISES[key].items` *at migration time* — the same
+   bug QL-005 exists to fix, one level up. A learner who skipped a release
+   and first loaded a later one after an item was reordered could have
+   had legacy progress migrated onto whichever item currently occupied
+   that position. The original reordering test didn't catch this because
+   it reordered *after* stable ids already existed, never exercising
+   legacy migration against a reordered array. Fixed by giving every item
+   a literal, frozen `legacyId` field and reading it directly; two new
+   tests reorder the array *before* migration runs and confirm the record
+   follows the correct item regardless.
+2. **The conflict rule's "disjoint sequences" claim was false.** Summing
+   `n` was justified by claiming a legacy and stable record "can only"
+   contain disjoint attempts. Counterexample: two browser tabs on
+   different app releases — one migrates an early 5-attempt snapshot to
+   the stable key, the other (still on the legacy key) later records a
+   6th attempt that already includes the first 5. Summing 6 + 5 reports
+   11 attempts for an item genuinely attempted 6 times. Replaced with a
+   conservative deterministic snapshot policy (keep the entire newer
+   record, never reconstruct one by mixing fields) and rewrote the
+   conflict tests around this exact counterexample plus four other
+   scenarios.
+
+`docs/ARCHITECTURE.md`, `docs/ROADMAP.md`, `docs/VALIDATION.md`, and
+`CHANGELOG.md` were all updated so none retain the disproven "disjoint
+sequences," "sum," or "never double-counts" claims. `npm test` and the
+full local Playwright suite passed after this correction. PR #16 remains
+draft, open, and unmerged pending a second independent review.
+
+A second independent review of the same draft PR found one remaining
+test-coverage blocker, corrected 2026-08-02 on the same branch — full
+diagnosis and mutation-test evidence in `docs/QUALITY_LOG.md` QL-005's
+second addendum: the structural check added above (every item has a
+unique `id` and a unique, non-colliding `legacyId`) proves presence and
+uniqueness, but never proves each `legacyId` is paired with the *correct*
+item — swapping two items' `legacyId` values with each other would leave
+every count/uniqueness/non-collision assertion satisfied while migration
+silently attached each item's history to the other one. Confirmed
+directly (not assumed): swapping `ex7-i1`/`ex7-i2`'s `legacyId` values
+and isolating just the old assertions against the mutated data showed
+every one of them still reporting `true`. Fixed by adding
+`EXPECTED_STABLE_TO_LEGACY_ID` to `tests/validate-course.mjs` — a
+literal table of all 30 stable-id-to-historical-legacy-id pairs,
+hard-coded independently of `EXERCISES`/`index.html` (never computed
+from an item's current position or from `item.legacyId` itself, since
+that couldn't detect a mistake in the very data being checked) — and
+asserting the complete live mapping matches it exactly, key set first
+then value-for-value. Mutation-tested: the same swap made the new
+exact-mapping assertion fail with a diff naming exactly the two swapped
+entries, while the pre-existing checks still passed unchanged; reverted
+and confirmed `index.html` byte-identical via `diff` before committing.
+`npm test` and the full local Playwright suite passed again. PR #16
+remains draft, open, and unmerged pending further review.
+
 ## Read these files first
 
 1. `README.md`
@@ -1023,16 +1158,27 @@ malformed nested maps and outcome records. It should:
 - define how stale content IDs are handled
 - have hostile/malformed fixtures and round-trip tests
 
-### Exercise identity
+### Exercise identity — resolved 2026-08-02
 
-Exercise outcomes still use position-derived IDs such as `ex7-1`. Inserting or
-reordering an item can attach saved progress to a different exercise. Give each
-item an explicit stable ID and add a migration strategy.
+~~Exercise outcomes still use position-derived IDs such as `ex7-1`.~~ Done
+via branch `claude/issue-2-stable-exercise-ids` (Issue #2): every exercise
+item now carries an explicit, literal `id` field, and
+`migrateExerciseIds()` deterministically and idempotently renames any
+surviving legacy-format key on load and on import, with a documented,
+tested conflict-resolution rule. See `docs/QUALITY_LOG.md` QL-005 and
+`docs/VALIDATION.md` "Stable exercise-item identity" for the full record.
+This closes only this specific risk — the item immediately below (exercise
+rendering after API writes) is a related but distinct, still-open gap this
+work does not touch.
 
 ### Exercise rendering after API writes
 
 API import and Reset rebuild quiz widgets but do not fully rebuild exercise
-closures. Tests and a centralized render/reset path are needed.
+closures. Tests and a centralized render/reset path are needed. (Not
+addressed by the exercise-identity work above: that work changed *which
+key* an outcome is stored under, not *whether* the exercise DOM re-renders
+after `importJSON()`/`reset()` — those still only call
+`$all('.quiz-mount').forEach(buildQuiz)`, unchanged.)
 
 ### Storage failure
 

@@ -231,12 +231,18 @@ test.describe("progressive disclosure: does not count as course progress", () =>
     // summary-seeding logic ever called recordAnswer/recordExercise/
     // saveProgress instead of only reading state, these exact values would
     // change (a new ts, or n incremented) even though nothing was clicked.
+    // The exercise record is seeded under "ex7-i1", the item's real stable
+    // id (Issue #2) -- not the legacy position-derived "ex7-1" -- so no
+    // migration is needed here and this test keeps proving its original
+    // claim (nothing written, no event) rather than incidentally covering
+    // migration, which has its own dedicated coverage in
+    // tests/dom-behavior.mjs.
     const seeded = {
       v: 2,
       modules: {},
       started: 0,
       answers: { "m1-q1": { c: true, n: 1, ts: 12345 } },
-      exercises: { "ex7-1": { c: true, n: 1, ts: 67890 } },
+      exercises: { "ex7-i1": { c: true, n: 1, ts: 67890 } },
     };
     await page.addInitScript(
       ([key, value]) => window.localStorage.setItem(key, value),
@@ -247,7 +253,7 @@ test.describe("progressive disclosure: does not count as course progress", () =>
 
     const progress = await page.evaluate(() => window.CytoCourse.getProgress());
     expect(progress.answers["m1-q1"]).toEqual(seeded.answers["m1-q1"]);
-    expect(progress.exercises["ex7-1"]).toEqual(seeded.exercises["ex7-1"]);
+    expect(progress.exercises["ex7-i1"]).toEqual(seeded.exercises["ex7-i1"]);
 
     // The summary must reflect the seeded record immediately, before any
     // interaction -- this is the regression this correction fixes.
@@ -407,7 +413,7 @@ test.describe("progressive disclosure: reattempting a previously recorded item",
     const host = page.locator('.exer[data-exer="ex15"]');
     const key = await host.getAttribute("data-exer");
     const items = await page.evaluate((k) => window.CytoCourse.getExercises()[k].items, key);
-    const firstId = `${key}-1`;
+    const firstId = items[0].id; // the item's own stable id (Issue #2), not a position-derived guess
 
     await openDisclosure(host);
     const wrongIndex = items[0].options.findIndex((_opt, i) => i !== items[0].answer);

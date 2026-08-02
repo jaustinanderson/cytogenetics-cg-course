@@ -207,6 +207,104 @@ test("exercise, flashcard, and image manifests match the baseline", () => {
   }
 });
 
+// Frozen historical record of every exercise item's stable id and the
+// EXACT legacy (position-derived) key it held before Issue #2 introduced
+// explicit ids. Hard-coded independently of index.html/EXERCISES on
+// purpose: this is the thing under test, so computing "expected" from the
+// same live data -- an item's current array position, item.legacyId
+// itself, or any other transformation of the data under test -- would let
+// a real authoring mistake (e.g. two items' legacyId values accidentally
+// swapped with each other) pass silently, because uniqueness alone cannot
+// distinguish "every value is unique" from "every value is unique AND
+// attached to the correct item." Do not derive this table from the live
+// course at any point, including regenerating it from the current file to
+// make a failing test pass -- if a legitimate legacy key is ever missing,
+// add its entry from the historical record of what that item's key
+// actually was, not from what the code currently claims.
+const EXPECTED_STABLE_TO_LEGACY_ID = {
+  "ex7-i1": "ex7-1",
+  "ex7-i2": "ex7-2",
+  "ex7-i3": "ex7-3",
+  "ex7-i4": "ex7-4",
+  "ex9group-i1": "ex9group-1",
+  "ex9group-i2": "ex9group-2",
+  "ex9group-i3": "ex9group-3",
+  "ex9group-i4": "ex9group-4",
+  "ex9group-i5": "ex9group-5",
+  "ex9chrom-i1": "ex9chrom-1",
+  "ex9chrom-i2": "ex9chrom-2",
+  "ex9chrom-i3": "ex9chrom-3",
+  "ex9chrom-i4": "ex9chrom-4",
+  "ex9chrom-i5": "ex9chrom-5",
+  "ex10-i1": "ex10-1",
+  "ex10-i2": "ex10-2",
+  "ex10-i3": "ex10-3",
+  "ex10-i4": "ex10-4",
+  "ex10-i5": "ex10-5",
+  "ex14-i1": "ex14-1",
+  "ex14-i2": "ex14-2",
+  "ex14-i3": "ex14-3",
+  "ex14-i4": "ex14-4",
+  "ex14-i5": "ex14-5",
+  "ex14-i6": "ex14-6",
+  "ex15-i1": "ex15-1",
+  "ex15-i2": "ex15-2",
+  "ex15-i3": "ex15-3",
+  "ex15-i4": "ex15-4",
+  "ex15-i5": "ex15-5",
+};
+
+test("every exercise item has complete, unique, non-colliding stable and legacy id metadata, matching the frozen historical mapping exactly", () => {
+  // Issue #2 / QL-005: exercise progress identity depends on every item
+  // carrying both an explicit stable `id` and a literal, frozen `legacyId`
+  // (the exact position-derived key that item held before this migration
+  // existed). Missing, blank, duplicate, or colliding values here would
+  // silently break migrateExerciseIds()'s guarantees.
+  const stableIds = [];
+  const legacyIds = [];
+  const actualMapping = {};
+  Object.entries(exercises).forEach(([key, exercise]) => {
+    exercise.items.forEach((item, i) => {
+      assert.equal(typeof item.id, "string", `${key}[${i}]: missing a string id`);
+      assert.ok(item.id.trim(), `${key}[${i}]: id must not be blank`);
+      assert.equal(typeof item.legacyId, "string", `${key}[${i}]: missing a string legacyId`);
+      assert.ok(item.legacyId.trim(), `${key}[${i}]: legacyId must not be blank`);
+      stableIds.push(item.id);
+      legacyIds.push(item.legacyId);
+      actualMapping[item.id] = item.legacyId;
+    });
+  });
+
+  assert.equal(stableIds.length, 30, "30 exercise items across 6 sets");
+  assert.equal(new Set(stableIds).size, 30, "every stable id must be unique");
+  assert.equal(legacyIds.length, 30);
+  assert.equal(new Set(legacyIds).size, 30, "every legacy id must be unique");
+
+  const stableSet = new Set(stableIds);
+  const legacyOverlap = legacyIds.filter((id) => stableSet.has(id));
+  assert.deepEqual(legacyOverlap, [], "no legacy id may accidentally collide with any stable id");
+
+  // Uniqueness and non-collision alone cannot catch two items' legacyId
+  // values being accidentally swapped with each other -- both values
+  // would still be present, still unique, and still non-colliding with
+  // any stable id. Compare the complete actual mapping (built from the
+  // live EXERCISES data above) against the independently frozen
+  // EXPECTED_STABLE_TO_LEGACY_ID table so a swap -- or any other
+  // per-item mismatch -- fails explicitly. Key sets are compared first so
+  // a missing or unexpected stable id is reported clearly, distinct from
+  // a value mismatch on an id both sides agree exists.
+  assert.deepEqual(
+    Object.keys(actualMapping).sort(),
+    Object.keys(EXPECTED_STABLE_TO_LEGACY_ID).sort(),
+    "the set of stable ids carrying a legacyId must exactly match the frozen historical table",
+  );
+  assert.deepEqual(
+    actualMapping,
+    EXPECTED_STABLE_TO_LEGACY_ID,
+    "every item's legacyId must exactly match its frozen historical value -- a stable id must never be paired with a different item's legacy key",
+  );
+});
+
 test("quiz and exercise mounts map to declared data keys", () => {
   const quizMounts = [...html.matchAll(/data-quiz=["']([^"']+)["']/g)].map((match) => match[1]);
   const exerciseMounts = [...html.matchAll(/data-exer=["']([^"']+)["']/g)].map((match) => match[1]);

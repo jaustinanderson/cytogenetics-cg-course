@@ -61,7 +61,8 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
 
 ## QL-005 — Exercise progress identity is position-dependent
 
-- **Status:** Open; Milestone 1
+- **Status:** Corrected on branch `claude/issue-2-stable-exercise-ids`
+  (Issue #2)
 - **Finding:** Exercise outcomes use IDs such as `ex7-1`, derived from array
   position.
 - **Impact:** Inserting or reordering exercise items can attach saved history to
@@ -69,8 +70,269 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
 - **Cause:** Presentation order was used as persistent identity.
 - **Correct action:** Give each item a stable explicit ID and migrate existing
   position-based records.
+- **Correction:** Every one of the 30 items across the 6 exercise sets
+  (`EXERCISES.ex7`/`ex9group`/`ex9chrom`/`ex10`/`ex14`/`ex15` in
+  `index.html`) now carries an explicit, literal `id` field
+  (`"<key>-i<n>"`, e.g. `"ex7-i1"`) — deliberately a different string
+  format from the legacy `"<key>-<n>"` position-derived form, so the two
+  can never collide and a genuine migration (not a same-string no-op) is
+  both meaningful and testable — **and** a second literal, frozen
+  `legacyId` field recording the exact position-derived key that item
+  held before this change (e.g. `"ex7-1"`). `buildExercise()`'s seeding
+  loop and `choose()` handler read/write `state.exercises[it.id]`
+  directly instead of recomputing `key + '-' + (idx+1)` from the current
+  render index.
+
+  A new `migrateExerciseIds()` renames any surviving legacy-format key —
+  read from each item's own frozen `legacyId`, **never recomputed from
+  its current array index** — to its item's real stable id, called
+  unconditionally from `loadProgress()` (both on a fresh v2 load and
+  after a v1→v2 migration produces no legacy exercise keys, since v1
+  never had an `exercises` field) and from `importJSON()`. It is
+  deterministic (driven entirely by each item's own `legacyId`/`id`
+  fields and the live `EXERCISES` data, never a stored "already migrated"
+  flag) and idempotent (once no legacy key remains, every further call —
+  on every load, forever — finds nothing to do and performs zero writes;
+  verified directly, not assumed, in `tests/dom-behavior.mjs`).
+
+  **Conflict rule**, for the case where both a legacy key and its item's
+  stable key already hold a record (a stale re-import, or a state a
+  mixed-version session partially wrote into): these records carry no
+  attempt-level identifiers or provenance, so their two histories cannot
+  be exactly reconstructed or merged — they might be disjoint, but they
+  might just as well overlap, and nothing in the stored fields can tell
+  the two cases apart. Migration therefore takes a conservative
+  deterministic **snapshot**: it keeps the entire record (`c`, `n`, and
+  `ts` together, never mixed from the two sides) from whichever key was
+  written more recently; ties keep the canonical stable-key record. This
+  is not a claim that no history can ever be lost — it is the best
+  available choice given records with no provenance, not a guarantee
+  every individual attempt survives.
+
+  **Schema-version decision:** `SCHEMA_V` stays `2`. The stored record's
+  shape (`{v,modules,answers,exercises,started}`) is unchanged — only the
+  convention for which strings populate `exercises`'s keys changed — and
+  the migration is unconditional, deterministic, and cheap enough (at
+  most 30 items) to simply always run rather than gate behind a new
+  version number that would add bookkeeping (an "already migrated" flag,
+  or a version-comparison branch) without any corresponding benefit, since
+  the migration is already safe to run on every load indefinitely.
+
+  Tests in `tests/dom-behavior.mjs` (17 total) and a structural
+  check in `tests/validate-course.mjs` cover: every item has an explicit
+  unique id and a unique, non-colliding `legacyId`, **and** the complete
+  live `id → legacyId` mapping matches an independently hard-coded,
+  frozen historical table exactly — not merely that every value happens
+  to be unique, which a swap between two items' `legacyId` values would
+  still satisfy (see the second addendum below); an item's
+  id is a literal property (verified by reordering a cloned array and
+  confirming ids travel with their items, not their positions); legacy
+  records migrate correctly on load, with the legacy key gone from both
+  memory and storage; migration is idempotent both in the simple case and
+  after a conflict resolution (a second load performs *zero* further
+  writes, verified by exact storage-string equality, not just an
+  equivalent-value check); a fresh answer is recorded only under its
+  stable id, never the legacy form; exercise progress survives a real
+  reload and an export/import round-trip under its stable id; and
+  importing a legacy-format export migrates it. Two dedicated end-to-end
+  tests run the real product script with one line —
+  `EXERCISES.ex7.items.reverse();` — injected into a copy of the exact
+  inline script text (not a stub): one answers two items with
+  deliberately different (correct/incorrect) outcomes, reverses their
+  array order, and confirms each item's recorded outcome stays correctly
+  attributed to its own id after the reorder; the other seeds a legacy
+  record and reorders the array *before* migration ever runs, confirming
+  the record follows its original item's `legacyId`-derived identity, not
+  whichever item now occupies that position (covered for both the load
+  path and the import path). The conflict-resolution tests cover a newer
+  stable record winning outright, a newer legacy record winning outright,
+  an equal-timestamp tie keeping the canonical stable record, idempotency
+  after resolution, and the mixed-version-tab overlap example described
+  in the addendum below (proving `n` stays the true attempt count, not an
+  inflated sum).
+
+  **Mutation-tested**, per the standing discipline in this log: (1)
+  disabling the `migrateExerciseIds()` call in `loadProgress()` made
+  exactly the 6 migration/conflict/idempotency/export tests fail, each
+  for the correct reason; restored, all checks passed again. (2)
+  reverting `choose()`'s `var thisId = it.id;` back to the legacy
+  `key + '-' + (idx+1)` made exactly the "answering a fresh exercise item
+  records ... only under the stable id" and the reordering end-to-end
+  test fail, each for the correct reason; restored (confirmed identical
+  to the pre-mutation file via `diff`), all checks passed again. Three
+  further mutations from the addenda below are recorded there.
+
+  `tests/e2e/progressive-disclosure.spec.mjs`'s existing seeded-record
+  test was updated to seed under `"ex7-i1"` (the real stable id) instead
+  of the legacy `"ex7-1"`, so it keeps proving its original claim (an
+  already-current-format record needs no migration, so loading it writes
+  nothing new and fires no `progress` event) rather than incidentally
+  exercising migration, which now has its own dedicated coverage.
+
+  No question, answer, rationale, scoring, quiz progress, analytics
+  semantics, image, styling, layout, or accessibility presentation
+  changed.
 - **Prevention:** Any persistable entity must have an order-independent identity
   and a migration test.
+
+### Addendum — independent review found two blocking correctness problems
+
+- **Status:** Corrected on the same branch, before merge
+- **Finding 1 — legacy ID was recomputed from current array position, not
+  frozen.** The first version of `migrateExerciseIds()` computed each
+  item's legacy key as `legacyExerciseId(key, i)`, where `i` was the
+  item's position in `EXERCISES[key].items` **at migration time**. That
+  reintroduced exactly the bug this correction exists to fix, one level
+  up: a learner who skips a release and first loads a later one *after*
+  an item was inserted or reordered could have their legacy progress
+  migrated onto whichever item currently occupies that array position,
+  not the item it actually belongs to. The reordering test committed with
+  the original fix did not catch this, because it answered items *after*
+  stable ids already existed and only then reordered — it proved the
+  runtime lookup uses a stable id correctly, but never exercised the
+  legacy-migration path against a reordered array at all.
+- **Impact:** None shipped — caught in independent review before merge.
+  Had it shipped, the exact class of bug QL-005 was opened to fix could
+  recur on any future reorder, silently, for any learner who happened to
+  still be on the old key format at the time.
+- **Correction:** Every exercise item now also carries a literal, frozen
+  `legacyId` field (e.g. `"ex7-1"`) — the exact key that item held before
+  this change — authored once, never recomputed. `migrateExerciseIds()`
+  reads `it.legacyId` directly instead of calling a position-based
+  helper, which was removed as now-dead code. Two new tests seed a legacy
+  record for a specific item, reorder `EXERCISES.ex7.items` via the same
+  script-injection technique *before* boot/migration ever runs (so the
+  reorder is in effect for the very first load, not just after), and
+  confirm the record follows that item's real stable id — never
+  whichever item now sits at the original array position — covering both
+  the direct-load path and the `importJSON()` path. **Mutation-tested:**
+  reverting to a position-derived legacy-key computation made exactly
+  these two new tests fail, for the correct reason; restored and
+  confirmed identical via `diff`.
+- **Finding 2 — the conflict rule's "disjoint sequences" claim is false,
+  and summing `n` can silently inflate the attempt count.** The original
+  conflict rule summed `n` from both records, justified by the claim that
+  a legacy key and its item's stable key "can only exist by recording two
+  genuinely disjoint sequences of attempts." That claim does not hold.
+  Concrete counterexample: a learner has two browser tabs open on
+  different app releases. Tab B (new version) migrates an early snapshot
+  of the item's history — 5 attempts — to the stable key. Tab A (old
+  version), still open, then records one more attempt under the legacy
+  key, so the legacy record's own count (6) already *includes* every
+  attempt the stable snapshot's count (5) does, plus one. The two records
+  overlap; they are not disjoint. The next migration, seeing both keys,
+  summed 6 + 5 and reported 11 attempts for an item that was genuinely
+  attempted 6 times — silently double-counting the 5 shared attempts.
+  Because these records carry no attempt-level identifiers or timestamps
+  per attempt (only one aggregate `n`/`c`/`ts` per key), there is no way
+  to detect or correct for overlap after the fact — exact reconciliation
+  is impossible with the data available.
+- **Impact:** None shipped — caught in independent review before merge.
+  Had it shipped, any learner using the app across a version boundary in
+  more than one tab (or any other path that leaves both a legacy and
+  stable record for the same item) could have their exercise attempt
+  count silently inflated, corrupting a number this course exposes
+  directly to the learner and to `getProgress()`/`exportJSON()`.
+- **Correction:** Replaced the summing merge with a conservative
+  deterministic **snapshot** policy: keep the entire record — `c`, `n`,
+  and `ts` together, never reconstructed by mixing fields from the two
+  sides — from whichever key was written more recently; a tie keeps the
+  canonical stable-key record. This does not claim no history can ever be
+  lost; it is documented as the best available choice given records with
+  no provenance, not a guarantee every individual attempt is preserved.
+  Rewrote the conflict tests to match: the mixed-tab overlap example
+  above (proving `n` stays 6, not 11), a newer stable record winning
+  outright, a newer legacy record winning outright, an equal-timestamp
+  tie keeping the stable record, and idempotency after resolution.
+  **Mutation-tested:** reverting to the sum-based merge made exactly
+  these five tests fail, for the correct reason; restored and confirmed
+  identical via `diff`.
+- **Cause:** Both problems share a root cause: an assumption ("the array
+  index is a safe proxy for identity across time"; "the two records must
+  be disjoint") was stated in a comment and acted on without being
+  checked against a concrete adversarial scenario (a future reorder; two
+  tabs on different versions) before shipping.
+- **Correct action:** For any migration or merge logic, name the specific
+  adversarial scenario the design must survive (a reorder happening
+  *before* the affected learner's next load; concurrent/overlapping
+  writers) and write a test that actually constructs that scenario, not
+  only a test of the mechanism in isolation. Treat "these two things can
+  only be disjoint" as a claim to prove, not assume, whenever the data
+  involved carries no identifiers that could confirm it.
+- **Prevention:** `docs/ARCHITECTURE.md`, `docs/ROADMAP.md`,
+  `docs/VALIDATION.md`, `docs/CLAUDE_HANDOFF.md`, and `CHANGELOG.md` were
+  all updated so none retain the disproven "disjoint sequences," "sum,"
+  or "never double-counts" claims; see `docs/VALIDATION.md` "Stable
+  exercise-item identity" for the corrected test-coverage record.
+
+### Addendum — independent review found a remaining test-coverage blocker
+
+- **Status:** Corrected on the same branch, before merge
+- **Finding:** The structural check added in the addendum above (every
+  item has a unique `id` and a unique, non-colliding `legacyId`) proves
+  presence and uniqueness, but never proves each `legacyId` is paired
+  with the *correct* item. Swapping two items' `legacyId` values with
+  each other — e.g. giving `ex7-i1` the value `"ex7-2"` and `ex7-i2` the
+  value `"ex7-1"` — leaves every one of those checks satisfied: both
+  values are still present, still unique among all 30, and still don't
+  collide with any stable id. The check could not have caught this class
+  of authoring mistake, even though it is exactly the mistake this
+  correction pass exists to make impossible: migration would attach
+  `ex7-1`'s saved history to `ex7-i2` and `ex7-2`'s to `ex7-i1`, silently
+  swapping the two items' recorded progress.
+- **Confirmed directly, not assumed, before writing the fix:** swapped
+  `ex7-i1`/`ex7-i2`'s `legacyId` values in `index.html` and re-ran the
+  then-current structural test in isolation — it passed. A separate
+  standalone script isolated and re-ran just the count/uniqueness/
+  collision assertions against the mutated data and printed `true` for
+  every one of them, confirming the gap precisely rather than inferring
+  it.
+- **Impact:** None shipped — caught in independent review before merge.
+  Had a real authoring mistake of this shape ever landed, the committed
+  test suite would have reported full coverage while silently permitting
+  the exact identity-swap bug this whole correction pass was written to
+  prevent.
+- **Cause:** Uniqueness and non-collision are necessary conditions for a
+  correct mapping but not sufficient ones — a permutation of otherwise-
+  valid values satisfies both while still being wrong. The original check
+  tested the *shape* of the id/legacyId data (right count, right
+  distinctness) without testing its *content* (the right value is
+  attached to the right item).
+- **Correct action:** For any per-item mapping where a permutation of
+  valid-looking values would be an undetected wrong answer, assert the
+  complete mapping against an independently authored expected value — not
+  a property (uniqueness, count, non-collision) that a permutation would
+  still satisfy.
+- **Correction:** Added `EXPECTED_STABLE_TO_LEGACY_ID` to
+  `tests/validate-course.mjs`: a literal, hard-coded object mapping all 30
+  stable ids to their exact historical legacy keys, written independently
+  of `EXERCISES`/`index.html` — deliberately not computed from an item's
+  current array position, from `item.legacyId` itself, or from any other
+  transformation of the live data under test, since computing "expected"
+  from the same data being checked cannot detect a mistake in that data.
+  The test now builds the complete actual `id → legacyId` mapping from
+  live `EXERCISES` data and asserts, in order: the key sets match exactly
+  (so a missing or unexpected stable id is reported as a set mismatch, not
+  a confusing value diff), then the complete mapping matches the frozen
+  table exactly, value-for-value. The pre-existing count/uniqueness/
+  non-collision assertions are unchanged and still run first.
+- **Mutation-tested:** the same `ex7-i1`/`ex7-i2` `legacyId` swap used to
+  confirm the original gap was re-applied to `index.html` after the fix.
+  The pre-existing count/uniqueness/non-collision assertions still
+  passed, exactly as before (confirmed directly, not assumed, by
+  isolating and re-running just those checks against the mutated data).
+  The new exact-mapping assertion failed with a diff naming exactly the
+  two swapped entries (`'ex7-i1': 'ex7-2'` / `'ex7-i2': 'ex7-1'` where
+  `'ex7-i1': 'ex7-1'` / `'ex7-i2': 'ex7-2'` was expected). Reverted;
+  `index.html` confirmed byte-identical to the pre-mutation file via
+  `diff` before committing; the full test passed again.
+- **Prevention:** `docs/VALIDATION.md`, `docs/QUALITY_LOG.md` (this
+  entry), and `CHANGELOG.md` now describe this check as verifying the
+  complete frozen mapping, not merely uniqueness. When a structural check
+  claims an id/key *pairing* is correct, confirm it actually tests the
+  pairing (value-for-value against an independent source of truth), not
+  only properties (count, uniqueness, non-collision) a wrong-but-
+  permuted pairing would still satisfy.
 
 ## QL-006 — Progress import trusts malformed nested state
 
