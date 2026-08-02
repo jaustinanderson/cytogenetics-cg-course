@@ -1053,6 +1053,78 @@ record are in `THIRD_PARTY_NOTICES.md`.
   the completion report on this branch's pull request for the exact command
   output
 
+## Stable exercise-item identity — added 2026-08-02
+
+`tests/dom-behavior.mjs` (Issue #2, `docs/QUALITY_LOG.md` QL-005) adds 12
+dependency-free checks covering the exercise-progress identity migration:
+every exercise item now carries an explicit, literal `id` field instead of
+a position-derived `"<key>-<n>"` string recomputed on every render, and
+`migrateExerciseIds()` normalizes any surviving legacy-format key on load
+and on import. Covers:
+
+- every one of the 30 exercise items has an explicit, unique, non-blank id
+- an item's id is a literal property of the item, not derived from array
+  position (reversing a cloned items array moves each id with its item)
+- a legacy position-derived record migrates to its item's stable id on
+  load, with the legacy key gone from both memory and the persisted
+  `localStorage` record
+- migration is idempotent: a second load against already-migrated state
+  performs **zero** additional `localStorage` writes, verified by exact
+  string equality of the stored record before and after, not merely an
+  equivalent-value check
+- a legacy/stable conflict (both keys hold a record) merges without
+  double-counting: `c` comes from the record with the later `ts`, `n` is
+  the sum of both counts, `ts` is the max of both — covered for both the
+  general case and the equal-`ts` tie-break case, plus idempotency of a
+  second load after a conflict merge
+- a freshly answered exercise item is recorded only under its stable id,
+  never a position-derived key
+- exercise progress survives a real reload, an `exportJSON`/`importJSON`
+  round-trip, and importing a legacy-format export, all under the item's
+  stable id
+
+The most rigorous check — `"reordering exercise items in source cannot
+attach stored history to a different item"` — does not merely assert a
+data-shape contract. It runs the real, unmodified product script (not a
+stub) inside a fresh `vm` context with one line —
+`EXERCISES.ex7.items.reverse();` — injected into a copy of the exact
+extracted inline script text at a fixed anchor comment, so the injection
+is confirmed to have actually changed the executed script before the test
+proceeds. Two items are answered with deliberately different
+(correct/incorrect) outcomes so a mix-up between their ids would flip a
+recorded correctness value, not just a count; after the injected reorder,
+each item's recorded outcome is confirmed still attached to its own stable
+id, and no legacy position-derived key exists that could misattribute
+either result to whichever item now occupies that position.
+
+**Mutation-tested**, per the standing discipline this log already
+establishes elsewhere: disabling the `migrateExerciseIds()` call in
+`loadProgress()` made exactly the 6 migration/conflict/idempotency/export
+tests fail, each for the correct reason; separately, reverting the
+`choose()` handler's stable-id lookup back to the legacy position-derived
+computation made exactly the "answered only under the stable id" and the
+reordering end-to-end test fail, each for the correct reason. Both
+mutations were reverted and confirmed byte-identical to the pre-mutation
+file via `diff` before committing; all 48 `tests/dom-behavior.mjs` checks
+passed again after each revert.
+
+`tests/e2e/progressive-disclosure.spec.mjs`'s existing seeded-record test
+(`"loading a page with existing persisted answer/exercise records writes
+nothing new and fires no progress event"`) was updated to seed its
+exercise record under `"ex7-i1"` (the real stable id) instead of the
+legacy `"ex7-1"`, so it keeps proving its original claim — an
+already-current-format record needs no migration, so loading it performs
+no write and fires no `progress` event — rather than incidentally
+exercising migration itself, which has its own dedicated coverage above.
+
+**Schema-version decision:** `SCHEMA_V` stays `2`. See
+`docs/QUALITY_LOG.md` QL-005 for the full reasoning: the stored record's
+shape is unchanged, and the migration is unconditional, deterministic, and
+cheap enough to always run rather than gate behind a version number.
+
+No question, answer, rationale, scoring, quiz progress, analytics
+semantics, image, styling, layout, or accessibility presentation changed.
+
 ## Gates still open
 
 ### Browser behavior

@@ -3211,19 +3211,19 @@
   EXERCISES.ex7 = {
     title:'Judge the metaphase',
     items:[
-      {svg: metaphaseCard('good','Spread A'),
+      {id:'ex7-i1', svg: metaphaseCard('good','Spread A'),
        prompt:'Spread A: chromosomes are well separated with crisp, resolvable detail. What is the highest use this cell supports?',
        options:['Countable only','Analyzable and karyotypable','Unusable — discard','Cannot be counted'],
        answer:1, fb:'A well-spread, well-resolved cell is suitable for full analysis and karyotyping (the most demanding tier).'},
-      {svg: metaphaseCard('overlap','Spread B'),
+      {id:'ex7-i2', svg: metaphaseCard('overlap','Spread B'),
        prompt:'Spread B: chromosomes are piled and crossing in the center. As-is, this cell is best described as:',
        options:['Ideal for karyotyping','Too overlapped to analyze reliably','Proof of a translocation','Triploid'],
        answer:1, fb:'Overlapping chromosomes cannot be reliably analyzed; overlap is a technical/spreading issue, not evidence of a rearrangement.'},
-      {svg: metaphaseCard('scatter','Spread C'),
+      {id:'ex7-i3', svg: metaphaseCard('scatter','Spread C'),
        prompt:'Spread C: chromosomes are widely scattered with some at the field edges. The main risk is:',
        options:['Artifactual loss / inaccurate count','Too many chromosomes','Better band resolution','A real monosomy'],
        answer:0, fb:'Over-spreading can push chromosomes out of the group or off-field, dropping the count artifactually — do not call a monosomy from this.'},
-      {svg: metaphaseCard('short','Spread D'),
+      {id:'ex7-i4', svg: metaphaseCard('short','Spread D'),
        prompt:'Spread D: the complement is complete but every chromosome is short and contracted. This cell is:',
        options:['Karyotypable at high resolution','Countable but not analyzable (likely long colcemid)','Evidence of triploidy','Over-trypsinized'],
        answer:1, fb:'Short, contracted chromosomes can be counted but lack the band resolution for analysis; the usual cause is excessive colcemid exposure (a harvest issue), not trypsin.'}
@@ -3233,23 +3233,23 @@
   EXERCISES.ex9group = {
     title:'Assign the group (A–G)',
     items:[
-      {svg: chromoCard({pLen:60,qLen:66,w:24,bands:[{arm:'p',start:0.2,len:0.18},{arm:'q',start:0.25,len:0.16},{arm:'q',start:0.6,len:0.14}]}),
+      {id:'ex9group-i1', svg: chromoCard({pLen:60,qLen:66,w:24,bands:[{arm:'p',start:0.2,len:0.18},{arm:'q',start:0.25,len:0.16},{arm:'q',start:0.6,len:0.14}]}),
        prompt:'A very large chromosome with the centromere near the middle (arms nearly equal). Which group?',
        options:['Group A (1–3)','Group C (6–12, X)','Group D (13–15)','Group G (21–22, Y)'],
        answer:0, fb:'Largest chromosomes with a roughly central (metacentric) centromere are Group A (1, 2, 3).'},
-      {svg: chromoCard({pLen:34,qLen:86,w:22,bands:[{arm:'q',start:0.15,len:0.14},{arm:'q',start:0.45,len:0.16},{arm:'q',start:0.75,len:0.12}]}),
+      {id:'ex9group-i2', svg: chromoCard({pLen:34,qLen:86,w:22,bands:[{arm:'q',start:0.15,len:0.14},{arm:'q',start:0.45,len:0.16},{arm:'q',start:0.75,len:0.12}]}),
        prompt:'A large chromosome with the centromere clearly off-center (short p, long q). Which group?',
        options:['Group A (1–3)','Group B (4–5)','Group F (19–20)','Group G (21–22, Y)'],
        answer:1, fb:'Large submetacentrics with a distinctly shorter p arm are Group B (4, 5).'},
-      {svg: chromoCard({pLen:10,qLen:76,w:20,sat:true,bands:[{arm:'q',start:0.2,len:0.16},{arm:'q',start:0.55,len:0.14}]}),
+      {id:'ex9group-i3', svg: chromoCard({pLen:10,qLen:76,w:20,sat:true,bands:[{arm:'q',start:0.2,len:0.16},{arm:'q',start:0.55,len:0.14}]}),
        prompt:'A medium chromosome with a near-terminal centromere and small satellited short arms. Which group?',
        options:['Group C (6–12, X)','Group E (16–18)','Group D (13–15)','Group F (19–20)'],
        answer:2, fb:'Medium acrocentrics bearing satellites are Group D (13, 14, 15).'},
-      {svg: chromoCard({pLen:24,qLen:28,w:20,bands:[{arm:'p',start:0.3,len:0.2},{arm:'q',start:0.35,len:0.2}]}),
+      {id:'ex9group-i4', svg: chromoCard({pLen:24,qLen:28,w:20,bands:[{arm:'p',start:0.3,len:0.2},{arm:'q',start:0.35,len:0.2}]}),
        prompt:'A small chromosome with a near-central centromere (arms about equal). Which group?',
        options:['Group F (19–20)','Group D (13–15)','Group B (4–5)','Group A (1–3)'],
        answer:0, fb:'Small metacentrics are Group F (19, 20).'},
-      {svg: chromoCard({pLen:8,qLen:38,w:20,sat:true,bands:[{arm:'q',start:0.3,len:0.18}]}),
+      {id:'ex9group-i5', svg: chromoCard({pLen:8,qLen:38,w:20,sat:true,bands:[{arm:'q',start:0.3,len:0.18}]}),
        prompt:'A small chromosome with a near-terminal centromere and satellites. Which group?',
        options:['Group D (13–15)','Group G (21–22, Y)','Group C (6–12, X)','Group E (16–18)'],
        answer:1, fb:'Small acrocentrics with satellites are Group G (21, 22). (The Y is also group G but lacks satellites.)'}
@@ -3259,23 +3259,23 @@
   EXERCISES.ex9chrom = {
     title:'Name the chromosome from its landmark',
     items:[
-      {svg: chromoCard({pLen:34,qLen:64,w:20,sec:{arm:'q',pos:0.12},bands:[{arm:'q',start:0.4,len:0.16},{arm:'p',start:0.3,len:0.16}]}),
+      {id:'ex9chrom-i1', svg: chromoCard({pLen:34,qLen:64,w:20,sec:{arm:'q',pos:0.12},bands:[{arm:'q',start:0.4,len:0.16},{arm:'p',start:0.3,len:0.16}]}),
        prompt:'A medium submetacentric with a prominent secondary constriction just below the centromere on the long arm. Most likely:',
        options:['Chromosome 9 (9qh)','Chromosome 1 (1qh)','Chromosome 16 (16qh)','The X'],
        answer:0, fb:'A proximal-q secondary constriction (9qh) on a medium submetacentric points to chromosome 9.'},
-      {svg: chromoCard({pLen:8,qLen:36,w:20,sat:true,bands:[{arm:'q',start:0.3,len:0.16}]}),
+      {id:'ex9chrom-i2', svg: chromoCard({pLen:8,qLen:36,w:20,sat:true,bands:[{arm:'q',start:0.3,len:0.16}]}),
        prompt:'The smaller of the two satellited small acrocentrics. Which chromosome?',
        options:['Chromosome 21','Chromosome 22','Chromosome 13','The Y'],
        answer:0, fb:'Despite the numbering, chromosome 21 is the smaller of the G-group satellited pair.'},
-      {svg: chromoCard({pLen:60,qLen:70,w:24,sec:{arm:'q',pos:0.08},bands:[{arm:'q',start:0.3,len:0.16},{arm:'p',start:0.25,len:0.16}]}),
+      {id:'ex9chrom-i3', svg: chromoCard({pLen:60,qLen:70,w:24,sec:{arm:'q',pos:0.08},bands:[{arm:'q',start:0.3,len:0.16},{arm:'p',start:0.25,len:0.16}]}),
        prompt:'The largest chromosome in the complement, with a secondary constriction near the proximal long arm. Which chromosome?',
        options:['Chromosome 1 (1qh)','Chromosome 2','Chromosome 3','Chromosome 9'],
        answer:0, fb:'The largest chromosome, metacentric with a proximal 1qh constriction, is chromosome 1.'},
-      {svg: chromoCard({pLen:28,qLen:34,w:20,sec:{arm:'q',pos:0.22},bands:[{arm:'p',start:0.3,len:0.18}]}),
+      {id:'ex9chrom-i4', svg: chromoCard({pLen:28,qLen:34,w:20,sec:{arm:'q',pos:0.22},bands:[{arm:'p',start:0.3,len:0.18}]}),
        prompt:'A small metacentric with a secondary constriction on the proximal long arm. Which chromosome?',
        options:['Chromosome 16 (16qh)','Chromosome 19','Chromosome 20','Chromosome 17'],
        answer:0, fb:'A small metacentric with a 16qh secondary constriction is chromosome 16.'},
-      {svg: chromoCard({pLen:8,qLen:40,w:20,bands:[{arm:'q',start:0.55,len:0.4,dark:true}]}),
+      {id:'ex9chrom-i5', svg: chromoCard({pLen:8,qLen:40,w:20,bands:[{arm:'q',start:0.55,len:0.4,dark:true}]}),
        prompt:'An acrocentric-shaped chromosome with NO satellites and a darkly staining, variable distal long arm. Which chromosome?',
        options:['The Y (Yqh)','Chromosome 21','Chromosome 22','Chromosome 14'],
        answer:0, fb:'Acrocentric shape WITHOUT satellites plus a variable dark distal q (Yqh) identifies the Y.'}
@@ -3285,23 +3285,23 @@
   EXERCISES.ex10 = {
     title:'Recognize the abnormality',
     items:[
-      {svg: rowCard([{pLen:8,qLen:38,w:20,sat:true,bands:[{arm:'q',start:0.3,len:0.16}]},{pLen:8,qLen:38,w:20,sat:true,bands:[{arm:'q',start:0.3,len:0.16}]},{pLen:8,qLen:38,w:20,sat:true,bands:[{arm:'q',start:0.3,len:0.16}]}]),
+      {id:'ex10-i1', svg: rowCard([{pLen:8,qLen:38,w:20,sat:true,bands:[{arm:'q',start:0.3,len:0.16}]},{pLen:8,qLen:38,w:20,sat:true,bands:[{arm:'q',start:0.3,len:0.16}]},{pLen:8,qLen:38,w:20,sat:true,bands:[{arm:'q',start:0.3,len:0.16}]}]),
        prompt:'Three copies of this small acrocentric are present where two are expected. This is a:',
        options:['Trisomy (e.g., +21)','Monosomy','Triploidy','Balanced translocation'],
        answer:0, fb:'A single chromosome present in three copies (count 47) is a trisomy — e.g., 47,XX,+21.'},
-      {svg: svgWrap(chromoG(28,8,{pLen:30,qLen:58,w:20,bands:[{arm:'q',start:0.3,len:0.16},{arm:'p',start:0.3,len:0.16}]}).m + '<rect x="58" y="16" width="22" height="86" rx="6" fill="none" stroke="#b9c9dc" stroke-width="1.6" stroke-dasharray="4 4"/><text x="69" y="62" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9" fill="#7c93a8">absent</text>', 92, 112),
+      {id:'ex10-i2', svg: svgWrap(chromoG(28,8,{pLen:30,qLen:58,w:20,bands:[{arm:'q',start:0.3,len:0.16},{arm:'p',start:0.3,len:0.16}]}).m + '<rect x="58" y="16" width="22" height="86" rx="6" fill="none" stroke="#b9c9dc" stroke-width="1.6" stroke-dasharray="4 4"/><text x="69" y="62" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9" fill="#7c93a8">absent</text>', 92, 112),
        prompt:'Only one copy of this chromosome is present; the homolog is absent. This is a:',
        options:['Monosomy (e.g., 45,X)','Trisomy','Triploidy','Normal disomy'],
        answer:0, fb:'A missing homolog (count 45 for a single chromosome) is a monosomy — e.g., 45,X.'},
-      {svg: rowCard([{pLen:24,qLen:28,w:18,bands:[{arm:'q',start:0.35,len:0.2}]},{pLen:24,qLen:28,w:18,bands:[{arm:'q',start:0.35,len:0.2}]},{pLen:24,qLen:28,w:18,bands:[{arm:'q',start:0.35,len:0.2}]}]),
+      {id:'ex10-i3', svg: rowCard([{pLen:24,qLen:28,w:18,bands:[{arm:'q',start:0.35,len:0.2}]},{pLen:24,qLen:28,w:18,bands:[{arm:'q',start:0.35,len:0.2}]},{pLen:24,qLen:28,w:18,bands:[{arm:'q',start:0.35,len:0.2}]}]),
        prompt:'Representative chromosome shown in THREE copies — and every chromosome in the cell is likewise present three times. The whole-genome state is:',
        options:['Triploidy (69)','Trisomy of one chromosome','Tetraploidy (92)','Monosomy'],
        answer:0, fb:'If every chromosome is present in three copies, the total is 69 — triploidy. (A single chromosome in three copies would instead be a trisomy.)'},
-      {svg: rowCard([{pLen:34,qLen:60,w:20,bands:[{arm:'q',start:0.3,len:0.16},{arm:'q',start:0.62,len:0.12}]},{pLen:34,qLen:60,w:20,bands:[{arm:'q',start:0.3,len:0.16},{arm:'q',start:0.62,len:0.12}]}]),
+      {id:'ex10-i4', svg: rowCard([{pLen:34,qLen:60,w:20,bands:[{arm:'q',start:0.3,len:0.16},{arm:'q',start:0.62,len:0.12}]},{pLen:34,qLen:60,w:20,bands:[{arm:'q',start:0.3,len:0.16},{arm:'q',start:0.62,len:0.12}]}]),
        prompt:'Two copies of this chromosome are present, as expected. This is:',
        options:['Normal disomy','Trisomy','Monosomy','A deletion'],
        answer:0, fb:'Two homologs is the normal (disomic) state — a useful baseline to compare against gains and losses.'},
-      {svg: rowCard([{pLen:24,qLen:28,w:18,bands:[{arm:'q',start:0.35,len:0.2}]},{pLen:24,qLen:28,w:18,bands:[{arm:'q',start:0.35,len:0.2}]},{pLen:24,qLen:28,w:18,bands:[{arm:'q',start:0.35,len:0.2}]},{pLen:24,qLen:28,w:18,bands:[{arm:'q',start:0.35,len:0.2}]}]),
+      {id:'ex10-i5', svg: rowCard([{pLen:24,qLen:28,w:18,bands:[{arm:'q',start:0.35,len:0.2}]},{pLen:24,qLen:28,w:18,bands:[{arm:'q',start:0.35,len:0.2}]},{pLen:24,qLen:28,w:18,bands:[{arm:'q',start:0.35,len:0.2}]},{pLen:24,qLen:28,w:18,bands:[{arm:'q',start:0.35,len:0.2}]}]),
        prompt:'Representative chromosome shown in FOUR copies, with every chromosome likewise doubled. The whole-genome state is:',
        options:['Tetraploidy (92)','Triploidy (69)','Trisomy','Normal'],
        answer:0, fb:'A doubled genome (every chromosome ×4, total 92) is tetraploidy — consider culture artifact and correlate before reporting as constitutional.'}
@@ -3311,22 +3311,22 @@
   EXERCISES.ex14 = {
     title:'Build the ISCN string',
     items:[
-      {svg:'', prompt:'A female with three copies of chromosome 21. Choose the correct karyotype:',
+      {id:'ex14-i1', svg:'', prompt:'A female with three copies of chromosome 21. Choose the correct karyotype:',
        options:['47,XX,+21','47,XY,+21','46,XX,+21','45,XX,-21'],
        answer:0, fb:'Count 47, female sex chromosomes XX, gain of 21 → 47,XX,+21.'},
-      {svg:'', prompt:'A patient with a single X chromosome (Turner syndrome). Choose the correct notation:',
+      {id:'ex14-i2', svg:'', prompt:'A patient with a single X chromosome (Turner syndrome). Choose the correct notation:',
        options:['45,X','45,XO','46,X','45,X0'],
        answer:0, fb:'45,X is correct — there is no letter O and no zero after the X.'},
-      {svg:'', prompt:'A male whose marrow shows t(9;22)(q34;q11.2) in all 20 analyzed cells. Choose the correct karyotype:',
+      {id:'ex14-i3', svg:'', prompt:'A male whose marrow shows t(9;22)(q34;q11.2) in all 20 analyzed cells. Choose the correct karyotype:',
        options:['46,XY,t(9;22)(q34;q11.2)[20]','46,XY,t(9;22)(q34;q11.2)','mos 46,XY,t(9;22)[20]','46,XY,t(9;22)(p34;p11.2)[20]'],
        answer:0, fb:'Acquired clones require clone-size brackets; the breakpoints are on the long arms (q).'},
-      {svg:'', prompt:'A male with an extra X chromosome (Klinefelter syndrome). Choose the correct karyotype:',
+      {id:'ex14-i4', svg:'', prompt:'A male with an extra X chromosome (Klinefelter syndrome). Choose the correct karyotype:',
        options:['47,XXY','47,XYY','47,XXX','46,XY'],
        answer:0, fb:'An extra X in a male gives 47,XXY.'},
-      {svg:'', prompt:'A constitutional study: 12 cells are 45,X and 18 cells are 46,XX. Choose the correct notation:',
+      {id:'ex14-i5', svg:'', prompt:'A constitutional study: 12 cells are 45,X and 18 cells are 46,XX. Choose the correct notation:',
        options:['mos 45,X[12]/46,XX[18]','chi 45,X[12]/46,XX[18]','45,XO[12]/46,XX[18]','45,X/46,XX'],
        answer:0, fb:'Two cell lines from one individual use mos with bracketed cell counts; chi denotes chimerism (≥2 zygotes).'},
-      {svg:'', prompt:'A triploid female conceptus (three full haploid sets). Choose the correct karyotype:',
+      {id:'ex14-i6', svg:'', prompt:'A triploid female conceptus (three full haploid sets). Choose the correct karyotype:',
        options:['69,XXX','69,XX','92,XXXX','47,XXX'],
        answer:0, fb:'Triploidy has 69 chromosomes; a triploid female with three X chromosomes is 69,XXX (the count and sex designation must agree).'}
     ]
@@ -3335,23 +3335,23 @@
   EXERCISES.ex15 = {
     title:'Read the FISH pattern',
     items:[
-      {svg: nucleusCard([{dx:-26,dy:-14,c:'r'},{dx:24,dy:-10,c:'r'},{dx:-22,dy:16,c:'g'},{dx:28,dy:14,c:'g'}]),
+      {id:'ex15-i1', svg: nucleusCard([{dx:-26,dy:-14,c:'r'},{dx:24,dy:-10,c:'r'},{dx:-22,dy:16,c:'g'},{dx:28,dy:14,c:'g'}]),
        prompt:'A dual-fusion probe shows two separate red and two separate green signals. This is:',
        options:['Normal (no fusion)','Fusion present','Break-apart positive','Deletion'],
        answer:0, fb:'For a dual-fusion probe, separate reds and greens (no colocalization) is the NORMAL pattern.'},
-      {svg: nucleusCard([{dx:-20,dy:-8,c:'y'},{dx:22,dy:12,c:'y'},{dx:30,dy:-16,c:'r'},{dx:-30,dy:18,c:'g'}]),
+      {id:'ex15-i2', svg: nucleusCard([{dx:-20,dy:-8,c:'y'},{dx:22,dy:12,c:'y'},{dx:30,dy:-16,c:'r'},{dx:-30,dy:18,c:'g'}]),
        prompt:'A dual-fusion probe shows two colocalized (yellow) fusion signals plus one residual red and one green. This indicates:',
        options:['A fusion (con) — e.g., BCR::ABL1','Normal','A deletion','A simple gain of green'],
        answer:0, fb:'Colocalized fusion (con) signals indicate the rearrangement — the dual-fusion-positive pattern seen with BCR::ABL1.'},
-      {svg: nucleusCard([{dx:-26,dy:-4,c:'r'},{dx:-18,dy:-2,c:'g'},{dx:22,dy:-18,c:'r'},{dx:24,dy:18,c:'g'}]),
+      {id:'ex15-i3', svg: nucleusCard([{dx:-26,dy:-4,c:'r'},{dx:-18,dy:-2,c:'g'},{dx:22,dy:-18,c:'r'},{dx:24,dy:18,c:'g'}]),
        prompt:'A break-apart probe shows one fused red+green pair, but the other red and green are pulled far apart. This is:',
        options:['A rearrangement (sep)','Normal','A fusion (con)','Triploidy'],
        answer:0, fb:'For a break-apart probe, separation (sep) of the two colors marks a rearrangement; the fused pair is the intact (normal) allele.'},
-      {svg: nucleusCard([{dx:-24,dy:-12,c:'g'},{dx:26,dy:-8,c:'g'},{dx:0,dy:16,c:'r'}]),
+      {id:'ex15-i4', svg: nucleusCard([{dx:-24,dy:-12,c:'g'},{dx:26,dy:-8,c:'g'},{dx:0,dy:16,c:'r'}]),
        prompt:'Two control (green) signals are present, but only ONE target (red) signal is seen where two are expected. This is:',
        options:['A deletion of the target','A gain of the target','Normal','A fusion'],
        answer:0, fb:'Loss of one target signal against a retained control indicates a deletion of the target locus.'},
-      {svg: nucleusCard([{dx:-26,dy:-12,c:'r'},{dx:24,dy:-10,c:'r'},{dx:0,dy:18,c:'r'},{dx:-28,dy:12,c:'g'},{dx:30,dy:14,c:'g'}]),
+      {id:'ex15-i5', svg: nucleusCard([{dx:-26,dy:-12,c:'r'},{dx:24,dy:-10,c:'r'},{dx:0,dy:18,c:'r'},{dx:-28,dy:12,c:'g'},{dx:30,dy:14,c:'g'}]),
        prompt:'An enumeration shows THREE target (red) signals (with two green controls). This indicates:',
        options:['A gain / trisomy of the target','A deletion','Normal disomy','A break-apart'],
        answer:0, fb:'Three target signals indicate a gain (e.g., trisomy) of that locus/chromosome.'}
@@ -3608,11 +3608,12 @@
     var items = ex.items, total = items.length, idx = 0, score = 0, answeredCount = 0;
     var answered = [];
     // Seed initial status/score from persisted records (state.exercises is
-    // keyed by the position-derived "<key>-<n>" id recordExercise already
-    // uses) rather than assuming a fresh "Not started" state -- see the
-    // matching comment in buildQuiz. Read-only: never writes or emits.
-    items.forEach(function(it, i){
-      var rec = state.exercises[key + '-' + (i+1)];
+    // keyed by each item's own explicit, stable `id` -- see EXERCISES.* --
+    // not by array position) rather than assuming a fresh "Not started"
+    // state -- see the matching comment in buildQuiz. Read-only: never
+    // writes or emits.
+    items.forEach(function(it){
+      var rec = state.exercises[it.id];
       if(rec){ answeredCount++; if(rec.c){ score++; } }
     });
     var icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
@@ -3651,7 +3652,7 @@
       var it = items[idx];
       var correct = (oi === it.answer);
       answered[idx] = {chosen:oi, correct:correct};
-      var thisId = key + '-' + (idx+1);
+      var thisId = it.id;
       // Re-answering an item that already has a persisted record (only
       // reachable across a reload, since a locked item can't be clicked
       // twice in one render) must update the score to the latest result
@@ -3784,11 +3785,75 @@
      { v:2,
        modules:   { m1:true, ... },                      // manual mark-complete
        answers:   { "m9-q3": {c:true,  n:2, ts:169...} }, // c=last correct, n=attempts
-       exercises: { "ex7-2": {c:false, n:1, ts:169...} },
-       started: <epoch ms> }                                                            */
+       exercises: { "ex7-i2": {c:false, n:1, ts:169...} }, // keyed by each item's own EXERCISES.*.items[].id
+       started: <epoch ms> }
+
+     Exercise-outcome keys used to be a position-derived "<key>-<n>" string
+     (n = 1-based array index), computed fresh on every render -- inserting
+     or reordering an exercise item could silently reattach a learner's
+     saved history to a different item (docs/QUALITY_LOG.md QL-005). Every
+     exercise item now carries an explicit, literal `id` field instead (see
+     EXERCISES.* below), which stays attached to that item object regardless
+     of array position; migrateExerciseIds() normalizes any surviving
+     legacy-format keys. This does NOT bump SCHEMA_V: the stored record's
+     shape above is unchanged -- only the convention for which strings
+     populate `exercises`'s keys changed -- and the migration is
+     unconditional, deterministic, and cheap enough (at most 30 items) to
+     simply always run rather than gate behind a new version number. */
   var state = null;
 
   function blankState(){ return {v:SCHEMA_V, modules:{}, answers:{}, exercises:{}, started:Date.now()}; }
+
+  /* The historical position-derived exercise-outcome key, kept as a single
+     named function so both the old runtime lookup (now removed) and this
+     migration compute it identically. */
+  function legacyExerciseId(key, i){ return key + '-' + (i+1); }
+
+  /* Renames any surviving legacy-format (position-derived) keys in
+     state.exercises to their item's real, explicit `id`. Deterministic and
+     idempotent: driven entirely by the current EXERCISES data, not by any
+     stored "already migrated" flag, so calling it again after everything is
+     already stable finds no legacy keys and changes nothing -- every time,
+     not just once. Safe to call unconditionally on every load and after
+     every import.
+
+     Conflict rule, when both a legacy key and its item's stable key already
+     hold a record (possible after a stale re-import, or if this is ever run
+     against a state a mixed-version session partially wrote into): merge,
+     never drop either side.
+       - `c` (last-attempt correctness) is taken from whichever record has
+         the LATER `ts` -- the most recent real attempt is definitionally
+         the current "last attempt". Ties (equal ts) keep the legacy
+         record's `c`, an arbitrary but deterministic tie-break.
+       - `n` (attempt count) is the SUM of both counts. The two keys can
+         only both exist by recording two genuinely disjoint sequences of
+         attempts, so summing counts every real attempt exactly once --
+         it neither drops either side's count nor double-counts any single
+         attempt under two different keys.
+     Returns true if it changed anything, so the caller can decide whether
+     the result needs persisting. */
+  function migrateExerciseIds(){
+    var changed = false;
+    Object.keys(EXERCISES).forEach(function(key){
+      EXERCISES[key].items.forEach(function(it, i){
+        var legacyId = legacyExerciseId(key, i);
+        var stableId = it.id;
+        if(legacyId === stableId){ return; } // authored id happens to match the legacy format: nothing to move
+        var legacyRec = state.exercises[legacyId];
+        if(!legacyRec){ return; }
+        var stableRec = state.exercises[stableId];
+        if(stableRec){
+          var latest = (legacyRec.ts >= stableRec.ts) ? legacyRec : stableRec;
+          state.exercises[stableId] = {c: latest.c, n: legacyRec.n + stableRec.n, ts: Math.max(legacyRec.ts, stableRec.ts)};
+        } else {
+          state.exercises[stableId] = legacyRec;
+        }
+        delete state.exercises[legacyId];
+        changed = true;
+      });
+    });
+    return changed;
+  }
 
   function loadProgress(){
     var raw = null;
@@ -3798,10 +3863,13 @@
       state.modules   = state.modules   || {};
       state.answers   = state.answers   || {};
       state.exercises = state.exercises || {};
+      if(migrateExerciseIds()){ saveProgress(); }
       return;
     }
     state = blankState();
-    /* migrate v1: a flat {modId:true} map of completed modules */
+    /* migrate v1: a flat {modId:true} map of completed modules (v1 never had
+       an exercises field, so there is nothing for migrateExerciseIds() to do
+       on this branch) */
     try{
       var old = JSON.parse(localStorage.getItem(PKEY_V1));
       if(old && typeof old === 'object'){
@@ -4068,6 +4136,7 @@
         if(!s || s.v !== SCHEMA_V){ return {ok:false, error:'schema mismatch, expected v' + SCHEMA_V}; }
         state = s;
         state.modules = state.modules || {}; state.answers = state.answers || {}; state.exercises = state.exercises || {};
+        migrateExerciseIds();
         saveProgress(); refreshProgressUI();
         $all('.quiz-mount').forEach(buildQuiz);
         return {ok:true};

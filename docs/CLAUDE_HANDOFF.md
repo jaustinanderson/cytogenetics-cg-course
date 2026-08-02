@@ -938,6 +938,70 @@ of the live course rather than an automated finding:
   candidate, and verification record, and `THIRD_PARTY_NOTICES.md` for the
   complete provenance/license record of the new image.
 
+A stable-exercise-identity pass (branch `claude/issue-2-stable-exercise-ids`,
+"Part of #2" — the first isolated Milestone 1 task, not a continuation of
+the prior figure-quality work) implements the first bullet of Issue #2's
+work list and `docs/QUALITY_LOG.md` QL-005:
+
+- **Root problem:** exercise-outcome storage keys
+  (`state.exercises[...]`) were a position-derived `"<key>-<n>"` string
+  recomputed from each item's array index on every render. Inserting or
+  reordering an item could silently reattach a learner's saved history to
+  a different item.
+- **Fix:** every one of the 30 items across the 6 exercise sets
+  (`EXERCISES.ex7`/`ex9group`/`ex9chrom`/`ex10`/`ex14`/`ex15`) now carries
+  an explicit, literal `id` field (`"<key>-i<n>"`, e.g. `"ex7-i1"`) —
+  deliberately a different string format from the legacy `"<key>-<n>"`
+  form so the two can never collide and migration is genuinely meaningful.
+  `buildExercise()`'s summary-seeding loop and its `choose()` handler now
+  read/write `state.exercises[it.id]` directly instead of recomputing a
+  position-derived key from the current render index.
+- **Migration:** a new `migrateExerciseIds()` renames any surviving
+  legacy-format key to its item's real stable id. It is deterministic
+  (driven entirely by the live `EXERCISES` data, never a stored
+  "already migrated" flag) and idempotent (a second run against
+  already-migrated state performs zero writes, verified by exact storage
+  string equality). Called unconditionally from `loadProgress()` and from
+  `importJSON()`.
+- **Conflict rule:** when both a legacy key and its item's stable key
+  already hold a record, merge rather than drop either side — `c` comes
+  from whichever record has the later `ts` (the true last attempt), `n` is
+  the **sum** of both attempt counts (the two keys can only both exist by
+  recording disjoint attempt sequences, so summing counts each real
+  attempt exactly once without ever double-counting one).
+- **Schema-version decision:** `SCHEMA_V` stays `2`. The stored record's
+  shape is unchanged — only the convention for which strings populate
+  `exercises`'s keys — and the migration is cheap and safe enough (at most
+  30 items) to simply always run rather than gate behind a version bump.
+- **Tests:** 12 new checks in `tests/dom-behavior.mjs` cover explicit
+  unique ids, id-travels-with-item-not-position, legacy migration (memory
+  and storage), idempotency (including after a conflict merge, via exact
+  storage-string equality), the conflict-merge rule and its tie-break,
+  fresh answers recorded only under stable ids, reload/export/import
+  round-trips, and importing a legacy-format export. A dedicated
+  end-to-end test runs the real product script with
+  `EXERCISES.ex7.items.reverse()` injected into a copy of the exact inline
+  script text, answers two items with deliberately different
+  correct/incorrect outcomes, and confirms each stays correctly attributed
+  to its own id after the reorder. **Mutation-tested**: disabling the
+  migration call failed exactly the 6 migration/conflict/idempotency/export
+  tests; separately reverting the stable-id lookup back to a
+  position-derived computation failed exactly the "recorded only under the
+  stable id" and reordering tests — both reverted and confirmed
+  byte-identical to the pre-mutation file via `diff` before committing.
+- `tests/e2e/progressive-disclosure.spec.mjs`'s existing seeded-record test
+  was updated to seed under `"ex7-i1"` (the real stable id) instead of the
+  legacy `"ex7-1"`, keeping its original claim (no migration needed, no
+  write, no `progress` event for an already-current-format record) intact.
+- Strictly scoped to this one Issue #2 work item: no question, answer,
+  rationale, scoring, quiz progress, analytics semantics, image, styling,
+  layout, or accessibility presentation changed, and none of the other
+  Issue #2 items (full import hardening, stale-ID policy, Reset/import
+  exercise re-render, storage-failure UI, analytics redesign, content-pack
+  format, image-manifest normalization) were touched. See
+  `docs/QUALITY_LOG.md` QL-005 and `docs/VALIDATION.md` "Stable
+  exercise-item identity" for the complete record.
+
 ## Read these files first
 
 1. `README.md`
@@ -1023,16 +1087,27 @@ malformed nested maps and outcome records. It should:
 - define how stale content IDs are handled
 - have hostile/malformed fixtures and round-trip tests
 
-### Exercise identity
+### Exercise identity — resolved 2026-08-02
 
-Exercise outcomes still use position-derived IDs such as `ex7-1`. Inserting or
-reordering an item can attach saved progress to a different exercise. Give each
-item an explicit stable ID and add a migration strategy.
+~~Exercise outcomes still use position-derived IDs such as `ex7-1`.~~ Done
+via branch `claude/issue-2-stable-exercise-ids` (Issue #2): every exercise
+item now carries an explicit, literal `id` field, and
+`migrateExerciseIds()` deterministically and idempotently renames any
+surviving legacy-format key on load and on import, with a documented,
+tested conflict-resolution rule. See `docs/QUALITY_LOG.md` QL-005 and
+`docs/VALIDATION.md` "Stable exercise-item identity" for the full record.
+This closes only this specific risk — the item immediately below (exercise
+rendering after API writes) is a related but distinct, still-open gap this
+work does not touch.
 
 ### Exercise rendering after API writes
 
 API import and Reset rebuild quiz widgets but do not fully rebuild exercise
-closures. Tests and a centralized render/reset path are needed.
+closures. Tests and a centralized render/reset path are needed. (Not
+addressed by the exercise-identity work above: that work changed *which
+key* an outcome is stored under, not *whether* the exercise DOM re-renders
+after `importJSON()`/`reset()` — those still only call
+`$all('.quiz-mount').forEach(buildQuiz)`, unchanged.)
 
 ### Storage failure
 

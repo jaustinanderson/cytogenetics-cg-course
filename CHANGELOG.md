@@ -6,6 +6,20 @@ All notable repository changes are recorded here.
 
 ### Added
 
+- Explicit, stable `id` fields on all 30 exercise items (`EXERCISES.ex7`/
+  `ex9group`/`ex9chrom`/`ex10`/`ex14`/`ex15` in `index.html`), and
+  `migrateExerciseIds()`, a deterministic, idempotent migration that
+  renames any surviving legacy position-derived progress key
+  (`"<key>-<n>"`) to its item's real stable id on every load and after
+  every import, with a documented conflict-resolution rule (later
+  timestamp wins for correctness, attempt counts sum) for the case where
+  both a legacy and stable record already exist. Does not require a
+  `SCHEMA_V` bump. 12 new dependency-free regression tests in
+  `tests/dom-behavior.mjs`, including a true end-to-end reordering proof
+  that runs the real product script with `EXERCISES.ex7.items.reverse()`
+  injected into a copy of the exact inline script text. Mutation-tested.
+  See `docs/QUALITY_LOG.md` QL-005 and `docs/VALIDATION.md` "Stable
+  exercise-item identity" (Issue #2)
 - `tests/e2e/figure-9-1-morphology.spec.mjs`: real-browser bounding-box
   regression coverage (not screenshots) for Figure 9.1's centromere-morphology
   labels — each label's containment inside its own card and inside the

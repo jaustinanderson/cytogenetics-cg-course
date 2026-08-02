@@ -297,6 +297,271 @@ test("progress survives a reload", () => {
   );
 });
 
+/* ============================ exercise identity & stable IDs (Issue #2) ============================
+   Exercise-outcome storage used to be keyed by a position-derived string
+   ("<key>-<n>", computed fresh from array index on every render), so
+   inserting or reordering an exercise item could silently reattach a
+   learner's saved history to a different item (docs/QUALITY_LOG.md QL-005).
+   Every exercise item now carries an explicit, literal `id` field instead,
+   and migrateExerciseIds() normalizes any surviving legacy-format keys. */
+
+/** The historical position-derived key format, mirrored here only to build
+ * seed fixtures and assert legacy keys are really gone -- never used to
+ * decide what the product *should* do, which is exactly the assumption
+ * this migration replaces. */
+const legacyExerciseId = (key, i) => `${key}-${i + 1}`;
+
+test("every exercise item has an explicit, unique, non-blank id", () => {
+  const env = boot();
+  const exercises = env.api.getExercises();
+  const seen = new Set();
+  let total = 0;
+  Object.keys(exercises).forEach((key) => {
+    exercises[key].items.forEach((item, i) => {
+      assert.equal(typeof item.id, "string", `${key}[${i}]: item is missing a string id`);
+      assert.ok(item.id.trim(), `${key}[${i}]: item id must not be blank`);
+      assert.ok(!seen.has(item.id), `duplicate exercise item id: ${item.id}`);
+      seen.add(item.id);
+      total += 1;
+    });
+  });
+  assert.equal(total, 30, "30 exercise items across 6 sets, matching the documented baseline");
+});
+
+test("an item's id is a literal property of the item, not derived from its array position", () => {
+  const env = boot();
+  const items = env.api.getExercises().ex7.items;
+  const originalIds = items.map((it) => it.id);
+  const reversed = items.slice().reverse();
+  assert.deepEqual(
+    reversed.map((it) => it.id),
+    originalIds.slice().reverse(),
+    "reordering the array moved the ids with their items, not left them at fixed positions",
+  );
+  assert.equal(reversed[0].id, originalIds[originalIds.length - 1]);
+  assert.notEqual(
+    reversed[0].id,
+    legacyExerciseId("ex7", 0),
+    "the item now at position 0 must not silently pick up the legacy id that position would have implied",
+  );
+});
+
+test("legacy position-derived exercise records migrate to their item's stable id on load", () => {
+  const env = boot({
+    storage: {
+      [V2_KEY]: JSON.stringify({
+        v: 2,
+        modules: {},
+        answers: {},
+        started: 0,
+        exercises: {
+          "ex7-1": { c: true, n: 2, ts: 555 },
+          "ex9group-3": { c: false, n: 1, ts: 777 },
+        },
+      }),
+    },
+  });
+  const progress = env.api.getProgress();
+  assert.deepEqual(progress.exercises["ex7-i1"], { c: true, n: 2, ts: 555 });
+  assert.deepEqual(progress.exercises["ex9group-i3"], { c: false, n: 1, ts: 777 });
+  assert.equal(progress.exercises["ex7-1"], undefined, "the legacy key no longer exists in memory");
+  assert.equal(progress.exercises["ex9group-3"], undefined, "the legacy key no longer exists in memory");
+
+  const stored = JSON.parse(env.storage.getItem(V2_KEY));
+  assert.deepEqual(stored.exercises["ex7-i1"], { c: true, n: 2, ts: 555 }, "the migration is persisted, not only held in memory");
+  assert.equal(stored.exercises["ex7-1"], undefined);
+});
+
+test("migrating exercise ids is idempotent — a second load against already-migrated state performs zero further writes", () => {
+  const seeded = {
+    v: 2, modules: {}, answers: {}, started: 0,
+    exercises: { "ex10-4": { c: true, n: 1, ts: 111 } },
+  };
+  const first = boot({ storage: { [V2_KEY]: JSON.stringify(seeded) } });
+  const afterFirstLoad = first.storage.getItem(V2_KEY);
+  assert.deepEqual(JSON.parse(afterFirstLoad).exercises["ex10-i4"], { c: true, n: 1, ts: 111 }, "sanity: first load actually migrated");
+
+  const second = boot({ storage: { [V2_KEY]: afterFirstLoad } });
+  assert.equal(
+    second.storage.getItem(V2_KEY),
+    afterFirstLoad,
+    "a second load against already-migrated state performs zero additional writes",
+  );
+  assert.deepEqual(second.api.getProgress().exercises["ex10-i4"], { c: true, n: 1, ts: 111 });
+});
+
+test("a legacy/stable exercise-id conflict merges without double-counting or discarding either record", () => {
+  const env = boot({
+    storage: {
+      [V2_KEY]: JSON.stringify({
+        v: 2, modules: {}, answers: {}, started: 0,
+        exercises: {
+          "ex15-2": { c: false, n: 2, ts: 1000 }, // legacy record, older
+          "ex15-i2": { c: true, n: 3, ts: 5000 }, // stable record, newer
+        },
+      }),
+    },
+  });
+  assert.deepEqual(
+    env.api.getProgress().exercises["ex15-i2"],
+    { c: true, n: 5, ts: 5000 },
+    "c comes from the later ts (the true last attempt), n is the sum of both counts, ts is the max of both",
+  );
+  assert.equal(env.api.getProgress().exercises["ex15-2"], undefined, "the legacy key is gone after the merge");
+});
+
+test("a legacy/stable conflict with equal timestamps deterministically keeps the legacy record's correctness", () => {
+  const env = boot({
+    storage: {
+      [V2_KEY]: JSON.stringify({
+        v: 2, modules: {}, answers: {}, started: 0,
+        exercises: {
+          "ex14-5": { c: true, n: 1, ts: 42 },
+          "ex14-i5": { c: false, n: 1, ts: 42 },
+        },
+      }),
+    },
+  });
+  assert.deepEqual(env.api.getProgress().exercises["ex14-i5"], { c: true, n: 2, ts: 42 });
+});
+
+test("migration idempotency holds after a legacy/stable conflict was merged", () => {
+  const env = boot({
+    storage: {
+      [V2_KEY]: JSON.stringify({
+        v: 2, modules: {}, answers: {}, started: 0,
+        exercises: { "ex10-1": { c: false, n: 1, ts: 10 }, "ex10-i1": { c: true, n: 1, ts: 20 } },
+      }),
+    },
+  });
+  const afterMerge = env.storage.getItem(V2_KEY);
+  const again = boot({ storage: { [V2_KEY]: afterMerge } });
+  assert.equal(again.storage.getItem(V2_KEY), afterMerge, "re-running after a merge performs zero further writes");
+  assert.deepEqual(again.api.getProgress().exercises["ex10-i1"], { c: true, n: 2, ts: 20 });
+});
+
+test("answering a fresh exercise item records its outcome only under the stable id, never a position-derived key", () => {
+  const env = boot();
+  const host = env.body.querySelectorAll('.exer[data-exer="ex9chrom"]')[0];
+  const items = env.api.getExercises().ex9chrom.items;
+  host.querySelectorAll(".eopt")[items[0].answer].click();
+
+  const keys = Object.keys(env.api.getProgress().exercises);
+  assert.deepEqual(keys, [items[0].id]);
+  assert.equal(keys[0], "ex9chrom-i1");
+  assert.notEqual(keys[0], legacyExerciseId("ex9chrom", 0));
+});
+
+test("exercise progress survives a real reload under its stable id", () => {
+  const first = boot();
+  const host = first.body.querySelectorAll('.exer[data-exer="ex7"]')[0];
+  const items = first.api.getExercises().ex7.items;
+  host.querySelectorAll(".eopt")[items[0].answer].click();
+
+  const persisted = first.storage._raw;
+  const second = boot({ storage: persisted });
+  assert.equal(second.api.getProgress().exercises[items[0].id].c, true);
+  assert.equal(
+    second.body.querySelectorAll('.exer[data-exer="ex7"]')[0].querySelector(".eh-score").textContent,
+    `1 / ${items.length}`,
+  );
+});
+
+test("export/import round-trip preserves migrated exercise progress under its stable id", () => {
+  const env = boot({
+    storage: {
+      [V2_KEY]: JSON.stringify({
+        v: 2, modules: {}, answers: {}, started: 0,
+        exercises: { "ex7-3": { c: true, n: 1, ts: 999 } },
+      }),
+    },
+  });
+  assert.deepEqual(env.api.getProgress().exercises["ex7-i3"], { c: true, n: 1, ts: 999 }, "already migrated on load");
+
+  const exported = env.api.exportJSON();
+  const fresh = boot();
+  const result = fresh.api.importJSON(exported);
+  assert.equal(result.ok, true);
+  assert.deepEqual(fresh.api.getProgress().exercises["ex7-i3"], { c: true, n: 1, ts: 999 });
+});
+
+test("importing a legacy-format export migrates its exercise keys to stable ids", () => {
+  const legacyExport = JSON.stringify({
+    exported: new Date(0).toISOString(),
+    state: {
+      v: 2, modules: {}, answers: {}, started: 0,
+      exercises: { "ex15-1": { c: true, n: 1, ts: 321 } },
+    },
+    stats: {},
+  });
+  const env = boot();
+  const result = env.api.importJSON(legacyExport);
+  assert.equal(result.ok, true);
+  assert.deepEqual(env.api.getProgress().exercises["ex15-i1"], { c: true, n: 1, ts: 321 });
+  assert.equal(env.api.getProgress().exercises["ex15-1"], undefined);
+});
+
+/* --- true end-to-end proof: reordering the real EXERCISES.ex7.items array
+   cannot reassign a learner's recorded history to a different item. Runs
+   the actual product script (not a stub) with one line injected --
+   EXERCISES.ex7.items.reverse() -- into a copy of the exact inline script
+   text, so this exercises real rendering and real recording code, not an
+   assumption about it. */
+test("reordering exercise items in source cannot attach stored history to a different item", () => {
+  const first = boot();
+  const items = first.api.getExercises().ex7.items;
+  // Answering item 1 requires answering item 0 first (Next stays disabled
+  // until the current item is answered), so both get recorded -- with
+  // deliberately DIFFERENT outcomes, so a mix-up between the two ids would
+  // be caught by either one's correctness flipping.
+  const host = first.body.querySelectorAll('.exer[data-exer="ex7"]')[0];
+  const wrongOptionForItem0 = (items[0].answer + 1) % host.querySelectorAll(".eopt").length;
+  host.querySelectorAll(".eopt")[wrongOptionForItem0].click(); // item 0: deliberately WRONG
+  host.querySelector(".exer-next").click(); // advance render to item 1
+  host.querySelectorAll(".eopt")[items[1].answer].click(); // item 1: correct
+  assert.equal(first.api.getProgress().exercises[items[0].id].c, false, "sanity: item 0 recorded as incorrect");
+  assert.equal(first.api.getProgress().exercises[items[1].id].c, true, "sanity: item 1 recorded as correct");
+
+  const anchor = "/* ============================ FLASHCARDS ============================ */";
+  assert.ok(inlineScript.includes(anchor), "injection anchor must exist in the real script");
+  const mutatedScript = inlineScript.replace(anchor, `EXERCISES.ex7.items.reverse();\n\n  ${anchor}`);
+  assert.notEqual(mutatedScript, inlineScript, "the injection must actually change the executed script");
+
+  const mutatedEnv = createEnvironment(staticBody, { storage: first.storage._raw });
+  vm.createContext(mutatedEnv.sandbox);
+  vm.runInContext(mutatedScript, mutatedEnv.sandbox, { filename: "index.inline.reordered.js", timeout: 15_000 });
+  mutatedEnv.api = mutatedEnv.sandbox.window.CytoCourse;
+
+  const reorderedItems = mutatedEnv.api.getExercises().ex7.items;
+  assert.equal(reorderedItems.findIndex((it) => it.id === items[1].id), 2, "sanity: reversing 4 items moves former index 1 to index 2");
+  assert.equal(reorderedItems.findIndex((it) => it.id === items[0].id), 3, "sanity: reversing 4 items moves former index 0 to index 3");
+
+  const reorderedProgress = mutatedEnv.api.getProgress().exercises;
+  assert.equal(
+    reorderedProgress[items[1].id].c,
+    true,
+    "item 1's stable id keeps its correct outcome after its item moved from position 1 to position 2",
+  );
+  assert.equal(
+    reorderedProgress[items[0].id].c,
+    false,
+    "item 0's stable id keeps its incorrect outcome after its item moved from position 0 to position 3 -- it did not inherit item 1's correct result",
+  );
+  assert.equal(
+    reorderedProgress[legacyExerciseId("ex7", 0)],
+    undefined,
+    "no legacy position-derived key exists to misattribute this history to whatever item is now at that position",
+  );
+  assert.equal(reorderedProgress[legacyExerciseId("ex7", 1)], undefined);
+
+  const reorderedHost = mutatedEnv.body.querySelectorAll('.exer[data-exer="ex7"]')[0];
+  assert.equal(
+    reorderedHost.querySelector(".eh-score").textContent,
+    `1 / ${reorderedItems.length}`,
+    "the reordered exercise's summary score (1 correct of 2 recorded) reflects both attempts, correctly attributed by id",
+  );
+});
+
 /* ============================ reset ============================ */
 
 for (const scenario of [

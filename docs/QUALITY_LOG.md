@@ -61,7 +61,8 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
 
 ## QL-005 — Exercise progress identity is position-dependent
 
-- **Status:** Open; Milestone 1
+- **Status:** Corrected on branch `claude/issue-2-stable-exercise-ids`
+  (Issue #2)
 - **Finding:** Exercise outcomes use IDs such as `ex7-1`, derived from array
   position.
 - **Impact:** Inserting or reordering exercise items can attach saved history to
@@ -69,6 +70,89 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
 - **Cause:** Presentation order was used as persistent identity.
 - **Correct action:** Give each item a stable explicit ID and migrate existing
   position-based records.
+- **Correction:** Every one of the 30 items across the 6 exercise sets
+  (`EXERCISES.ex7`/`ex9group`/`ex9chrom`/`ex10`/`ex14`/`ex15` in
+  `index.html`) now carries an explicit, literal `id` field
+  (`"<key>-i<n>"`, e.g. `"ex7-i1"`) — deliberately a different string
+  format from the legacy `"<key>-<n>"` position-derived form, so the two
+  can never collide and a genuine migration (not a same-string no-op) is
+  both meaningful and testable. `buildExercise()`'s seeding loop and
+  `choose()` handler now read/write `state.exercises[it.id]` directly
+  instead of recomputing `key + '-' + (idx+1)` from the current render
+  index.
+
+  A new `migrateExerciseIds()` renames any surviving legacy-format key to
+  its item's real stable id, called unconditionally from `loadProgress()`
+  (both on a fresh v2 load and after a v1→v2 migration produces no
+  legacy exercise keys, since v1 never had an `exercises` field) and from
+  `importJSON()`. It is deterministic (driven entirely by the live
+  `EXERCISES` data, never a stored "already migrated" flag) and idempotent
+  (once no legacy key remains, every further call — on every load, forever
+  — finds nothing to do and performs zero writes; verified directly, not
+  assumed, in `tests/dom-behavior.mjs`).
+
+  **Conflict rule**, for the case where both a legacy key and its item's
+  stable key already hold a record (a stale re-import, or a state a
+  mixed-version session partially wrote into): merge, never drop either
+  side. `c` (last-attempt correctness) is taken from whichever record has
+  the later `ts` — the most recent real attempt is definitionally the
+  current "last attempt"; ties keep the legacy record's `c`, an arbitrary
+  but deterministic tie-break. `n` (attempt count) is the **sum** of both
+  counts — the two keys can only both exist by recording two genuinely
+  disjoint sequences of attempts, so summing records every real attempt
+  exactly once, neither dropping either side's count nor double-counting
+  any single attempt under two different keys.
+
+  **Schema-version decision:** `SCHEMA_V` stays `2`. The stored record's
+  shape (`{v,modules,answers,exercises,started}`) is unchanged — only the
+  convention for which strings populate `exercises`'s keys changed — and
+  the migration is unconditional, deterministic, and cheap enough (at
+  most 30 items) to simply always run rather than gate behind a new
+  version number that would add bookkeeping (an "already migrated" flag,
+  or a version-comparison branch) without any corresponding benefit, since
+  the migration is already safe to run on every load indefinitely.
+
+  New tests in `tests/dom-behavior.mjs`: every item has an explicit unique
+  id; an item's id is a literal property (verified by reordering a cloned
+  array and confirming ids travel with their items, not their positions);
+  legacy records migrate correctly on load, with the legacy key gone from
+  both memory and storage; migration is idempotent both in the simple case
+  and after a conflict merge (a second load performs *zero* further
+  writes, verified by exact storage-string equality, not just an
+  equivalent-value check); the conflict rule merges without double-
+  counting, including its ts-tie-break case; a freshly answered item is
+  recorded only under its stable id, never the legacy form; exercise
+  progress survives a real reload and an export/import round-trip under
+  its stable id; and importing a legacy-format export migrates it. A
+  dedicated end-to-end test (`"reordering exercise items in source cannot
+  attach stored history to a different item"`) runs the real product
+  script with one line — `EXERCISES.ex7.items.reverse();` — injected into
+  a copy of the exact inline script text (not a stub), answers two items
+  with deliberately different (correct/incorrect) outcomes, reverses their
+  array order, and confirms each item's recorded outcome stays correctly
+  attributed to its own id after the reorder, with no legacy key ever
+  reappearing to misattribute either result.
+
+  **Mutation-tested**, per the standing discipline in this log: (1)
+  disabling the `migrateExerciseIds()` call in `loadProgress()` made
+  exactly the 6 migration/conflict/idempotency/export tests fail, each
+  for the correct reason; restored, all 48 checks passed again. (2)
+  reverting `choose()`'s `var thisId = it.id;` back to the legacy
+  `key + '-' + (idx+1)` made exactly the "answering a fresh exercise item
+  records ... only under the stable id" and the reordering end-to-end
+  test fail, each for the correct reason; restored (confirmed identical
+  to the pre-mutation file via `diff`), all 48 checks passed again.
+
+  `tests/e2e/progressive-disclosure.spec.mjs`'s existing seeded-record
+  test was updated to seed under `"ex7-i1"` (the real stable id) instead
+  of the legacy `"ex7-1"`, so it keeps proving its original claim (an
+  already-current-format record needs no migration, so loading it writes
+  nothing new and fires no `progress` event) rather than incidentally
+  exercising migration, which now has its own dedicated coverage.
+
+  No question, answer, rationale, scoring, quiz progress, analytics
+  semantics, image, styling, layout, or accessibility presentation
+  changed.
 - **Prevention:** Any persistable entity must have an order-independent identity
   and a migration test.
 
