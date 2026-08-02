@@ -82,7 +82,7 @@ test("displayed fonts and embedded images are served locally, not from a remote 
   // The two embedded figure <img> tags must point to local assets, not a remote image host.
   const embeddedImageLocalPaths = [
     "assets/images/nhgri-human-male-karyotype-46xy.png",
-    "assets/images/cdc-phil-12504-trisomy21-karyotype.jpg",
+    "assets/images/wellcome-b0000249-trisomy21-karyotype-47xy.jpg",
   ];
   for (const localPath of embeddedImageLocalPaths) {
     const imgTagPattern = new RegExp(`<img\\b[^>]*\\bsrc\\s*=\\s*["']${localPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["']`);
@@ -103,7 +103,7 @@ test("displayed fonts and embedded images are served locally, not from a remote 
 
   // External attribution/source-page links must remain intact and external (not localized).
   assert.match(html, /https:\/\/commons\.wikimedia\.org\/wiki\/File:NHGRI_human_male_karyotype\.png/);
-  assert.match(html, /https:\/\/phil\.cdc\.gov\/Details\.aspx\?pid=12504/);
+  assert.match(html, /https:\/\/wellcomecollection\.org\/works\/wmcdanw6/);
 });
 
 const inlineScripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]

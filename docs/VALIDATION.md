@@ -924,6 +924,135 @@ Visible answer buttons on a fresh load: 636 before, 0 after, at every
 viewport. Full before/after screenshots are in the evidence artifact
 linked from the PR description (not committed to the repository).
 
+## Figure 9.1 label-layout fix and Figure 10.1 karyogram replacement — added 2026-08-01
+
+Direct review of the live course confirmed two figure-quality defects, fixed
+on a new, separately scoped issue (see `docs/QUALITY_LOG.md`; this does not
+reopen Issue #11).
+
+### Figure 9.1: centromere-morphology label overlap
+
+**Confirmed defect:** the three morphology labels ("Metacentric",
+"Submetacentric", "Acrocentric + satellite") were rendered as embedded SVG
+`<text>` elements inside one shared `<svg>` whose `viewBox` was computed
+from the chromosome drawings' geometry only (`rowCard()`'s `x`/`W`
+accumulation), never from the labels' own rendered width. At real font
+sizes, "Metacentric" overlapped "Submetacentric" and "Acrocentric +
+satellite" extended past the `viewBox`'s right edge and the figure's own
+boundary — confirmed directly against the live page before any change, not
+assumed from the acceptance-criteria description alone.
+
+**Fix:** `index.html`'s `chromoOnlySVG()`/`morphGrid()` (new) separate each
+chromosome drawing from its label entirely. Each morphology is now its own
+`.morph-item` in a responsive CSS grid (`.fig-morph-grid`,
+`display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))`),
+with the label as ordinary wrapping HTML text (`.morph-label`) below a
+small, label-free SVG drawing — not embedded SVG `<text>`, so a long label
+can wrap onto a second line instead of overlapping a neighbor or escaping a
+fixed viewBox. `auto-fit`/`minmax` collapses to a single column once three
+150px-minimum tracks no longer fit the available width, without a hard
+media-query breakpoint, so it stacks at the narrow viewports without
+needing to duplicate the product's existing 560px/980px breakpoints. The
+figure's "(schematic)" title and caption badge are unchanged; the three
+small SVGs are marked `aria-hidden` (the visible HTML label next to each
+one is a strictly better accessible name than a synthesized `aria-label`
+would have been).
+
+**Verification, measured directly, not assumed:**
+
+- A standalone Playwright script (not committed) checked real bounding
+  boxes at all five acceptance-criteria viewports (1440×900, 1280×900,
+  768×1024, 390×844, 360×800) before the committed test file was written:
+  every label fully contained within the figure, zero pairwise label-box
+  intersections, and `document.documentElement.scrollWidth <= clientWidth`
+  at every viewport. At 1280/1440/768px the three cards render in one row;
+  at 390/360px they stack into a single column, confirmed by each label's
+  y-coordinate diverging by hundreds of pixels between items rather than
+  sharing a row.
+- `tests/e2e/figure-9-1-morphology.spec.mjs` (new, both Playwright
+  projects plus the three extra viewports via `test.use({ viewport })`
+  inside the file, matching the existing convention in
+  `tests/e2e/visual-polish.spec.mjs`) commits this as a permanent
+  regression check: exact label text (uncut), per-label containment within
+  both the figure and its own card, zero pairwise label-bounding-box
+  intersection, no label-element internal clipping
+  (`scrollWidth <= clientWidth`), no page-level horizontal overflow, and
+  that the figure still says "(schematic)" in both its title and caption.
+- **Mutation-tested**: with the fix stashed (reverting to the pre-fix
+  embedded-SVG-`<text>` markup, via `git stash` — the new test file itself
+  is untracked and unaffected by the stash), 10 of the 12 test runs failed,
+  each for the correct underlying reason (`.morph-label`/`.morph-item`
+  never exist in the old markup, so the containment/overlap assertions
+  cannot even locate their targets) — confirming the suite actually depends
+  on the fix rather than passing vacuously. Restoring the fix (`git stash
+  pop`) returned all 12 runs to passing.
+
+### Figure 10.1: trisomy-21 karyogram replaced
+
+**Confirmed defect:** the embedded CDC PHIL image (`image #12504`) had
+chromosome morphology and band detail below the bar for a professional
+cytogenetics study guide: heavily thresholded/low-contrast, chromosomes
+grouped (e.g. "C 6-12 + XX") rather than individually numbered, and — found
+by decoding and reading the plate's own printed group label directly,
+not assumed — the depicted karyotype is actually **female**
+(46,XX-derived, i.e. 47,XX,+21), which did not match the course's own
+primary worked ISCN example immediately below it in the lesson text
+(`47,XY,+21`).
+
+**Replacement search, and what was rejected first:** per the acceptance
+criteria, the commonly available Wikimedia/DOE "21 trisomy - Down
+syndrome.png" was not considered — it is also heavily thresholded and would
+not have been a material improvement. A Wikimedia Commons file from the
+Josef Reischig CC BY-SA archive, titled "Human karyotype (263 15) ... 47,
+XY, +21 (Down syndrome).jpg" (3,749×2,399px), looked promising by its
+title, resolution, and license alone — but decoding and visually inspecting
+the actual image (not trusting the filename or an automated page-text
+summary) showed it is a **raw, unsorted metaphase spread**: overlapping,
+unpaired chromosomes scattered across the field, with intact interphase
+nuclei still visible on the same slide, not an arranged karyogram. It was
+rejected on that basis alone, despite its higher pixel count and permissive
+license — confirming this course's own prior note (see `docs/ROADMAP.md`
+Milestone 2B) that this collection's metaphase images "are not direct
+replacements for a properly arranged karyogram."
+
+**Selected replacement:** Wellcome Collection work `wmcdanw6`, "Down
+syndrome human karyotype 47,XY,+21" (Miro image `B0000249`, credit "Wessex
+Reg. Genetics Centre"), fetched at its full native resolution
+(1176×1158px) via the IIIF Image API. Verified directly against
+`api.wellcomecollection.org`'s catalogue record (not only the human-readable
+page) as `license.id: "cc-by"` / `"Attribution 4.0 International (CC BY
+4.0)"` with `accessConditions[].status.id: "open"`. Visual inspection
+confirmed a genuinely arranged G-banded karyogram: chromosomes cut, paired,
+and laid out in numbered rows 1–22 plus X/Y, the title "47,XY,+21 TRISOMY
+21 (DOWN'S SYNDROME)" printed directly on the plate, and an arrow marking
+the third chromosome-21 copy. No patient name, date of birth, or
+accession/specimen number is visible anywhere on the plate. Full
+before/after image comparison, exact hashes, and the rejected candidate's
+record are in `THIRD_PARTY_NOTICES.md`.
+
+**Structural/behavioral verification:**
+
+- `tests/validate-course.mjs`'s asset-localization check (`assets/` path
+  resolution, no-remote-host check, on-disk existence/nonzero-size check,
+  and the external source-page-link check) was updated to the new filename
+  and Wellcome Collection URL and continues to pass — see "Asset
+  localization" above for what this check covers
+- `tests/e2e/local-images.spec.mjs` and `tests/e2e-deployed/
+  local-images.spec.mjs` were updated to check the new filename;
+  `npm run test:e2e`'s local run confirms nonzero natural dimensions and
+  same-origin delivery from the local static server exactly as before
+- `tests/e2e/visual-polish.spec.mjs`'s figure-sizing and caption-attachment
+  checks (which iterate the embedded figures generically, not by
+  filename) pass unchanged against the new, differently proportioned
+  (near-square vs. the old 700×563) image
+- A full local run of `npm test` (55 dependency-free checks) and
+  `npm run test:e2e` (both Playwright projects, including the new
+  `figure-9-1-morphology.spec.mjs` and the updated `local-images.spec.mjs`
+  and `accessibility.spec.mjs`) passed with zero axe-core violations and
+  zero page-origin console errors/warnings after both figure changes — see
+  the completion report on this branch's pull request for the exact command
+  output
+
 ## Gates still open
 
 ### Browser behavior

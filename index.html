@@ -203,6 +203,10 @@
   .fig-media img{max-width:100%;max-height:min(52vh,460px);width:auto;height:auto;border-radius:8px;border:1px solid var(--line);background:#fff;box-shadow:var(--shadow)}
   .fig-media svg{max-width:100%;height:auto}
   .fig-svg{background:var(--surface)}
+  .fig-media.fig-morph-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1rem;justify-content:center;align-items:start}
+  .morph-item{display:flex;flex-direction:column;align-items:center;gap:.5rem;min-width:0;max-width:100%}
+  .morph-item svg{max-width:100%;height:auto}
+  .morph-label{font-family:var(--mono);font-weight:600;font-size:.82rem;color:var(--ink);text-align:center;max-width:100%;overflow-wrap:break-word}
   figcaption{font-size:.92rem;line-height:1.5;color:var(--ink-soft);padding:.5rem 1rem 1rem;border-top:1px solid var(--line-soft)}
   figcaption .notice{display:block;font-weight:600;color:var(--ink);margin-bottom:.25rem}
   figcaption .analysis{display:block;background:var(--pearl-bg);border:1px solid var(--pearl-line);border-radius:8px;padding:.45rem .65rem;margin:.5rem 0;color:var(--pearl-ink);font-weight:500}
@@ -1243,7 +1247,7 @@
 
       <figure class="fig">
         <div class="fig-title">Figure 9.1 &mdash; Centromere morphology (schematic)</div>
-        <div class="fig-media fig-svg" id="figMorph"></div>
+        <div class="fig-media fig-morph-grid" id="figMorph"></div>
         <figcaption>
           <span class="notice">What to notice: where the centromere sits sets arm-length ratio. Acrocentrics carry satellite stalks on tiny p arms.</span>
           <span class="analysis">Analysis prompt: For each shape, is the p arm long, short, or nearly absent? Which morphology bears satellites?</span>
@@ -1349,16 +1353,16 @@
       <p>Autosomal trisomies seen in liveborns: <strong>21 (Down)</strong>, <strong>18 (Edwards)</strong>, <strong>13 (Patau)</strong>. Sex-chromosome aneuploidies: <strong>45,X (Turner)</strong>, <strong>47,XXY (Klinefelter)</strong>, <strong>47,XXX</strong>, <strong>47,XYY</strong>.</p>
 
       <figure class="fig">
-        <div class="fig-title">Figure 10.1 &mdash; Trisomy 21 (Down syndrome) karyotype</div>
+        <div class="fig-title">Figure 10.1 &mdash; Trisomy 21 (Down syndrome) karyotype, 47,XY,+21</div>
         <div class="fig-media">
-          <img src="assets/images/cdc-phil-12504-trisomy21-karyotype.jpg" alt="G-banded karyotype showing three copies of chromosome 21 instead of the normal two; an arrow marks the extra chromosome 21." loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
-          <div class="fig-fallback">[Image did not load] A karyotype with three copies of chromosome 21 (trisomy 21). View it at the CDC PHIL link below.</div>
+          <img src="assets/images/wellcome-b0000249-trisomy21-karyotype-47xy.jpg" alt="G-banded karyotype arranged into pairs 1&ndash;22 plus X and Y, labeled 47,XY,+21 Trisomy 21 (Down's syndrome). Chromosome 21 has three copies instead of the normal two, marked with an arrow; every other chromosome is present as a normal pair." loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+          <div class="fig-fallback">[Image did not load] A karyotype with three copies of chromosome 21 (trisomy 21). View it at the Wellcome Collection link below.</div>
         </div>
         <figcaption>
-          <span class="notice">What to notice: the G-group shows <strong>three</strong> copies of chromosome 21 (arrowed) rather than the normal pair&mdash;total count 47.</span>
-          <span class="analysis">Analysis prompt: Before reading the arrow, scan the G-group. How would you write this in ISCN for a male vs. a female?</span>
-          <span class="src">Source: <a href="https://phil.cdc.gov/Details.aspx?pid=12504" target="_blank" rel="noopener">CDC Public Health Image Library, image #12504</a> &middot; Credit: CDC / Dr. Allan J. Ebbin (1967).</span>
-          <span class="lic">Public domain (CDC PHIL &mdash; no copyright restrictions)</span>
+          <span class="notice">What to notice: chromosome <strong>21</strong> has <strong>three</strong> copies (arrowed) rather than the normal pair&mdash;total count 47&mdash;while every other numbered pair and the sex chromosomes are normal.</span>
+          <span class="analysis">Analysis prompt: This karyotype is from a male. How would the ISCN designation change for a female with the same finding?</span>
+          <span class="src">Source: <a href="https://wellcomecollection.org/works/wmcdanw6" target="_blank" rel="noopener">Wellcome Collection, "Down syndrome human karyotype 47,XY,+21"</a> &middot; Credit: Wessex Regional Genetics Centre.</span>
+          <span class="lic">CC BY 4.0 (Wellcome Collection)</span>
         </figcaption>
       </figure>
 
@@ -2305,6 +2309,7 @@
           <ul>
             <li><strong>NHGRI Image Gallery</strong> &mdash; genome.gov/image-gallery (many U.S. government public-domain images).</li>
             <li><strong>CDC Public Health Image Library (PHIL)</strong> &mdash; phil.cdc.gov (public domain).</li>
+            <li><strong>Wellcome Collection</strong> &mdash; wellcomecollection.org (mixed licenses; many digitized clinical images are explicitly CC BY).</li>
             <li><strong>Wikimedia Commons</strong> &mdash; &ldquo;Category:Human karyotypes&rdquo; (check each file's license individually).</li>
             <li>Always confirm licensing on the source page before reusing any figure.</li>
           </ul>
@@ -2315,15 +2320,15 @@
     <!-- ===================== IMAGE CREDITS & DISCLAIMER ===================== -->
     <section class="section-block anchor-offset" id="credits" aria-labelledby="credTitle">
       <h2 id="credTitle">Image credits &amp; licensing</h2>
-      <p>This course embeds only images whose public-domain status was verified. Where no such image is embedded yet, the lesson text, tables, and ISCN notation cover the concept on their own rather than shipping an unfinished placeholder.</p>
+      <p>This course embeds only images whose license and provenance were verified. Where no such image is embedded yet, the lesson text, tables, and ISCN notation cover the concept on their own rather than shipping an unfinished placeholder.</p>
 
       <div class="cred">
         <span class="ct">Figure 8.1 &mdash; Normal human male karyotype (46,XY)</span><br>
         Source: Wikimedia Commons, <a href="https://commons.wikimedia.org/wiki/File:NHGRI_human_male_karyotype.png" target="_blank" rel="noopener">File:NHGRI_human_male_karyotype.png</a>. Credit: National Human Genome Research Institute (NHGRI), Human Genome Project. <strong>License: Public domain</strong> (work of the U.S. federal government).
       </div>
       <div class="cred">
-        <span class="ct">Figure 10.1 &mdash; Trisomy 21 (Down syndrome) karyotype</span><br>
-        Source: CDC Public Health Image Library, <a href="https://phil.cdc.gov/Details.aspx?pid=12504" target="_blank" rel="noopener">image #12504</a>. Credit: CDC / Dr. Allan J. Ebbin (1967). <strong>License: Public domain</strong> (CDC PHIL &mdash; no copyright restrictions).
+        <span class="ct">Figure 10.1 &mdash; Trisomy 21 (Down syndrome) karyotype, 47,XY,+21</span><br>
+        Source: Wellcome Collection, <a href="https://wellcomecollection.org/works/wmcdanw6" target="_blank" rel="noopener">&ldquo;Down syndrome human karyotype 47,XY,+21&rdquo;</a> (Miro image B0000249). Credit: Wessex Regional Genetics Centre. <strong>License: CC BY 4.0</strong> (Attribution 4.0 International).
       </div>
       <div class="cred">
         <span class="ct">Original schematics (created for this course)</span><br>
@@ -3124,6 +3129,27 @@
     return svgWrap(head+body, W, H, name);
   }
 
+  /* A single chromosome drawing with no embedded SVG text label — the label is
+     rendered as ordinary wrapping HTML text alongside it instead, so long
+     labels (e.g. "Acrocentric + satellite") can never overlap a neighbor or
+     be clipped by a fixed viewBox the way embedded SVG <text> can. */
+  function chromoOnlySVG(cfg){
+    var pad = 10, w = cfg.w || 20;
+    var g = chromoG(pad + w/2, pad, cfg);
+    var W = w + pad*2, H = g.bottom + pad;
+    return svgWrap(g.m, W, H, null);
+  }
+
+  /* Responsive grid of individually contained chromosome-morphology cards:
+     one drawing + one ordinary wrapping HTML label per card, instead of a
+     single SVG whose fixed viewBox does not account for long text labels. */
+  function morphGrid(cfgs){
+    return cfgs.map(function(cfg){
+      return '<div class="morph-item">' + chromoOnlySVG(cfg)
+        + '<div class="morph-label">' + esc(cfg.label) + '</div></div>';
+    }).join('');
+  }
+
   function chromoCard(cfg){ return rowCard([cfg], {labels: !!cfg.label}); }
 
   /* FISH nucleus with signal dots. dots: [{dx,dy,c}] relative to nucleus center; c in r/g/y. */
@@ -3431,15 +3457,15 @@
       retrievedDate:'2026-07-31', sha256:'956b733178670ff972164d9dcfc2df588f13781308115a8ba1c012363469e298'
     },
     {
-      id:'fig10-1', status:'embedded', type:'karyogram', subject:'trisomy 21',
+      id:'fig10-1', status:'embedded', type:'karyogram', subject:'trisomy 21 (47,XY,+21)',
       module:'m10', figure:'10.1', bandRes:null, quality:'reference',
-      url:'assets/images/cdc-phil-12504-trisomy21-karyotype.jpg',
-      sourcePage:'https://phil.cdc.gov/Details.aspx?pid=12504',
-      credit:'CDC / Dr. Allan J. Ebbin (1967)',
-      license:'Public domain (CDC PHIL)',
+      url:'assets/images/wellcome-b0000249-trisomy21-karyotype-47xy.jpg',
+      sourcePage:'https://wellcomecollection.org/works/wmcdanw6',
+      credit:'Wessex Regional Genetics Centre, via Wellcome Collection (Miro image B0000249)',
+      license:'CC BY 4.0 (Attribution 4.0 International)',
       licenseVerified:true, redistribution_ok:true, specimenSource:'patient',
-      retrievedFrom:'https://wwwn.cdc.gov/phil/PHIL_Images/12504/12504_lores.jpg',
-      retrievedDate:'2026-07-31', sha256:'0958251e8896b340c677b2ddb14436ba860ee344604f3cf08a787177daf9e995'
+      retrievedFrom:'https://iiif.wellcomecollection.org/image/B0000249/full/full/0/default.jpg',
+      retrievedDate:'2026-08-01', sha256:'aa062e66a0ca67a5a63c4ce12bdabccf28a811f622ad38340fdca54371cf2c43'
     },
     /* --- still needed: see the compile list. Leads are UNVERIFIED. --- */
     {id:'need-46xx',      status:'needed', type:'karyogram', subject:'normal female 46,XX',            module:'m8',  lead:'Wikimedia Commons, Category:Human karyotypes / NHGRI Image Gallery'},
@@ -3711,11 +3737,11 @@
         + metaphaseCard('good','Well spread') + metaphaseCard('overlap','Overlapping')
         + metaphaseCard('scatter','Over-spread (loss)') + metaphaseCard('short','Short / contracted') + '</div>'; }
     var mo = $('#figMorph');
-    if(mo){ mo.innerHTML = rowCard([
-        {pLen:52,qLen:56,w:24,gap:40,label:'Metacentric',bands:[{arm:'p',start:0.25,len:0.18},{arm:'q',start:0.3,len:0.16}]},
-        {pLen:30,qLen:80,w:22,gap:40,label:'Submetacentric',bands:[{arm:'q',start:0.2,len:0.16},{arm:'q',start:0.55,len:0.14}]},
-        {pLen:9,qLen:72,w:22,gap:40,sat:true,label:'Acrocentric + satellite',bands:[{arm:'q',start:0.25,len:0.16}]}
-      ], {labels:true}); }
+    if(mo){ mo.innerHTML = morphGrid([
+        {pLen:52,qLen:56,w:24,label:'Metacentric',bands:[{arm:'p',start:0.25,len:0.18},{arm:'q',start:0.3,len:0.16}]},
+        {pLen:30,qLen:80,w:22,label:'Submetacentric',bands:[{arm:'q',start:0.2,len:0.16},{arm:'q',start:0.55,len:0.14}]},
+        {pLen:9,qLen:72,w:22,sat:true,label:'Acrocentric + satellite',bands:[{arm:'q',start:0.25,len:0.16}]}
+      ]); }
     var ko = $('#figKaryoOrder');
     if(ko){ ko.innerHTML = karyoLayoutSVG(); }
     var fi = $('#figFISH');

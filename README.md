@@ -86,14 +86,14 @@ The application is client-only:
 - There is no course account, telemetry system, or progress server.
 
 Progress and answer history are not transmitted. As of 2026-07-31, the IBM
-Plex Sans/Mono webfonts and the two approved public-domain images are
-committed to this repository (`assets/fonts/`, `assets/images/`) and served
-from the page's own origin — the page no longer requests any third-party
-font or image host at runtime. Only the figures' source-page/credit links
-(Wikimedia Commons, the CDC Public Health Image Library) remain external,
-click-through references, which send no request until a visitor follows them.
-See [Third-party notices](./THIRD_PARTY_NOTICES.md) for exact upstream
-sources, retrieval dates, licenses, and file hashes.
+Plex Sans/Mono webfonts and the course's two approved images are committed
+to this repository (`assets/fonts/`, `assets/images/`) and served from the
+page's own origin — the page no longer requests any third-party font or
+image host at runtime. Only the figures' source-page/credit links (Wikimedia
+Commons, Wellcome Collection) remain external, click-through references,
+which send no request until a visitor follows them. See
+[Third-party notices](./THIRD_PARTY_NOTICES.md) for exact upstream sources,
+retrieval dates, licenses, and file hashes.
 
 ## Integration API
 

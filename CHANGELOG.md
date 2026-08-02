@@ -6,6 +6,29 @@ All notable repository changes are recorded here.
 
 ### Added
 
+- `tests/e2e/figure-9-1-morphology.spec.mjs`: real-browser bounding-box
+  regression coverage (not screenshots) for Figure 9.1's centromere-morphology
+  labels — each label's containment inside its own card and inside the
+  figure, no pairwise label-bounding-box intersection, no label text
+  clipping, and no page-level horizontal overflow, across all five
+  acceptance-criteria viewports (1440×900, 1280×900, 768×1024, 390×844,
+  360×800). Mutation-verified: reverted against the pre-fix markup, 10 of 12
+  test runs failed for the expected reason (zero `.morph-label`/`.morph-item`
+  elements found), confirming the suite actually depends on the fix. See
+  `docs/QUALITY_LOG.md` for the full diagnosis
+- `assets/images/wellcome-b0000249-trisomy21-karyotype-47xy.jpg`: replaces
+  the removed CDC PHIL trisomy-21 image as Figure 10.1 — a genuine,
+  individually numbered (1–22, X, Y) G-banded karyogram labeled
+  "47,XY,+21 TRISOMY 21 (DOWN'S SYNDROME)" on the plate itself, with an
+  arrow marking the third chromosome-21 copy, from Wellcome Collection
+  (credit: Wessex Regional Genetics Centre), CC BY 4.0, 1176×1158 pixels.
+  Selected only after decoding and visually inspecting it directly (not
+  from its filename or listing text) and after the same direct-inspection
+  step rejected a same-collection, similarly named Wikimedia Commons
+  candidate that turned out to be an unsorted, overlapping metaphase spread
+  rather than an arranged karyogram. See `THIRD_PARTY_NOTICES.md` for the
+  full provenance/license record
+
 - `tests/e2e/progressive-disclosure.spec.mjs`: real-browser regression
   coverage for the quiz/exercise progressive-disclosure redesign below —
   default collapsed state with an informative summary, click/keyboard/touch
@@ -199,6 +222,25 @@ All notable repository changes are recorded here.
 
 ### Changed
 
+- Figure 9.1 (centromere morphology) no longer renders its three labels as
+  embedded SVG `<text>` inside one fixed viewBox — the layout that produced
+  "Metacentric" overlapping "Submetacentric" and "Acrocentric + satellite"
+  extending outside the figure at real widths. Each morphology is now a
+  separate, individually contained card in a responsive CSS grid
+  (`.fig-morph-grid`, `repeat(auto-fit,minmax(150px,1fr))`) with the label as
+  ordinary wrapping HTML text below a small, label-free drawing. Stacks to a
+  single column at narrow widths, verified at all five acceptance-criteria
+  viewports with no overlap, no clipping, and no horizontal page overflow.
+  The figure keeps its "(schematic)" title and caption badge unchanged
+- Figure 10.1 (trisomy 21 karyotype) replaced: removed the CDC PHIL image
+  (heavily thresholded, chromosomes grouped but not individually numbered,
+  and — confirmed by reading its own printed group label rather than
+  assumed — an XX-derived karyotype that did not match the course's own
+  primary `47,XY,+21` worked ISCN example directly beneath it) and embedded
+  a Wellcome Collection karyogram instead (CC BY 4.0, Wessex Regional
+  Genetics Centre; see "Added" above). Figure title, alt text, caption, and
+  the `IMAGES` manifest record were all updated to match; no ISCN notation,
+  question, or scoring content changed
 - Every quiz and exercise widget (`.quiz`, `.exer`) is now a native
   `<details>`/`<summary>` element, collapsed by default, instead of an
   always-fully-expanded block — the same disclosure pattern already used

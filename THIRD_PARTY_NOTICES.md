@@ -21,22 +21,68 @@ course. It is not a substitute for verifying the source record before a release.
 - Redistribution status in manifest: approved
 - Last repository verification: 2026-07-31
 
-## Trisomy 21 karyotype
+## Trisomy 21 karyotype (47,XY,+21)
 
 - Internal ID: `img-t21` (course data: `fig10-1`)
-- Creator/credit: CDC / Dr. Allan J. Ebbin (1967)
-- Source page (external, unchanged): <https://phil.cdc.gov/Details.aspx?pid=12504>
-- Original runtime image URL (used through 2026-07-30, now localized):
-  <https://wwwn.cdc.gov/phil/PHIL_Images/12504/12504_lores.jpg>
-- **Local file (as of 2026-07-31):** `assets/images/cdc-phil-12504-trisomy21-karyotype.jpg`
-- Retrieved: 2026-07-31, from the original runtime image URL above (byte-for-byte
-  the same file the page already displayed remotely; no re-encoding or editing)
-- File hash: `sha256:0958251e8896b340c677b2ddb14436ba860ee344604f3cf08a787177daf9e995`
-- File size: 31,373 bytes; decoded dimensions 700x563
-- Rights basis: CDC Public Health Image Library public-domain record
-- Course modification: displayed responsively; no source-image editing claimed
+- **Superseded image, removed 2026-08-01 (Issue tracked in this PR):** the
+  course previously embedded a CDC Public Health Image Library image
+  (`assets/images/cdc-phil-12504-trisomy21-karyotype.jpg`, CDC / Dr. Allan J.
+  Ebbin, 1967, image #12504, `sha256:0958251e8896b340c677b2ddb14436ba860ee344604f3cf08a787177daf9e995`).
+  Independent review of the live course found that image's chromosome
+  morphology and band detail unacceptable for a professional cytogenetics
+  study guide: heavily thresholded, low contrast, individual G-bands not
+  reliably interpretable, chromosomes not individually numbered (only
+  grouped, e.g. "C 6-12 + XX"), and — confirmed by decoding and directly
+  reading the group label rather than assumed — the depicted karyotype is
+  actually **female (46,XX-derived, i.e. 47,XX,+21)**, which did not match
+  the course's own primary worked ISCN example directly below it
+  (`47,XY,+21`). The file has been removed from `assets/images/` and from
+  this record's "local file" status; its historical hash above is kept only
+  as a provenance trail for what was previously embedded.
+- Creator/credit: Wessex Regional Genetics Centre, via Wellcome Collection
+- Source page (external, unchanged):
+  <https://wellcomecollection.org/works/wmcdanw6> ("Down syndrome human
+  karyotype 47,XY,+21", Miro image number `B0000249`, Miro library reference
+  `BSIP 0282803`)
+- Original runtime image URL (IIIF Image API, full resolution):
+  <https://iiif.wellcomecollection.org/image/B0000249/full/full/0/default.jpg>
+- **Local file (as of 2026-08-01):**
+  `assets/images/wellcome-b0000249-trisomy21-karyotype-47xy.jpg`
+- Retrieved: 2026-08-01, from the IIIF Image API URL above at its full native
+  resolution (byte-for-byte as delivered; no re-encoding or editing)
+- File hash: `sha256:aa062e66a0ca67a5a63c4ce12bdabccf28a811f622ad38340fdca54371cf2c43`
+- File size: 135,316 bytes; decoded dimensions 1176x1158
+- Rights basis: Wellcome Collection catalogue record for this specific
+  digital item states an explicit, machine-readable license —
+  `"license":{"id":"cc-by","label":"Attribution 4.0 International (CC BY 4.0)","url":"http://creativecommons.org/licenses/by/4.0/"}`
+  — with `"accessConditions":[{"status":{"id":"open"}}]`, confirmed directly
+  against `https://api.wellcomecollection.org/catalogue/v2/works/wmcdanw6?include=items,images,identifiers`
+  on 2026-08-01, not merely inferred from the human-readable page. Required
+  attribution per that record: credit "Wessex Reg. Genetics Centre".
+- Content verification: the image itself was decoded and visually inspected
+  (not assumed from its filename or page description) before selection —
+  it is a genuinely arranged G-banded karyogram (chromosomes cut, paired,
+  and laid out in numbered rows 1–22 plus X/Y, matching the standard
+  A–G group layout this course teaches in Module 8/9), with the title
+  "47,XY,+21 TRISOMY 21 (DOWN'S SYNDROME)" printed directly on the plate and
+  an arrow indicating the third copy of chromosome 21. This step also ruled
+  out a same-collection false lead: a separate, superficially similar
+  Wikimedia Commons file titled "Human karyotype ... 47, XY, +21 (Down
+  syndrome).jpg" (Josef Reischig archive, CC BY-SA 3.0, 3749x2399) was
+  downloaded and inspected the same way and found to be a raw, unsorted
+  metaphase spread — overlapping, unpaired chromosomes plus intact
+  interphase nuclei still visible on the slide — not an arranged karyogram,
+  so it was rejected despite its higher pixel resolution and permissive
+  license. No image in this notice was selected from its filename, listing
+  text, or license badge alone.
+- No PHI: the plate shows only the arranged chromosomes and the printed
+  diagnostic title; no patient name, date of birth, or accession/specimen
+  number is visible anywhere in the image.
+- Course modification: displayed responsively; no source-image editing
+  (cropping, contrast adjustment, or annotation) applied beyond what the
+  source plate already contained
 - Redistribution status in manifest: approved
-- Last repository verification: 2026-07-31
+- Last repository verification: 2026-08-01
 
 ## IBM Plex Sans and IBM Plex Mono (webfonts)
 
