@@ -1203,8 +1203,61 @@ terminology inaccuracy, all recorded as an addendum to QL-006:
   removing the state-level required-own-key loop; and reverting the
   wrapper validator to the original permissive logic — each failed exactly
   the tests written to cover it, and no others.
-- Full record: `docs/QUALITY_LOG.md` QL-006's addendum. `SCHEMA_V` stays
-  `2` — nothing here changes the accepted record shape.
+- Full record: `docs/QUALITY_LOG.md` QL-006's first addendum. `SCHEMA_V`
+  stays `2` — nothing here changes the accepted record shape.
+
+A second **correction pass**, same branch/PR, before merge: independent
+review found one further contract-level gap, recorded as a second
+addendum to QL-006:
+
+- **Root problem:** `isPlainObject(x)` was `typeof x === 'object' &&
+  !Array.isArray(x)` — true of ANY non-array object, including exotic
+  built-ins (`Date`, `Map`, `Set`, `RegExp`) that carry no data reachable
+  through ordinary own-property enumeration, so `{modules: new Date(0)}`
+  silently imported as an empty `modules` map. Every exact-shape check
+  here is built on `Object.keys()`, which lists only own *enumerable
+  string* keys — invisible to a symbol-keyed own property, a
+  non-enumerable own property, or an accessor (getter/setter) property.
+  Four counterexamples were independently reproduced by direct execution
+  before any fix was written: `modules: new Date(0)`/`answers: new Map()`
+  both silently accepted as empty; an outcome record with a genuine
+  non-enumerable fourth own property accepted as if it only had `{c,n,ts}`;
+  a state with an own `Symbol` key accepted with the symbol silently
+  ignored; a wrapper `stats: new Date(0)` accepted.
+- **Fix:** `isPlainObject(x)` is now `isRecordObject(x) &&
+  hasOnlyOwnDataProperties(x)`. `isRecordObject()` rejects exotic
+  built-ins by checking prototype-chain SHAPE (own prototype is `null`, or
+  that prototype's own prototype is `null`) rather than identity or
+  `Object.prototype.toString`, so it is correct cross-realm and resists a
+  `Symbol.toStringTag`-spoofing exotic object (verified directly: a `Map`
+  subclass overriding its tag to read as `"[object Object]"` is still
+  correctly rejected, since the check never consults `toString`).
+  `hasOnlyOwnDataProperties()` rejects any own symbol key, any
+  non-enumerable own property, and any accessor property. A null-prototype
+  object (`Object.create(null)`) is a deliberate exception: it IS accepted
+  at every level, since every check here reads properties via explicit
+  `hasOwnProperty`/bracket access, never an object's own inherited
+  methods, so it behaves identically to an ordinary plain object for every
+  purpose this validator cares about.
+- **9 new tests** (`tests/dom-behavior.mjs`, 92 → 101 checks): the four
+  reproduced counterexamples; a `Set` as `exercises` and a `RegExp` as
+  `modules` in one test (a `RegExp` owns a non-enumerable `lastIndex`,
+  independently caught by the other half of the defense, confirming
+  neither check is redundant); the `Symbol.toStringTag`-spoofing case; an
+  accessor-property outcome record; and a positive test confirming
+  null-prototype objects are accepted at every level. One existing test
+  was rebuilt (a plain-object-literal prototype now makes the whole chain
+  two levels deep and is rejected by `isRecordObject()` before reaching
+  the ownership check it was written to isolate; rebuilt using a
+  null-prototype intermediate to keep isolating that specific exploit), and
+  a new companion test covers the now-earlier rejection path explicitly.
+  **Mutation-tested:** two mutations, each reverted and confirmed
+  byte-identical via `diff`: weakening `isRecordObject()` to accept any
+  non-array object failed exactly the four exotic-built-in tests; weakening
+  `hasOnlyOwnDataProperties()` to always return `true` failed exactly the
+  three own-property-shape tests — confirming neither defense is
+  redundant with the other.
+- Full record: `docs/QUALITY_LOG.md` QL-006's second addendum.
 - Strictly scoped: no question, answer, rationale, scoring, quiz
   progress, analytics semantics, image, styling, layout, or accessibility
   presentation changed, and none of the other Issue #2 items (stale-ID

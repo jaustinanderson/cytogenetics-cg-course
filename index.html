@@ -3950,6 +3950,53 @@
      explicitly out-of-scope "stale ID policy" item still open in
      docs/ROADMAP.md Milestone 1.
 
+     Every object this validator inspects -- the state, the wrapper, the
+     modules/answers/exercises containers, and every individual outcome
+     record -- must be a genuine RECORD OBJECT, not merely any non-array
+     `typeof x === 'object'` value (see isPlainObject() below): a `Date`,
+     `Map`, `Set`, `RegExp`, or similar exotic object satisfies the weaker
+     check while carrying no data reachable through ordinary own-property
+     enumeration, so a candidate like `{modules: new Date(0)}` was
+     previously accepted as an empty `modules` map instead of rejected --
+     confirmed as a real bug by direct execution before this defense was
+     added. A null-prototype object (`Object.create(null)`) IS accepted as
+     a valid record: a direct (non-JSON-string) caller may reasonably build
+     one to avoid prototype-pollution surface entirely, and every check
+     here operates on own properties via explicit `hasOwnProperty`/bracket
+     access, never through the object's own inherited methods, so a
+     null-prototype object behaves identically to an ordinary one for
+     every purpose this validator cares about. Distinguishing "genuine
+     record object" from "exotic object with no own enumerable
+     properties" (under which an empty `Date`/`Map`/`Set` would otherwise
+     vacuously pass a check phrased only as "every own property is
+     acceptable") requires checking prototype-chain SHAPE, not identity:
+     the object's own prototype must itself be `null`, or that prototype's
+     own prototype must be `null` -- true for an ordinary plain object or a
+     null-prototype object in ANY realm (this course's own dependency-free
+     test harness runs the app in a separate `vm` realm, so an
+     identity comparison against this realm's `Object.prototype` would
+     incorrectly reject every legitimate cross-realm plain object a test
+     passes in), and false for any exotic built-in, whose prototype chain
+     is at least one level deeper. A `Symbol.toStringTag`-spoofing exotic
+     object (e.g. a `Map` subclass overriding its tag to read as
+     `"[object Object]"`) does not defeat this check, since it inspects
+     prototype-chain shape, never `Object.prototype.toString`.
+
+     Additionally, every one of an accepted record object's own properties
+     must be a plain, enumerable, STRING-keyed DATA property: a symbol key
+     is rejected outright (it can never collide with any check here, but
+     silently accepting one would contradict the exact-own-property-shape
+     claims above); a non-enumerable own property is rejected, since
+     `Object.keys()` -- what every exact-shape check below is built on --
+     cannot see it, so an object with a non-enumerable fourth key
+     alongside a valid `{c,n,ts}` previously passed the "exactly three
+     own keys" check outright; and an ACCESSOR property (a getter/setter
+     pair) is rejected, since its value is computed fresh on every read --
+     a validated value is read again later when the accepted output is
+     rebuilt, and a getter could legally return something different (or
+     something invalid) the second time, defeating the "validate once,
+     then trust" contract this validator is built on.
+
      Every check below runs against the RAW parsed/caller-supplied data and
      builds an entirely NEW object graph (out/modules/answers/exercises are
      all fresh object literals, and every outcome record is rebuilt field-
@@ -3992,7 +4039,37 @@
   var EXPORT_WRAPPER_KEYS = ['exported', 'state', 'stats'];
   var hasOwn = Object.prototype.hasOwnProperty;
 
-  function isPlainObject(x){ return !!x && typeof x === 'object' && !Array.isArray(x); }
+  /* True only for a genuine record-shaped object: an ordinary plain
+     object, or an explicit null-prototype object -- in ANY realm -- never
+     an exotic built-in (Date/Map/Set/RegExp/...), which this checks by
+     prototype-chain SHAPE (depth), not identity, so it holds correctly
+     for cross-realm input and cannot be defeated by an object spoofing
+     `Symbol.toStringTag`. See the file-level comment above for the full
+     reasoning and the confirmed counterexample this exists to reject. */
+  function isRecordObject(x){
+    if(!x || typeof x !== 'object' || Array.isArray(x)){ return false; }
+    var proto = Object.getPrototypeOf(x);
+    return proto === null || Object.getPrototypeOf(proto) === null;
+  }
+
+  /* True only if every one of x's own properties is a plain, enumerable,
+     string-keyed DATA property -- rejects any own symbol key, any
+     non-enumerable own property (invisible to the Object.keys()-based
+     exact-shape checks this validator otherwise relies on), and any
+     accessor (getter/setter) property (whose value could legally differ
+     between the read that validates it and the later read that persists
+     it). See the file-level comment above for the full reasoning. */
+  function hasOnlyOwnDataProperties(x){
+    if(Object.getOwnPropertySymbols(x).length > 0){ return false; }
+    var names = Object.getOwnPropertyNames(x);
+    for(var i=0;i<names.length;i++){
+      var d = Object.getOwnPropertyDescriptor(x, names[i]);
+      if(!d.enumerable || !hasOwn.call(d, 'value')){ return false; }
+    }
+    return true;
+  }
+
+  function isPlainObject(x){ return isRecordObject(x) && hasOnlyOwnDataProperties(x); }
   function isSafeKey(k){
     return typeof k === 'string' && k.length > 0 && DANGEROUS_KEYS.indexOf(k) === -1;
   }

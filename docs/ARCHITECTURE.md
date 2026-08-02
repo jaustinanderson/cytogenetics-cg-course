@@ -147,6 +147,56 @@ defense). This does **not** check whether an id is a *currently known*
 module/question/exercise — that remains the separate, still-open
 "stale ID policy" item in `docs/ROADMAP.md` Milestone 1.
 
+**Record-object requirement.** Every object this validator inspects — the
+state, the wrapper, the `modules`/`answers`/`exercises` containers, and
+every individual outcome record — must be a genuine RECORD OBJECT, not
+merely any non-array `typeof x === 'object'` value. `isPlainObject()` is
+`isRecordObject(x) && hasOnlyOwnDataProperties(x)`:
+
+- `isRecordObject(x)` rejects exotic built-ins (`Date`, `Map`, `Set`,
+  `RegExp`, …), which satisfy the weaker `typeof`/`Array.isArray` check
+  while carrying no data reachable through ordinary own-property
+  enumeration — `{modules: new Date(0)}` previously imported as a silently
+  empty `modules` map, confirmed as a real bug by direct execution before
+  this defense was added. It checks prototype-chain SHAPE (the object's
+  own prototype must be `null`, or that prototype's own prototype must be
+  `null`), not identity or `Object.prototype.toString`, so it is correct
+  for cross-realm input (this course's own dependency-free test harness
+  runs the app in a separate `vm` realm) and cannot be defeated by an
+  object spoofing `Symbol.toStringTag` to read as `"[object Object]"`.
+  **A null-prototype object (`Object.create(null)`) is deliberately
+  accepted** as a valid record at every level: every check here reads own
+  properties via explicit `hasOwnProperty`/bracket access, never through
+  the object's own inherited methods, so a null-prototype object behaves
+  identically to an ordinary plain object for every purpose this validator
+  cares about, and a direct (non-JSON-string) caller may reasonably build
+  one to avoid prototype-pollution surface entirely.
+- `hasOnlyOwnDataProperties(x)` rejects any own **symbol** key (invisible
+  to every `Object.keys()`-based check here, but silently accepting one
+  would contradict the exact-own-property-shape claims above); any
+  **non-enumerable** own property (also invisible to `Object.keys()` — an
+  object with a hidden fourth key alongside a valid `{c,n,ts}` previously
+  passed the "exactly three own keys" check outright); and any
+  **accessor** (getter/setter) property (its value is computed fresh on
+  every read, and a validated value is read again later when the accepted
+  output is rebuilt — a getter could legally return something different,
+  or invalid, the second time).
+
+Both checks are necessary together: an exotic built-in with zero own
+enumerable-or-not properties (`new Date(0)`, `new Map()`, `new Set()`)
+would vacuously satisfy `hasOnlyOwnDataProperties()` alone, and neither
+check subsumes the other. 9 new tests cover both halves independently —
+exotic containers at every position (`modules`/`answers`/`exercises`/
+wrapper `stats`), the `Symbol.toStringTag`-spoofing case, a non-enumerable
+extra property, an accessor property, a symbol key, the deliberate
+null-prototype-acceptance decision, and a companion test confirming a
+deeper (non-record-shaped) prototype chain is rejected before an existing
+ownership check further down is ever reached. **Mutation-tested:** weakening
+`isRecordObject()` to accept any non-array object failed exactly the four
+exotic-built-in tests; weakening `hasOnlyOwnDataProperties()` to always
+return `true` failed exactly the three own-property-shape tests — neither
+mutation affected the other's tests or any pre-existing test.
+
 A raw string import is also checked against a documented length limit
 (262,144 characters — a JavaScript string-length/code-unit limit, not a
 byte or KiB limit) **before** `JSON.parse` is ever called, and the parsed

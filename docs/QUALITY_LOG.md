@@ -591,6 +591,133 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   by the corrected tests above; see `docs/VALIDATION.md` "Progress-import
   validation and cloning" for the corrected test-coverage record.
 
+### Addendum 2 — independent review found a contract-level gap: `isPlainObject()` accepted any non-array object, not a genuine record
+
+- **Status:** Corrected on the same branch (`claude/issue-2-import-hardening`),
+  before merge.
+- **Finding.** `isPlainObject(x)` was `!!x && typeof x === 'object' &&
+  !Array.isArray(x)` — true of *any* non-array object, including exotic
+  built-ins (`Date`, `Map`, `Set`, `RegExp`, …) that carry no data
+  reachable through ordinary own-property enumeration. Every exact-shape
+  check in this validator (the state, the wrapper, the
+  `modules`/`answers`/`exercises` containers, and every outcome record) is
+  built on `Object.keys()`, which lists only OWN ENUMERABLE STRING keys —
+  so it was also blind to an own SYMBOL key, a genuine own property marked
+  NON-ENUMERABLE, and an ACCESSOR (getter/setter) property, none of which
+  `Object.keys()` can see. Four counterexamples were independently
+  reproduced by direct execution against the pre-fix validator, through
+  the same `vm`-sandboxed `importJSON()` the test suite exercises, before
+  any fix was written: (1) `{v:2, modules: new Date(0), answers: new
+  Map(), exercises:{}, started:0}` was accepted, with `modules`/`answers`
+  silently stored as empty objects (`Object.keys(new Date(0))` and
+  `Object.keys(new Map())` are both `[]`); (2) an otherwise-valid outcome
+  record `{c:true,n:1,ts:1}` with a fourth own property added via
+  `Object.defineProperty(rec,'hidden',{value:'secret',enumerable:false})`
+  was accepted — `Object.keys(rec)` still reported exactly `['c','n','ts']`
+  despite `Object.getOwnPropertyNames(rec)` confirming four real own
+  properties; (3) a state object with a genuine own `Symbol('evil')` key
+  alongside otherwise-valid fields was accepted, the symbol key completely
+  invisible to `Object.keys()`; (4) a wrapper `{exported:'x', state:{...
+  valid...}, stats:new Date(0)}` was accepted, `stats` silently treated as
+  an empty object.
+- **Impact:** None shipped — this entire gap was found and fixed within
+  the same draft PR, before independent sign-off or merge. Had it shipped,
+  a direct-object caller of the public `importJSON()` API (not achievable
+  via a JSON string, since `JSON.parse` cannot produce a `Date`/`Map`/
+  symbol key/accessor/non-enumerable property — but trivially achievable
+  by any JavaScript caller passing an object directly, which this API
+  explicitly supports and has a dedicated detachment test for) could have
+  had `modules`/`answers`/`exercises`/wrapper `stats` silently replaced
+  with empty data while `importJSON()` reported `{ok:true}`, or smuggled a
+  fourth outcome-record field or a symbol-keyed state field past checks
+  that document themselves as exact-own-property-shape.
+- **Correction.** Added `isRecordObject(x)`, which rejects exotic
+  built-ins by checking prototype-chain SHAPE rather than identity or
+  `Object.prototype.toString`: the object's own prototype must be `null`,
+  or that prototype's own prototype must be `null` — true for an ordinary
+  plain object or a null-prototype object in *any* realm (verified
+  directly against Node's `vm` module before relying on it, since this
+  course's own test harness runs the app in a separate realm from its
+  test file), and false for any exotic built-in, whose prototype chain is
+  at least one level deeper. This also resists a
+  `Symbol.toStringTag`-spoofing exotic object (e.g. a `Map` subclass
+  overriding its tag to read as `"[object Object]"`, which would defeat a
+  `Object.prototype.toString.call(x) === '[object Object]'`-style check)
+  — verified directly: the spoofed tag reads as `"[object Object]"` while
+  `isRecordObject()` still correctly returns `false` for it, since it
+  never consults `toString` at all. Added `hasOnlyOwnDataProperties(x)`,
+  which rejects any own symbol key (`Object.getOwnPropertySymbols(x).length
+  > 0`), any own property whose descriptor is not `enumerable`, and any
+  own property that is an accessor rather than a data property (no
+  `'value'` key on its descriptor). `isPlainObject(x)` is now
+  `isRecordObject(x) && hasOnlyOwnDataProperties(x)` — both checks are
+  necessary together, confirmed by mutation testing below: an exotic
+  built-in with zero own properties at all (`new Date(0)`, `new Map()`,
+  `new Set()`) vacuously satisfies `hasOnlyOwnDataProperties()` alone, and
+  neither check subsumes the other.
+
+  **Deliberate design decision, documented:** a null-prototype object
+  (`Object.create(null)`) IS accepted as a valid record at every level.
+  Every check in this validator reads own properties via explicit
+  `hasOwnProperty`/bracket access, never through an object's own inherited
+  methods, so a null-prototype object behaves identically to an ordinary
+  plain object for every purpose this validator cares about — and a
+  direct (non-JSON-string) caller may reasonably build one specifically to
+  avoid prototype-pollution surface entirely. Rejecting it would
+  needlessly penalize that defensive habit for no security benefit. A
+  dedicated positive test constructs a complete state, entirely out of
+  `Object.create(null)` objects at every level (state, `modules`,
+  `answers`, `exercises`, and an outcome record), and confirms it imports
+  successfully.
+
+  9 new tests in `tests/dom-behavior.mjs`: the four reproduced
+  counterexamples above; a state whose `exercises` is a `Set` and,
+  separately, whose `modules` is a `RegExp` in the same test (a `RegExp`
+  instance owns a non-enumerable `lastIndex` property, so it is
+  independently caught by `hasOnlyOwnDataProperties()` too — confirming
+  the two defenses are not redundant with each other for every exotic
+  type); the `Symbol.toStringTag`-spoofing case; an outcome record whose
+  `c` field is an accessor (getter) that legally returns a different value
+  on a second read; and the null-prototype-acceptance positive test.
+  Additionally, one existing test ("a state object with required fields
+  only on its prototype is rejected, not read through the prototype
+  chain") was rebuilt to use a null-prototype intermediate object (rather
+  than an ordinary plain-object-literal prototype), since a plain-object
+  prototype now makes the whole chain two levels deep and gets correctly
+  rejected by `isRecordObject()` before the OWNERSHIP check it was written
+  to isolate is ever reached — a new companion test
+  ("...whose prototype chain is deeper than a plain record...") covers
+  that now-earlier rejection path explicitly, so no coverage was lost, and
+  the original test still isolates the specific ownership-only exploit it
+  was written for.
+- **Mutation-tested:** two mutations, each reverted and confirmed
+  byte-identical via `diff`: (1) weakening `isRecordObject()` to accept
+  any non-array object failed exactly the four exotic-built-in tests and
+  none of the own-data-property tests; (2) weakening
+  `hasOnlyOwnDataProperties()` to always return `true` failed exactly the
+  three own-property-shape tests (non-enumerable extra, accessor `c`,
+  symbol key) and none of the exotic-built-in tests — confirming neither
+  check is redundant with the other.
+- **Cause:** Same root cause as this entry's first addendum and QL-005's
+  addendum: `isPlainObject()`'s original check and the exact-shape checks
+  built on `Object.keys()` were both correct for every fixture any
+  existing test constructed (ordinary object literals, JSON round-trips),
+  because nothing had yet tried to construct an object that is
+  `typeof === 'object'` yet not record-shaped, or an own property that
+  `Object.keys()` cannot see.
+- **Correct action:** Same discipline restated once more, now across four
+  independent findings in this one file: a validator's job is to resist
+  input its own author did not think to construct, so audit each
+  primitive JavaScript check it relies on (`typeof x === 'object'`,
+  `Object.keys()`, property access) against what that primitive actually
+  guarantees versus what the surrounding code assumes it guarantees, and
+  construct the gap directly rather than trusting that existing tests
+  would have caught it.
+- **Prevention:** `docs/ARCHITECTURE.md` and `docs/VALIDATION.md` updated
+  to document the record-object requirement, the null-prototype
+  acceptance decision, and the corrected test/mutation-test record;
+  `CHANGELOG.md` updated with the corrected test and mutation counts.
+
 ## QL-007 — A test instrument produced a false defect report
 
 - **Status:** Corrected before any product change was made

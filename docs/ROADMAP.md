@@ -218,17 +218,25 @@ review status stable before adding 46 questions.
   counters/timestamps/correctness values, extra/missing/inherited-only
   outcome-record fields, and dangerous keys (`__proto__`/`constructor`/
   `prototype`) wherever they appear, including on the export wrapper
-  itself. A rejected *or unsaved* import is atomic: persistence is
-  attempted before live state is ever committed, so `getProgress()`,
-  `localStorage`, the rendered UI, and public API events are all left
-  completely unchanged whether validation fails or the underlying
-  `localStorage.setItem()` write itself fails (full quota, private
-  browsing). See `docs/QUALITY_LOG.md` QL-006 and its addendum (three
-  correctness gaps independent review found and fixed before merge:
-  persistence-failure atomicity, own-property vs. inherited-property
-  validation, and export-wrapper shape) and `docs/VALIDATION.md`
-  "Progress-import validation and cloning" for the full record. This
-  closes only these two items — the remaining Milestone 1 work below
+  itself. Every accepted object — the state, the wrapper, the
+  `modules`/`answers`/`exercises` containers, and every outcome record —
+  must also be a genuine record object (an ordinary plain object or an
+  explicit null-prototype object, never an exotic built-in like
+  `Date`/`Map`/`Set`/`RegExp`), and every one of its own properties must
+  be a plain, enumerable, string-keyed data property (no symbol keys, no
+  non-enumerable extras, no accessor/getter properties). A rejected *or
+  unsaved* import is atomic: persistence is attempted before live state is
+  ever committed, so `getProgress()`, `localStorage`, the rendered UI, and
+  public API events are all left completely unchanged whether validation
+  fails or the underlying `localStorage.setItem()` write itself fails
+  (full quota, private browsing). See `docs/QUALITY_LOG.md` QL-006 and its
+  two addenda (four correctness gaps independent review found and fixed
+  before merge, across two separate correction passes: persistence-failure
+  atomicity, own-property vs. inherited-property validation,
+  export-wrapper shape, and the record-object requirement) and
+  `docs/VALIDATION.md` "Progress-import validation and cloning" for the
+  full record. This closes only these two items — the remaining
+  Milestone 1 work below
   (stale-ID policy, Reset/import re-render, storage-failure UI for
   `recordAnswer()`/`recordExercise()`/`markModule()`, analytics semantics,
   content-pack decision, provenance fields, image-manifest normalization,

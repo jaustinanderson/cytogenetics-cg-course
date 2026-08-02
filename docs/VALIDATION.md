@@ -1172,16 +1172,20 @@ cheap enough to always run rather than gate behind a version number.
 No question, answer, rationale, scoring, quiz progress, analytics
 semantics, image, styling, layout, or accessibility presentation changed.
 
-## Progress-import validation and cloning — added 2026-08-02, corrected 2026-08-02
+## Progress-import validation and cloning — added 2026-08-02, corrected 2026-08-02 (twice)
 
 `tests/dom-behavior.mjs` (Issue #2, `docs/QUALITY_LOG.md` QL-006 and its
-addendum) adds 40 dependency-free checks covering `importJSON()`'s full
+addenda) adds 49 dependency-free checks covering `importJSON()`'s full
 validation and atomicity contract — 27 from the initial hardening pass, 13
-more from a correction pass after independent review found three further
-gaps (persistence-failure atomicity, own-property vs. inherited-property
-validation, and export-wrapper shape). See `docs/ARCHITECTURE.md` "Import
-validation" for the exact accepted bare-state and wrapper schemas and the
-transaction order. Covers:
+more from a first correction pass after independent review found three
+further gaps (persistence-failure atomicity, own-property vs.
+inherited-property validation, and export-wrapper shape), and 9 more from
+a second correction pass closing a record-object gap (exotic built-ins
+like `Date`/`Map` accepted as empty record objects; symbol keys,
+non-enumerable properties, and accessor properties invisible to the
+`Object.keys()`-based exact-shape checks). See `docs/ARCHITECTURE.md`
+"Import validation" for the exact accepted bare-state and wrapper schemas,
+the record-object requirement, and the transaction order. Covers:
 
 - **round-trip:** a current `exportJSON()` output (now including an
   exercise outcome, not only a module and a quiz answer) imports correctly
@@ -1247,6 +1251,29 @@ transaction order. Covers:
   `exported`/`stats` are each rejected; a full current `exportJSON()` →
   `importJSON()` round trip confirms the accepted wrapper shape still
   matches what this app actually produces
+- **record-object requirement (second correction pass):** a state whose
+  `modules`/`answers` are exotic built-ins (`new Date(0)`, `new Map()`,
+  both of which have zero own enumerable-or-not properties, so the
+  previous `typeof x === 'object'` check accepted them as silently empty
+  maps); a state whose `exercises` is a `Set` and, separately, whose
+  `modules` is a `RegExp` (a `RegExp` instance owns a non-enumerable
+  `lastIndex` property, so it is independently caught by the
+  own-data-property check too — confirming the two defenses are not
+  redundant with each other); a `Map` subclass overriding
+  `Symbol.toStringTag` to read as `"[object Object]"`, confirming the
+  record-object check inspects prototype-chain shape rather than
+  `Object.prototype.toString`; an outcome record with a genuine fourth own
+  property marked non-enumerable (invisible to `Object.keys()`); an
+  outcome record whose `c` field is an accessor (getter) rather than a
+  data property; a state with an own **symbol** key; a wrapper `stats`
+  field that is a `Date`. A dedicated positive test confirms
+  null-prototype objects (`Object.create(null)`) are accepted as valid
+  records at every level (state, containers, and outcome records) — the
+  deliberate design decision documented in `docs/ARCHITECTURE.md`. All
+  eight adversarial counterexamples above were confirmed as real, working
+  exploits by direct execution against the pre-fix validator (via the same
+  `vm`-sandboxed `importJSON()` this test file exercises) before any fix
+  was written, not assumed from reading the code.
 
 **Mutation-tested**, three separate mutations from the initial hardening
 pass, each reverted and confirmed byte-identical to the pre-mutation file
@@ -1275,6 +1302,21 @@ missing-field tests, and the pre-existing missing-`v` test); (4) reverting
 o.state : o` logic failed exactly the five wrapper-rejection tests (the
 valid-wrapper round-trip test correctly continued to pass, since a
 genuinely valid wrapper is accepted by both versions).
+
+**Mutation-tested, second correction pass**, two further mutations, each
+reverted and confirmed byte-identical via `diff`: (1) weakening
+`isRecordObject()` to accept any non-array object (reverting to the
+original weak check) failed exactly the four exotic-built-in tests (the
+`Date`/`Map` state test, the `Set`/`RegExp` state test, the spoofed-tag
+test, and the wrapper-`stats`-is-a-`Date` test) and none of the
+own-data-property tests, confirming the `RegExp` half of the `Set`/
+`RegExp` test really is independently caught by the other defense, as
+claimed above; (2) weakening `hasOnlyOwnDataProperties()` to always return
+`true` failed exactly the three own-property-shape tests (the
+non-enumerable extra, the accessor `c`, and the symbol key) and none of
+the exotic-built-in tests — together proving neither check subsumes the
+other, exactly as the "both checks are necessary together" reasoning in
+`docs/ARCHITECTURE.md` claims.
 
 **Schema-version decision:** `SCHEMA_V` stays `2`. The accepted record
 shape is completely unchanged from before this work — every field that

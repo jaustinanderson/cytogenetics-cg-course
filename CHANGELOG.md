@@ -25,24 +25,34 @@ All notable repository changes are recorded here.
   so mutating the caller's source object after a successful import
   (including when `importJSON()` is called with a plain object rather
   than a JSON string, which previously aliased that object directly into
-  live state) cannot affect course progress. The full transaction —
+  live state) cannot affect course progress. Accepted objects (the state,
+  the wrapper, the `modules`/`answers`/`exercises` containers, and every
+  outcome record) must also be genuine RECORD objects — an ordinary plain
+  object or an explicit null-prototype object, in any realm, never an
+  exotic built-in like `Date`/`Map`/`Set`/`RegExp` (which previously
+  passed the weaker `typeof x === 'object'` check while carrying no data
+  reachable through normal own-property enumeration) — and every one of
+  their own properties must be a plain, enumerable, string-keyed DATA
+  property, rejecting any own symbol key, non-enumerable extra, or
+  accessor (getter/setter) property outright. The full transaction —
   validate, migrate the candidate, serialize, then attempt the
   `localStorage` write — runs to completion *before* live state is ever
   committed, so a rejected import, and now also one whose persistence
   itself fails (full quota, private browsing), both leave `getProgress()`,
   `localStorage`, the rendered UI, and public API events completely
-  unchanged. Does not bump `SCHEMA_V`. 40 dependency-free regression tests
+  unchanged. Does not bump `SCHEMA_V`. 49 dependency-free regression tests
   in `tests/dom-behavior.mjs` (27 from the initial pass, 13 from a
   correction pass after independent review found three further gaps —
   persistence-failure atomicity, own-property vs. inherited-property
-  validation, and the wrapper contract — plus a terminology fix), mutation-
-  tested across seven separate mutations in total. Found and fixed a real
-  self-contained bug in the process: a `{'__proto__':true, ...}`-shaped
-  blocklist never actually contained `__proto__` as an own key
-  (object-literal syntax silently drops it when the value isn't itself an
-  object), replaced with a plain array. See `docs/QUALITY_LOG.md` QL-006
-  and its addendum, and QL-023, and `docs/VALIDATION.md` "Progress-import
-  validation and cloning" (Issue #2)
+  validation, and the wrapper contract — plus a terminology fix, and 9
+  more from a further correction pass closing the record-object gap
+  above), mutation-tested across nine separate mutations in total. Found
+  and fixed a real self-contained bug in the process: a
+  `{'__proto__':true, ...}`-shaped blocklist never actually contained
+  `__proto__` as an own key (object-literal syntax silently drops it when
+  the value isn't itself an object), replaced with a plain array. See
+  `docs/QUALITY_LOG.md` QL-006 and its addenda, and QL-023, and
+  `docs/VALIDATION.md` "Progress-import validation and cloning" (Issue #2)
 - Explicit, stable `id` fields, plus a literal frozen `legacyId` recording
   each item's original position-derived key, on all 30 exercise items
   (`EXERCISES.ex7`/`ex9group`/`ex9chrom`/`ex10`/`ex14`/`ex15` in
