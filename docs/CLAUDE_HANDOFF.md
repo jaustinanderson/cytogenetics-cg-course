@@ -1073,6 +1073,198 @@ and confirmed `index.html` byte-identical via `diff` before committing.
 `npm test` and the full local Playwright suite passed again. PR #16
 remains draft, open, and unmerged pending further review.
 
+PR #16 was subsequently reviewed, approved, and squash-merged to `main`
+as `0d963a56a5069801d77665172a758564ca85f7fa`. Post-merge, an incident
+was caught and corrected within the same session: the PR body's summary
+sentence "It does **not** close #2" contained the literal substring
+"close #2", which GitHub's keyword auto-linker matched despite the
+negation and auto-closed Issue #2 on merge. Caught immediately, Issue #2
+was reopened within seconds and the PR body text corrected afterward to
+remove the pattern (confirmed via the repository's
+`closingIssuesReferences` GraphQL field that no closing link remained).
+Full post-merge chain (Validate course, Pages build/deployment, deployed
+Pages smoke test, deployment-record + live-hash match, and a direct
+isolated-browser check of the deployed migration/stable-id behavior) was
+confirmed green; see the comment on Issue #2 for the complete record.
+**Lesson for future PR/commit text near any issue number: avoid the
+literal substring `close #N`/`closes #N`/`fix #N`/`fixes #N` even inside
+a grammatically negated sentence — GitHub's matcher is a plain substring
+scan, not a natural-language parser.**
+
+A progress-import hardening pass (branch
+`claude/issue-2-import-hardening`, "Part of Issue #2" — the second
+isolated Milestone 1 task, not a continuation of the exercise-identity
+work) implements the roadmap's "define and validate a versioned
+progress-import schema" and "deep-clone imported state and reject
+malformed nested values" items, and `docs/QUALITY_LOG.md` QL-006:
+
+- **Root problem:** `importJSON()` checked only the top-level `v` field
+  and trusted everything else; passing a plain object (not a JSON string)
+  made the caller's own object the live `state` by reference, so later
+  mutating that object silently corrupted course progress.
+- **Fix:** `validateImportedState()` (pure — never mutates its input,
+  never touches live `state`/`localStorage`/the DOM) checks the complete
+  envelope and every nested value against an exact schema (see
+  `docs/ARCHITECTURE.md` "Import validation"), builds an entirely new
+  deep-cloned object graph, and only `importJSON()` commits it to live
+  state after full success — atomic by construction, not by a rollback
+  step. A raw string is checked against a 262,144-character length limit *before*
+  `JSON.parse`; the parsed data against a 2000-entry cap before the more
+  expensive per-entry pass. Both limits are grounded in a real measured
+  full-course export (~8.7 KB, 200 entries), not a guess.
+- **Dangerous keys:** map keys may be any non-empty string except
+  `__proto__`/`constructor`/`prototype`, rejected wherever they appear.
+- **Schema-version decision:** `SCHEMA_V` stays `2` — the accepted record
+  shape is unchanged, only what was previously silently trusted is now
+  checked.
+- **Tests:** 27 new checks in `tests/dom-behavior.mjs` cover round-trip,
+  full detachment from the caller's source object (including after
+  mutating it post-import), missing/wrong schema version, size-before-
+  parse, the entry-count cap, one dedicated rejection case per nested-type
+  category (bad `modules`/`answers` types, non-true modules values,
+  invalid `c`/`n`/`ts` in every named way, extra/missing outcome fields,
+  unrecognized top-level fields), atomicity for every rejection case via
+  one shared helper (`getProgress()`/`localStorage`/rendered
+  label/`progress`-event count all unchanged), and no-partial-write
+  proof. **Mutation-tested** across three mutations (each reverted and
+  confirmed byte-identical via `diff`): weakening the counter validator,
+  reverting the dangerous-key defense, and writing to live state before
+  validation completes — each failed exactly the tests that claim to
+  cover it.
+- **A self-caught real bug, found while writing the `__proto__` test:**
+  the first version of the dangerous-key blocklist,
+  `{'__proto__':true, 'constructor':true, 'prototype':true}`, never
+  actually contained `__proto__` as an own key — a bareword/quoted
+  `__proto__:` entry in a JS object literal sets the prototype instead of
+  creating a property when its value isn't itself an object, and `true`
+  isn't one, so the assignment was a silent no-op. The single most
+  important entry in a three-entry blocklist was absent the entire time.
+  Confirmed directly with a Node one-liner before fixing; replaced with a
+  plain array checked via `indexOf()`, which has no such special-casing.
+  A related mistake in the test itself (trying to build the hostile
+  fixture as a JS object literal, then as a bracket assignment — both
+  equally affected by the same or a related special-casing) was also
+  caught and fixed by building the fixture from a raw JSON string via
+  `JSON.parse` instead. Full account: `docs/QUALITY_LOG.md` QL-023.
+
+A subsequent **correction pass**, same branch/PR, before merge: independent
+review found three further blocking correctness gaps in the above, plus a
+terminology inaccuracy, all recorded as an addendum to QL-006:
+
+- **Persistence-failure atomicity:** the original version committed
+  `state = candidate` and only then called `saveProgress()` (which
+  swallows a `localStorage.setItem()` failure and unconditionally emits
+  `progress`) — so a fully valid import could report `{ok:true}` and
+  update the UI while nothing was actually saved. Fixed by reordering
+  `importJSON()`'s transaction: validate → `migrateExerciseIds()` against
+  the candidate (not global `state`, which required refactoring that
+  function to accept an explicit target state) → serialize →
+  `localStorage.setItem()` → only then commit to live state, emit, and
+  re-render. `importJSON()` no longer calls `saveProgress()` at all, since
+  it needs to observe a storage failure rather than swallow it;
+  `saveProgress()`'s swallow-and-emit behavior is unchanged for its other
+  callers, where it is correct by design.
+- **Own-property vs. inherited-property validation:** the original
+  validator checked required fields by property *access*
+  (`candidate.v`, `rec.c`), which follows the prototype chain, while
+  counting/enumerating only *own* keys — so an object built via
+  `Object.create()` with the right values entirely on its prototype (zero
+  own keys) passed every check. Both the state-level and outcome-record-
+  level versions of this exploit were confirmed as real by direct
+  execution against the pre-fix code before being fixed. Fixed with
+  explicit `hasOwnProperty` checks for every required field, added as
+  `REQUIRED_STATE_KEYS` in `validateImportedState()` and inline in
+  `isValidOutcomeRecord()`.
+- **Export-wrapper contract:** `var candidate = isPlainObject(o.state) ?
+  o.state : o;` selected `o.state` whenever object-valued and silently
+  discarded everything else about the wrapper, contradicting this course's
+  own documentation that the complete envelope was validated. Fixed with
+  `validateImportEnvelope()`, which requires a wrapper's own keys to be
+  exactly `exported`/`state`/`stats`, with `state` on the same exact
+  schema and `exported`/`stats` checked to the basic types `exportJSON()`
+  actually produces.
+- **Terminology:** `MAX_IMPORT_JSON_LENGTH` (262144) bounds a JS string's
+  `.length` (UTF-16 code units), which the docs previously called
+  "256 KiB" — not reliably true once encoded. Every occurrence was
+  reworded to "262,144 characters"; the limit's behavior never changed.
+- **13 new tests** (`tests/dom-behavior.mjs`, 79 → 92 checks): a
+  persistence-failure test (test harness's storage `setItem()`
+  monkey-patched to throw mid-import, then restored to prove the failure
+  was specifically about persistence); a state built via `Object.create()`
+  with required fields only on its prototype; an outcome record with
+  inherited `c`/`n`/`ts` plus three unrelated own keys; each of
+  `modules`/`answers`/`exercises`/`started` individually missing as an own
+  property; and six wrapper-contract tests (unknown field, dangerous own
+  key, inherited — not own — `state`, missing `exported`, wrong types for
+  `exported`/`stats`, and a valid current-export round trip). **Mutation-
+  tested**, four further mutations beyond the original three, each
+  reverted and confirmed byte-identical via `diff`: reordering the commit
+  before the storage write; removing the outcome-record ownership check;
+  removing the state-level required-own-key loop; and reverting the
+  wrapper validator to the original permissive logic — each failed exactly
+  the tests written to cover it, and no others.
+- Full record: `docs/QUALITY_LOG.md` QL-006's first addendum. `SCHEMA_V`
+  stays `2` — nothing here changes the accepted record shape.
+
+A second **correction pass**, same branch/PR, before merge: independent
+review found one further contract-level gap, recorded as a second
+addendum to QL-006:
+
+- **Root problem:** `isPlainObject(x)` was `typeof x === 'object' &&
+  !Array.isArray(x)` — true of ANY non-array object, including exotic
+  built-ins (`Date`, `Map`, `Set`, `RegExp`) that carry no data reachable
+  through ordinary own-property enumeration, so `{modules: new Date(0)}`
+  silently imported as an empty `modules` map. Every exact-shape check
+  here is built on `Object.keys()`, which lists only own *enumerable
+  string* keys — invisible to a symbol-keyed own property, a
+  non-enumerable own property, or an accessor (getter/setter) property.
+  Four counterexamples were independently reproduced by direct execution
+  before any fix was written: `modules: new Date(0)`/`answers: new Map()`
+  both silently accepted as empty; an outcome record with a genuine
+  non-enumerable fourth own property accepted as if it only had `{c,n,ts}`;
+  a state with an own `Symbol` key accepted with the symbol silently
+  ignored; a wrapper `stats: new Date(0)` accepted.
+- **Fix:** `isPlainObject(x)` is now `isRecordObject(x) &&
+  hasOnlyOwnDataProperties(x)`. `isRecordObject()` rejects exotic
+  built-ins by checking prototype-chain SHAPE (own prototype is `null`, or
+  that prototype's own prototype is `null`) rather than identity or
+  `Object.prototype.toString`, so it is correct cross-realm and resists a
+  `Symbol.toStringTag`-spoofing exotic object (verified directly: a `Map`
+  subclass overriding its tag to read as `"[object Object]"` is still
+  correctly rejected, since the check never consults `toString`).
+  `hasOnlyOwnDataProperties()` rejects any own symbol key, any
+  non-enumerable own property, and any accessor property. A null-prototype
+  object (`Object.create(null)`) is a deliberate exception: it IS accepted
+  at every level, since every check here reads properties via explicit
+  `hasOwnProperty`/bracket access, never an object's own inherited
+  methods, so it behaves identically to an ordinary plain object for every
+  purpose this validator cares about.
+- **9 new tests** (`tests/dom-behavior.mjs`, 92 → 101 checks): the four
+  reproduced counterexamples; a `Set` as `exercises` and a `RegExp` as
+  `modules` in one test (a `RegExp` owns a non-enumerable `lastIndex`,
+  independently caught by the other half of the defense, confirming
+  neither check is redundant); the `Symbol.toStringTag`-spoofing case; an
+  accessor-property outcome record; and a positive test confirming
+  null-prototype objects are accepted at every level. One existing test
+  was rebuilt (a plain-object-literal prototype now makes the whole chain
+  two levels deep and is rejected by `isRecordObject()` before reaching
+  the ownership check it was written to isolate; rebuilt using a
+  null-prototype intermediate to keep isolating that specific exploit), and
+  a new companion test covers the now-earlier rejection path explicitly.
+  **Mutation-tested:** two mutations, each reverted and confirmed
+  byte-identical via `diff`: weakening `isRecordObject()` to accept any
+  non-array object failed exactly the four exotic-built-in tests; weakening
+  `hasOnlyOwnDataProperties()` to always return `true` failed exactly the
+  three own-property-shape tests — confirming neither defense is
+  redundant with the other.
+- Full record: `docs/QUALITY_LOG.md` QL-006's second addendum.
+- Strictly scoped: no question, answer, rationale, scoring, quiz
+  progress, analytics semantics, image, styling, layout, or accessibility
+  presentation changed, and none of the other Issue #2 items (stale-ID
+  policy, Reset/import exercise re-render, storage-failure UI, analytics
+  redesign, content-pack format, image-manifest normalization) were
+  touched.
+
 ## Read these files first
 
 1. `README.md`
@@ -1147,16 +1339,26 @@ contract and review gates remain incomplete.
 
 ## Known open implementation risks
 
-### Progress import
+### Progress import — mostly resolved 2026-08-02
 
-`importJSON()` currently validates the top-level version but still trusts
-malformed nested maps and outcome records. It should:
+~~`importJSON()` currently validates the top-level version but still
+trusts malformed nested maps and outcome records.~~ Done via branch
+`claude/issue-2-import-hardening` (Issue #2, QL-006):
+`validateImportedState()` now imposes a documented input-size limit
+(checked before `JSON.parse`), validates and normalizes every nested
+value, deep-clones the entire accepted object graph, and the whole import
+is atomic (a rejection touches neither live state, `localStorage`, the
+DOM, nor public API events). See `docs/ARCHITECTURE.md` "Import
+validation" and `docs/VALIDATION.md` "Progress-import validation and
+cloning" for the exact schema and test coverage.
 
-- impose a reasonable input-size limit
-- validate and normalize all nested values
-- deep-clone caller-supplied objects
-- define how stale content IDs are handled
-- have hostile/malformed fixtures and round-trip tests
+**Still open, deliberately not touched by that work:** defining how
+*stale* content IDs are handled during import — i.e. whether a
+module/question/exercise id that doesn't currently exist in the course
+should be accepted, dropped, or flagged. The new validator only checks
+that an id is a syntactically safe, non-empty string; it does not check
+whether that id is currently known. This is intentionally a separate
+roadmap item ("stale ID policy"), not a structural-validity question.
 
 ### Exercise identity — resolved 2026-08-02
 

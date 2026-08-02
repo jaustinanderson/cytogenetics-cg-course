@@ -1172,6 +1172,164 @@ cheap enough to always run rather than gate behind a version number.
 No question, answer, rationale, scoring, quiz progress, analytics
 semantics, image, styling, layout, or accessibility presentation changed.
 
+## Progress-import validation and cloning — added 2026-08-02, corrected 2026-08-02 (twice)
+
+`tests/dom-behavior.mjs` (Issue #2, `docs/QUALITY_LOG.md` QL-006 and its
+addenda) adds 49 dependency-free checks covering `importJSON()`'s full
+validation and atomicity contract — 27 from the initial hardening pass, 13
+more from a first correction pass after independent review found three
+further gaps (persistence-failure atomicity, own-property vs.
+inherited-property validation, and export-wrapper shape), and 9 more from
+a second correction pass closing a record-object gap (exotic built-ins
+like `Date`/`Map` accepted as empty record objects; symbol keys,
+non-enumerable properties, and accessor properties invisible to the
+`Object.keys()`-based exact-shape checks). See `docs/ARCHITECTURE.md`
+"Import validation" for the exact accepted bare-state and wrapper schemas,
+the record-object requirement, and the transaction order. Covers:
+
+- **round-trip:** a current `exportJSON()` output (now including an
+  exercise outcome, not only a module and a quiz answer) imports correctly
+  into a fresh instance
+- **detachment:** importing a plain JS object (not a JSON string) and then
+  mutating that object afterward — at the top level, inside a nested
+  outcome record, and by adding a brand-new key — never changes live
+  `getProgress()`, proving the accepted state is a full deep clone with no
+  shared references anywhere in the graph
+- **schema version:** both a wrong version and a version field missing
+  entirely are rejected
+- **size, checked before parsing:** an oversized (300,000-character),
+  deliberately-not-valid-JSON string is rejected with a size-specific
+  error — proving the length check runs *before* `JSON.parse` is ever
+  attempted, not after a parse failure or a schema check
+- **entry-count cap:** a payload with 2,001 module entries (well past the
+  documented 2,000 cap) is rejected before the more expensive per-entry
+  structural pass
+- **nested-type rejections**, each its own test: `modules`/`answers` as an
+  array, as `null`, or as a string; a `modules` entry that isn't the
+  literal `true`; an outcome record that is `null` or an array; a
+  non-boolean `c`; a zero, negative, non-integer, or string `n`; a
+  negative or string `ts`; an outcome record with an extra unexpected
+  key; an exercises entry validated the same way as answers; an
+  unrecognized top-level field; a non-numeric `started`
+- **dangerous keys:** `constructor` in `modules` and `prototype` in
+  `exercises` are rejected as ordinary malformed-key cases; a dedicated
+  test additionally proves a `__proto__` key never actually pollutes
+  `Object.prototype` **in the course's own realm** (`vm.runInContext("({}).polluted", env.sandbox)`,
+  not this test file's own `Object`, which is a different JavaScript realm
+  entirely) — see QL-006 for a self-caught bug in the first version of
+  this specific defense, found by actually running this test rather than
+  assuming a `{'__proto__':true}`-shaped key list worked
+- **atomicity for every rejection above:** a single shared helper,
+  `assertImportRejectedAtomically()`, asserts `getProgress()`,
+  `localStorage`, the rendered module-count label, and the count of fired
+  `progress` API events are all byte-for-byte unchanged after every one of
+  the rejection cases above — not spot-checked on a few of them
+- **no partial writes:** an import with valid `modules`/`answers` fields
+  but one malformed `exercises` entry leaves `getProgress()` completely
+  unchanged, proving earlier-validated fields never leak into live state
+  before a later field fails
+- **missing required own fields:** each of `modules`/`answers`/`exercises`/
+  `started` individually absent as an own property is rejected (`v` absent
+  is covered by the dedicated missing-schema-version test above)
+- **persistence-failure atomicity (correction pass):** with the test
+  harness's storage object monkey-patched so `setItem()` throws mid-import,
+  an otherwise fully valid import returns `{ok:false}`, and `getProgress()`,
+  `localStorage`, the rendered module-count label, and the fired-`progress`-
+  event count are all unchanged — then, with storage restored, confirms the
+  identical import now succeeds, proving the earlier failure was
+  specifically about persistence, not an unrelated rejection
+- **own-property vs. inherited-property (correction pass):** a state object
+  built via `Object.create()` with every required field only on its
+  prototype (zero own keys) is rejected; an outcome record with three own
+  keys that are none of `c`/`n`/`ts`, plus genuine `c`/`n`/`ts` values
+  inherited from its prototype, is rejected
+- **export-wrapper contract (correction pass):** an unknown wrapper field,
+  a dangerous own key on the wrapper itself (a genuine own `__proto__` via
+  `JSON.parse`), a wrapper whose `state` is only prototype-inherited (not
+  own — falls through to bare-state validation and is rejected there, not
+  silently unwrapped), a wrapper missing `exported`, and wrong types for
+  `exported`/`stats` are each rejected; a full current `exportJSON()` →
+  `importJSON()` round trip confirms the accepted wrapper shape still
+  matches what this app actually produces
+- **record-object requirement (second correction pass):** a state whose
+  `modules`/`answers` are exotic built-ins (`new Date(0)`, `new Map()`,
+  both of which have zero own enumerable-or-not properties, so the
+  previous `typeof x === 'object'` check accepted them as silently empty
+  maps); a state whose `exercises` is a `Set` and, separately, whose
+  `modules` is a `RegExp` (a `RegExp` instance owns a non-enumerable
+  `lastIndex` property, so it is independently caught by the
+  own-data-property check too — confirming the two defenses are not
+  redundant with each other); a `Map` subclass overriding
+  `Symbol.toStringTag` to read as `"[object Object]"`, confirming the
+  record-object check inspects prototype-chain shape rather than
+  `Object.prototype.toString`; an outcome record with a genuine fourth own
+  property marked non-enumerable (invisible to `Object.keys()`); an
+  outcome record whose `c` field is an accessor (getter) rather than a
+  data property; a state with an own **symbol** key; a wrapper `stats`
+  field that is a `Date`. A dedicated positive test confirms
+  null-prototype objects (`Object.create(null)`) are accepted as valid
+  records at every level (state, containers, and outcome records) — the
+  deliberate design decision documented in `docs/ARCHITECTURE.md`. All
+  eight adversarial counterexamples above were confirmed as real, working
+  exploits by direct execution against the pre-fix validator (via the same
+  `vm`-sandboxed `importJSON()` this test file exercises) before any fix
+  was written, not assumed from reading the code.
+
+**Mutation-tested**, three separate mutations from the initial hardening
+pass, each reverted and confirmed byte-identical to the pre-mutation file
+via `diff`: (1) weakening `isValidCount()` to accept any number (removing
+the integer/range checks) failed exactly the counter-related rejection
+tests plus the partial-write test; (2) reverting `DANGEROUS_KEYS` to the
+broken `{'__proto__':true, ...}` object-literal form failed exactly the
+`__proto__`-pollution test; (3) writing `candidate.modules` into live
+`state` *before* `validateImportedState()` completes failed exactly the
+tests whose rejection depends on atomicity (wrong schema version, too many
+entries, the mixed valid/invalid payload, a bad `modules` entry, and a
+dangerous key in `modules`) — each of these mutations left a real,
+observable partial write that the shared atomicity assertion caught
+immediately.
+
+**Mutation-tested, correction pass**, four further mutations, each
+reverted and confirmed byte-identical via `diff`: (1) committing `state =
+candidate` before (rather than after) the `localStorage.setItem()` attempt
+failed exactly the new persistence-failure test; (2) removing the
+`hasOwn` ownership check inside `isValidOutcomeRecord()` failed exactly
+the inherited-outcome-record test; (3) removing the `REQUIRED_STATE_KEYS`
+ownership loop in `validateImportedState()` failed exactly the six tests
+that depend on it (the prototype-only state test, the four individually-
+missing-field tests, and the pre-existing missing-`v` test); (4) reverting
+`validateImportEnvelope()` to the original `isPlainObject(o.state) ?
+o.state : o` logic failed exactly the five wrapper-rejection tests (the
+valid-wrapper round-trip test correctly continued to pass, since a
+genuinely valid wrapper is accepted by both versions).
+
+**Mutation-tested, second correction pass**, two further mutations, each
+reverted and confirmed byte-identical via `diff`: (1) weakening
+`isRecordObject()` to accept any non-array object (reverting to the
+original weak check) failed exactly the four exotic-built-in tests (the
+`Date`/`Map` state test, the `Set`/`RegExp` state test, the spoofed-tag
+test, and the wrapper-`stats`-is-a-`Date` test) and none of the
+own-data-property tests, confirming the `RegExp` half of the `Set`/
+`RegExp` test really is independently caught by the other defense, as
+claimed above; (2) weakening `hasOnlyOwnDataProperties()` to always return
+`true` failed exactly the three own-property-shape tests (the
+non-enumerable extra, the accessor `c`, and the symbol key) and none of
+the exotic-built-in tests — together proving neither check subsumes the
+other, exactly as the "both checks are necessary together" reasoning in
+`docs/ARCHITECTURE.md` claims.
+
+**Schema-version decision:** `SCHEMA_V` stays `2`. The accepted record
+shape is completely unchanged from before this work — every field that
+was ever legitimately written by this app already satisfies the new
+validator — only what was previously silently trusted is now checked.
+Gating stricter validation behind a version bump would need a real
+compatibility break to justify (there is none here; see
+`docs/QUALITY_LOG.md` QL-006 for the full reasoning and the measured
+real-export evidence behind the two documented size limits).
+
+No question, answer, rationale, scoring, quiz progress, analytics
+semantics, image, styling, layout, or accessibility presentation changed.
+
 ## Gates still open
 
 ### Browser behavior

@@ -791,7 +791,12 @@ test("imports with the wrong schema version are rejected without corrupting stat
   const env = boot();
   env.body.querySelectorAll(".mark-complete")[0].click();
 
-  const rejected = env.api.importJSON(JSON.stringify({ state: { v: 1, modules: { m4: true } } }));
+  // A bare (unwrapped) state object -- every required field present and
+  // own, but v is the wrong version -- isolates the schema-version check
+  // from wrapper-shape validation (covered separately below).
+  const rejected = env.api.importJSON(JSON.stringify({
+    v: 1, modules: { m4: true }, answers: {}, exercises: {}, started: 0,
+  }));
   assert.equal(rejected.ok, false);
   assert.match(rejected.error, /schema/i);
   assert.equal(env.api.getStats().modulesComplete, 1, "existing progress is untouched");
@@ -804,6 +809,586 @@ test("unparseable imports are rejected safely", () => {
   assert.equal(result.ok, false);
   assert.ok(result.error);
   assert.equal(env.api.getStats().modulesComplete, 0);
+});
+
+/* ============================ import hardening (Issue #2 / QL-006) ============================
+   importJSON() used to check only the top-level `v` field and trust
+   everything else, and directly assigned `state = s` -- if `json` was
+   passed as an object rather than a string, the caller's own object
+   became the app's live state by reference. See index.html's
+   validateImportedState() for the exact accepted schema. */
+
+/** Captures getProgress()/localStorage/rendered-label/progress-event count,
+ * runs the import, then asserts every one of those is byte-for-byte
+ * unchanged and the import was rejected -- the same "atomic failure"
+ * contract for every rejection category below, in one place. */
+function assertImportRejectedAtomically(env, badInput, { errorPattern } = {}) {
+  const beforeProgress = JSON.stringify(env.api.getProgress());
+  const beforeStorage = env.storage.getItem(V2_KEY);
+  const beforeLabel = env.document.getElementById("tpLabel").textContent;
+  let progressEvents = 0;
+  env.api.on("progress", () => { progressEvents += 1; });
+
+  const result = env.api.importJSON(badInput);
+
+  assert.equal(result.ok, false, `expected rejection, got ${JSON.stringify(result)}`);
+  if (errorPattern) assert.match(result.error, errorPattern, `error message: ${result.error}`);
+  assert.equal(JSON.stringify(env.api.getProgress()), beforeProgress, "getProgress() must be unchanged");
+  assert.equal(env.storage.getItem(V2_KEY), beforeStorage, "localStorage must be unchanged");
+  assert.equal(env.document.getElementById("tpLabel").textContent, beforeLabel, "rendered state must be unchanged");
+  assert.equal(progressEvents, 0, "a rejected import must fire no progress event");
+  return result;
+}
+
+test("a current export successfully round-trips through import", () => {
+  // Baseline coverage already exists ("export and import round-trip
+  // preserves progress" above); this adds exercise-outcome coverage so the
+  // round trip is proven for all three of modules/answers/exercises, not
+  // only modules/answers.
+  const env = boot();
+  env.body.querySelectorAll(".mark-complete")[0].click();
+  const questions = env.api.getQuestions("m1");
+  quizMount(env, "m1").querySelectorAll(".qitem")[0].querySelectorAll(".qopt")[questions[0].a].click();
+  const exHost = env.body.querySelectorAll(".exer")[0];
+  const exKey = exHost.getAttribute("data-exer");
+  const exItems = env.api.getExercises()[exKey].items;
+  exHost.querySelectorAll(".eopt")[exItems[0].answer].click();
+
+  const exported = env.api.exportJSON();
+  const fresh = boot();
+  const result = fresh.api.importJSON(exported);
+  assert.equal(result.ok, true);
+  assert.equal(fresh.api.getStats().modulesComplete, 1);
+  assert.equal(fresh.api.getProgress().answers[questions[0].id].c, true);
+  assert.equal(fresh.api.getProgress().exercises[exItems[0].id].c, true);
+});
+
+test("importing a plain object (not a JSON string) fully detaches live state from the caller's object", () => {
+  const env = boot();
+  const source = {
+    v: 2,
+    modules: { m1: true },
+    answers: { "m1-q1": { c: true, n: 1, ts: 100 } },
+    exercises: {},
+    started: 0,
+  };
+  const result = env.api.importJSON(source);
+  assert.equal(result.ok, true);
+
+  // Mutate the caller's own object AFTER import -- top level, and inside a
+  // nested outcome record -- and add a brand-new key.
+  source.modules.m1 = false;
+  source.modules.m2 = true;
+  source.answers["m1-q1"].c = false;
+  source.answers["m1-q1"].n = 999;
+  source.answers["new-fake-q"] = { c: true, n: 1, ts: 1 };
+
+  const progress = env.api.getProgress();
+  assert.equal(progress.modules.m1, true, "live progress must not follow the caller's later mutation");
+  assert.equal(progress.modules.m2, undefined);
+  assert.equal(progress.answers["m1-q1"].c, true);
+  assert.equal(progress.answers["m1-q1"].n, 1);
+  assert.equal(progress.answers["new-fake-q"], undefined);
+});
+
+test("an import missing the schema version entirely is rejected", () => {
+  const env = boot();
+  const missingV = JSON.stringify({ modules: {}, answers: {}, exercises: {}, started: 0 });
+  assertImportRejectedAtomically(env, missingV, { errorPattern: /missing required own field: v/i });
+});
+
+test("an oversized import string is rejected before it is ever parsed", () => {
+  const env = boot();
+  // Deliberately NOT valid JSON. If size were checked after (or not at all,
+  // relying on JSON.parse to eventually choke), this would fail with a JSON
+  // syntax error instead of a size-specific one -- getting the size error
+  // proves the length check runs first.
+  const hostileButInvalidJson = "x".repeat(300000);
+  assertImportRejectedAtomically(env, hostileButInvalidJson, { errorPattern: /too large/i });
+});
+
+test("import rejects a payload with too many total progress entries", () => {
+  const env = boot();
+  const modules = {};
+  for (let i = 0; i < 2001; i += 1) { modules[`fake-module-${i}`] = true; }
+  const tooManyEntries = JSON.stringify({ v: 2, modules, answers: {}, exercises: {}, started: 0 });
+  assertImportRejectedAtomically(env, tooManyEntries, { errorPattern: /too many/i });
+});
+
+test("an import with valid modules/answers but one malformed exercises entry writes nothing at all", () => {
+  const env = boot();
+  env.body.querySelectorAll(".mark-complete")[2].click();
+  const before = JSON.stringify(env.api.getProgress());
+
+  const mixedInput = JSON.stringify({
+    v: 2,
+    modules: { m1: true, m5: true },
+    answers: { "m1-q1": { c: true, n: 1, ts: 1 } },
+    exercises: { "ex7-i1": { c: true, n: 0, ts: 1 } }, // n:0 is invalid (must be >= 1)
+    started: 0,
+  });
+  const result = env.api.importJSON(mixedInput);
+  assert.equal(result.ok, false);
+  assert.equal(
+    JSON.stringify(env.api.getProgress()),
+    before,
+    "no partial write occurred -- the valid modules/answers fields never leaked in",
+  );
+});
+
+test("a dangerous __proto__ key never actually pollutes Object.prototype, even in a rejected import", () => {
+  const env = boot();
+  // Deliberately a raw JSON STRING, not a JS object literal: writing
+  // `{ __proto__: ... }` (bareword or quoted) in JS source sets the
+  // object's actual prototype instead of creating an own property, and so
+  // does plain bracket assignment (`obj["__proto__"] = ...`) on an
+  // ordinary object -- both go through Object.prototype's inherited
+  // `__proto__` accessor. JSON.parse is different: it defines the property
+  // directly, bypassing that accessor, so a real hostile payload really
+  // does carry `__proto__` as a genuine own key. Verified directly (not
+  // assumed) below before relying on it, since two different JS-source
+  // ways of trying to build this same fixture were both silently wrong.
+  const hostile =
+    '{"v":2,"modules":{},"answers":{"m1-q1":{"c":true,"n":1,"ts":1},' +
+    '"__proto__":{"c":true,"n":1,"ts":1}},"exercises":{},"started":0}';
+  const sanity = JSON.parse(hostile);
+  assert.deepEqual(Object.keys(sanity.answers), ["m1-q1", "__proto__"], "sanity: __proto__ is a real own key here");
+  assertImportRejectedAtomically(env, hostile);
+  // The real proof: check the COURSE'S OWN vm realm (a separate global
+  // object from this test file's), since that is the only realm the
+  // import logic could possibly pollute.
+  assert.equal(
+    vm.runInContext("({}).polluted", env.sandbox),
+    undefined,
+    "Object.prototype in the course's own realm must not be polluted",
+  );
+});
+
+const REJECTION_FIXTURES = [
+  { label: "modules is an array", input: { v: 2, modules: [], answers: {}, exercises: {}, started: 0 } },
+  { label: "modules is null", input: { v: 2, modules: null, answers: {}, exercises: {}, started: 0 } },
+  {
+    label: "a modules entry is not the literal true",
+    input: { v: 2, modules: { m1: "yes" }, answers: {}, exercises: {}, started: 0 },
+  },
+  { label: "answers is a string", input: { v: 2, modules: {}, answers: "nope", exercises: {}, started: 0 } },
+  {
+    label: "an answers entry is null",
+    input: { v: 2, modules: {}, answers: { "m1-q1": null }, exercises: {}, started: 0 },
+  },
+  {
+    label: "an answers entry is an array",
+    input: { v: 2, modules: {}, answers: { "m1-q1": [] }, exercises: {}, started: 0 },
+  },
+  {
+    label: "an answers entry has a non-boolean c",
+    input: { v: 2, modules: {}, answers: { "m1-q1": { c: "true", n: 1, ts: 1 } }, exercises: {}, started: 0 },
+  },
+  {
+    label: "an answers entry has a zero n",
+    input: { v: 2, modules: {}, answers: { "m1-q1": { c: true, n: 0, ts: 1 } }, exercises: {}, started: 0 },
+  },
+  {
+    label: "an answers entry has a negative n",
+    input: { v: 2, modules: {}, answers: { "m1-q1": { c: true, n: -1, ts: 1 } }, exercises: {}, started: 0 },
+  },
+  {
+    label: "an answers entry has a non-integer n",
+    input: { v: 2, modules: {}, answers: { "m1-q1": { c: true, n: 1.5, ts: 1 } }, exercises: {}, started: 0 },
+  },
+  {
+    label: "an answers entry has a string n",
+    input: { v: 2, modules: {}, answers: { "m1-q1": { c: true, n: "1", ts: 1 } }, exercises: {}, started: 0 },
+  },
+  {
+    label: "an answers entry has a negative ts",
+    input: { v: 2, modules: {}, answers: { "m1-q1": { c: true, n: 1, ts: -5 } }, exercises: {}, started: 0 },
+  },
+  {
+    label: "an answers entry has a string ts",
+    input: { v: 2, modules: {}, answers: { "m1-q1": { c: true, n: 1, ts: "1" } }, exercises: {}, started: 0 },
+  },
+  {
+    label: "an answers entry has an extra unexpected key",
+    input: {
+      v: 2,
+      modules: {},
+      answers: { "m1-q1": { c: true, n: 1, ts: 1, extra: true } },
+      exercises: {},
+      started: 0,
+    },
+  },
+  {
+    label: "an exercises entry is malformed the same way answers entries are validated",
+    input: { v: 2, modules: {}, answers: {}, exercises: { "ex7-i1": { c: true, n: 0, ts: 1 } }, started: 0 },
+  },
+  {
+    label: "a dangerous constructor key in modules",
+    input: { v: 2, modules: { constructor: true }, answers: {}, exercises: {}, started: 0 },
+  },
+  {
+    label: "a dangerous prototype key in exercises",
+    input: { v: 2, modules: {}, answers: {}, exercises: { prototype: { c: true, n: 1, ts: 1 } }, started: 0 },
+  },
+  {
+    label: "an unrecognized top-level field",
+    input: { v: 2, modules: {}, answers: {}, exercises: {}, started: 0, bogus: true },
+  },
+  {
+    label: "a non-numeric started timestamp",
+    input: { v: 2, modules: {}, answers: {}, exercises: {}, started: "nope" },
+  },
+  {
+    // Raw JSON string, not a JS object literal: `{ __proto__: ... }` (bareword
+    // or quoted) in JS source sets the object's actual prototype instead of
+    // creating an own property, so JSON.stringify-ing it would silently drop
+    // the key and test nothing (see the dedicated __proto__ test above for
+    // the full explanation and a from-scratch verification of this).
+    // JSON.parse, unlike an object literal or bracket assignment, defines
+    // the property directly and does carry it through.
+    label: "a dangerous __proto__ key at the top level of the state object",
+    raw: '{"v":2,"modules":{},"answers":{},"exercises":{},"started":0,"__proto__":{"polluted":true}}',
+  },
+];
+
+for (const fixture of REJECTION_FIXTURES) {
+  test(`import rejects and leaves state unchanged: ${fixture.label}`, () => {
+    const env = boot();
+    assertImportRejectedAtomically(env, fixture.raw || JSON.stringify(fixture.input));
+  });
+}
+
+const MISSING_REQUIRED_STATE_FIELDS = ["modules", "answers", "exercises", "started"];
+for (const field of MISSING_REQUIRED_STATE_FIELDS) {
+  // "v" missing entirely is covered by its own dedicated test above; this
+  // covers the remaining four required own fields the same way.
+  test(`import rejects a state object missing the required own field: ${field}`, () => {
+    const env = boot();
+    const full = { v: 2, modules: {}, answers: {}, exercises: {}, started: 0 };
+    delete full[field];
+    assertImportRejectedAtomically(env, JSON.stringify(full), {
+      errorPattern: new RegExp(`missing required own field: ${field}`, "i"),
+    });
+  });
+}
+
+/* ============================ import hardening — correction pass ============================
+   Independent review found three further gaps in the hardening above, all
+   fixed in index.html's IMPORT VALIDATION block and importJSON(): (1) a
+   successful validation could still be silently lost to a storage failure,
+   (2) required fields were checked by property ACCESS rather than OWN-ness,
+   letting an object with the right values entirely on its prototype pass,
+   and (3) the export-wrapper envelope was unwrapped without validating its
+   own shape. See that block's comment for the full account of each. */
+
+test("a persistence failure during import leaves state, storage, the UI, and events entirely unchanged", () => {
+  const env = boot();
+  env.body.querySelectorAll(".mark-complete")[0].click();
+  const beforeProgress = JSON.stringify(env.api.getProgress());
+  const beforeStorage = env.storage.getItem(V2_KEY);
+  const beforeLabel = env.document.getElementById("tpLabel").textContent;
+  let progressEvents = 0;
+  env.api.on("progress", () => { progressEvents += 1; });
+
+  const originalSetItem = env.storage.setItem;
+  env.storage.setItem = () => { throw new Error("QuotaExceededError"); };
+  let result;
+  try {
+    const validImport = JSON.stringify({ v: 2, modules: { m4: true }, answers: {}, exercises: {}, started: 0 });
+    result = env.api.importJSON(validImport);
+  } finally {
+    env.storage.setItem = originalSetItem;
+  }
+
+  assert.equal(result.ok, false, `an otherwise-valid import must fail when persistence fails, got ${JSON.stringify(result)}`);
+  assert.match(result.error, /save|storage|quota/i);
+  assert.equal(JSON.stringify(env.api.getProgress()), beforeProgress, "getProgress() must be unchanged");
+  assert.equal(env.storage.getItem(V2_KEY), beforeStorage, "localStorage must be unchanged");
+  assert.equal(env.document.getElementById("tpLabel").textContent, beforeLabel, "rendered state must be unchanged");
+  assert.equal(progressEvents, 0, "a persistence failure must fire no progress event");
+
+  // Prove the write really would have succeeded afterward -- i.e. this
+  // wasn't rejected for some unrelated reason -- confirming the failure
+  // above was specifically about persistence, not validation.
+  const retryResult = env.api.importJSON(JSON.stringify({ v: 2, modules: { m4: true }, answers: {}, exercises: {}, started: 0 }));
+  assert.equal(retryResult.ok, true, `the same import must succeed once storage works again, got ${JSON.stringify(retryResult)}`);
+});
+
+test("a state object with required fields only on its prototype is rejected, not read through the prototype chain", () => {
+  // The prototype itself is built with Object.create(null), so the
+  // hostile object's own prototype chain is exactly one level deep --
+  // proto's own prototype IS null -- the same shape as an ordinary plain
+  // object or an explicit null-prototype record, and so it passes the
+  // record-object check (isRecordObject()) and isolates the OWNERSHIP
+  // check this test exists to prove, rather than being rejected one layer
+  // earlier for having a non-record prototype chain (see the dedicated
+  // test below for that separate case).
+  const env = boot();
+  const beforeProgress = JSON.stringify(env.api.getProgress());
+
+  const proto = Object.create(null);
+  proto.v = 2; proto.modules = { m4: true }; proto.answers = {}; proto.exercises = {}; proto.started = 0;
+  const hostile = Object.create(proto);
+  assert.deepEqual(Object.keys(hostile), [], "sanity: the hostile object owns nothing");
+  assert.equal(hostile.v, 2, "sanity: v is still readable via the prototype chain");
+
+  const result = env.api.importJSON(hostile);
+  assert.equal(result.ok, false, `expected rejection, got ${JSON.stringify(result)}`);
+  assert.match(result.error, /missing required own field/i);
+  assert.equal(JSON.stringify(env.api.getProgress()), beforeProgress, "existing progress is untouched");
+});
+
+test("a state object whose prototype chain is deeper than a plain record (fields inherited through an intermediate plain object) is rejected outright", () => {
+  const env = boot();
+  const beforeProgress = JSON.stringify(env.api.getProgress());
+
+  // Here the intermediate prototype is an ORDINARY plain object (own
+  // prototype is Object.prototype, not null), so the whole chain is two
+  // levels deep -- not the shape of any genuine record object -- and
+  // isRecordObject() rejects it before ownership is ever checked.
+  const proto = { v: 2, modules: { m4: true }, answers: {}, exercises: {}, started: 0 };
+  const hostile = Object.create(proto);
+  assert.equal(Object.getPrototypeOf(Object.getPrototypeOf(hostile)), Object.prototype, "sanity: chain is two levels deep");
+
+  const result = env.api.importJSON(hostile);
+  assert.equal(result.ok, false, `expected rejection, got ${JSON.stringify(result)}`);
+  assert.equal(JSON.stringify(env.api.getProgress()), beforeProgress, "existing progress is untouched");
+});
+
+test("an outcome record with inherited c/n/ts plus three unrelated own keys is rejected", () => {
+  const env = boot();
+  const beforeProgress = JSON.stringify(env.api.getProgress());
+
+  const proto = { c: true, n: 1, ts: 1 };
+  const hostileRecord = Object.create(proto);
+  hostileRecord.foo = 1; hostileRecord.bar = 2; hostileRecord.baz = 3;
+  assert.deepEqual(Object.keys(hostileRecord).sort(), ["bar", "baz", "foo"], "sanity: three own keys, none of them c/n/ts");
+  assert.equal(hostileRecord.c, true, "sanity: c is still readable via the prototype chain");
+
+  const hostileState = { v: 2, modules: {}, answers: { "m1-q1": hostileRecord }, exercises: {}, started: 0 };
+  const result = env.api.importJSON(hostileState);
+  assert.equal(result.ok, false, `expected rejection, got ${JSON.stringify(result)}`);
+  assert.equal(JSON.stringify(env.api.getProgress()), beforeProgress, "existing progress is untouched");
+});
+
+test("import wrapper rejects an unknown top-level field", () => {
+  const env = boot();
+  const validState = { v: 2, modules: {}, answers: {}, exercises: {}, started: 0 };
+  const hostile = JSON.stringify({ exported: "x", state: validState, stats: {}, bogus: true });
+  assertImportRejectedAtomically(env, hostile, { errorPattern: /unrecognized field in import wrapper/i });
+});
+
+test("import wrapper rejects a dangerous own key", () => {
+  const env = boot();
+  const hostile = '{"exported":"x","state":{"v":2,"modules":{},"answers":{},"exercises":{},"started":0},'
+    + '"stats":{},"__proto__":{"polluted":true}}';
+  const sanity = JSON.parse(hostile);
+  assert.ok(Object.prototype.hasOwnProperty.call(sanity, "__proto__"), "sanity: __proto__ is a real own key here");
+  assertImportRejectedAtomically(env, hostile, { errorPattern: /disallowed key/i });
+});
+
+test("a wrapper whose state is only inherited (not own) is rejected, not silently unwrapped", () => {
+  const env = boot();
+  const beforeProgress = JSON.stringify(env.api.getProgress());
+
+  const proto = { state: { v: 2, modules: { m4: true }, answers: {}, exercises: {}, started: 0 } };
+  const hostile = Object.create(proto);
+  hostile.exported = "x";
+  hostile.stats = {};
+  assert.equal(Object.prototype.hasOwnProperty.call(hostile, "state"), false, "sanity: state is only inherited");
+  assert.equal(hostile.state.modules.m4, true, "sanity: state is still readable via the prototype chain");
+
+  const result = env.api.importJSON(hostile);
+  assert.equal(result.ok, false, `expected rejection, got ${JSON.stringify(result)}`);
+  assert.equal(JSON.stringify(env.api.getProgress()), beforeProgress, "existing progress is untouched");
+});
+
+test("import wrapper rejects a missing required field (exported)", () => {
+  const env = boot();
+  const validState = { v: 2, modules: {}, answers: {}, exercises: {}, started: 0 };
+  const missingExported = JSON.stringify({ state: validState, stats: {} });
+  assertImportRejectedAtomically(env, missingExported, { errorPattern: /missing a required own field/i });
+});
+
+test("import wrapper rejects wrong field types for exported/stats", () => {
+  const env = boot();
+  const validState = { v: 2, modules: {}, answers: {}, exercises: {}, started: 0 };
+  assertImportRejectedAtomically(
+    env,
+    JSON.stringify({ exported: 12345, state: validState, stats: {} }),
+    { errorPattern: /exported field must be a string/i },
+  );
+  assertImportRejectedAtomically(
+    env,
+    JSON.stringify({ exported: "x", state: validState, stats: "nope" }),
+    { errorPattern: /stats field must be an object/i },
+  );
+});
+
+test("a valid current export wrapper round-trips through import", () => {
+  const env = boot();
+  env.body.querySelectorAll(".mark-complete")[0].click();
+  const exported = env.api.exportJSON();
+  const parsed = JSON.parse(exported);
+  assert.ok(Object.prototype.hasOwnProperty.call(parsed, "exported"));
+  assert.ok(Object.prototype.hasOwnProperty.call(parsed, "state"));
+  assert.ok(Object.prototype.hasOwnProperty.call(parsed, "stats"));
+  assert.deepEqual(Object.keys(parsed).sort(), ["exported", "state", "stats"]);
+
+  const fresh = boot();
+  const result = fresh.api.importJSON(exported);
+  assert.equal(result.ok, true, `expected success, got ${JSON.stringify(result)}`);
+  assert.equal(fresh.api.getStats().modulesComplete, 1);
+});
+
+/* ============================ import hardening — record-object correction pass ============================
+   Independent review found a fourth gap: isPlainObject() only checked
+   `typeof x === 'object' && !Array.isArray(x)`, which is true of ANY
+   non-array object -- including exotic built-ins (Date, Map, Set, RegExp)
+   that carry no data reachable through ordinary own-property enumeration,
+   so e.g. `{modules: new Date(0)}` was silently accepted as an empty
+   `modules` map. The exact-shape checks were also built on Object.keys(),
+   which lists only OWN ENUMERABLE STRING keys -- invisible to a
+   non-enumerable extra property, a symbol-keyed property, or an accessor
+   (getter/setter) property, any of which could smuggle data past the
+   "exactly these own keys" checks or reintroduce a validate-once/persist-
+   different-value TOCTOU gap. See index.html's isRecordObject()/
+   hasOnlyOwnDataProperties() and the file-level IMPORT VALIDATION comment
+   for the full account; all four counterexamples below were confirmed as
+   real, working exploits by direct execution against the pre-fix
+   validator before any fix was written. */
+
+test("import rejects a state whose modules/answers are exotic built-ins (Date/Map), not record objects", () => {
+  const env = boot();
+  const beforeProgress = JSON.stringify(env.api.getProgress());
+  // Object.keys(new Date(0)) and Object.keys(new Map()) are both [] --
+  // without a record-object check, these silently pass as "empty" maps.
+  const hostile = { v: 2, modules: new Date(0), answers: new Map(), exercises: {}, started: 0 };
+  const result = env.api.importJSON(hostile);
+  assert.equal(result.ok, false, `expected rejection, got ${JSON.stringify(result)}`);
+  assert.equal(JSON.stringify(env.api.getProgress()), beforeProgress, "existing progress is untouched");
+});
+
+test("import rejects a state whose exercises container is a Set, and one whose modules container is a RegExp", () => {
+  const env = boot();
+  const beforeProgress = JSON.stringify(env.api.getProgress());
+
+  const withSet = { v: 2, modules: {}, answers: {}, exercises: new Set(), started: 0 };
+  let result = env.api.importJSON(withSet);
+  assert.equal(result.ok, false, `expected rejection (Set), got ${JSON.stringify(result)}`);
+
+  // A RegExp instance owns a non-enumerable `lastIndex` property, so it is
+  // caught by hasOnlyOwnDataProperties() even before isRecordObject() --
+  // either defense alone is sufficient here, which is the point of
+  // combining both rather than relying on just one.
+  const withRegExp = { v: 2, modules: /x/, answers: {}, exercises: {}, started: 0 };
+  result = env.api.importJSON(withRegExp);
+  assert.equal(result.ok, false, `expected rejection (RegExp), got ${JSON.stringify(result)}`);
+
+  assert.equal(JSON.stringify(env.api.getProgress()), beforeProgress, "existing progress is untouched");
+});
+
+test("a Symbol.toStringTag-spoofing exotic object is still rejected as a modules container", () => {
+  // Confirms the record-object check inspects prototype-chain SHAPE, not
+  // Object.prototype.toString -- a Map subclass that overrides its tag to
+  // read as "[object Object]" must not be able to disguise itself as a
+  // plain object this way.
+  const env = boot();
+  const beforeProgress = JSON.stringify(env.api.getProgress());
+
+  class SpoofedMap extends Map {
+    get [Symbol.toStringTag]() { return "Object"; }
+  }
+  const spoofed = new SpoofedMap();
+  assert.equal(Object.prototype.toString.call(spoofed), "[object Object]", "sanity: the tag really is spoofed");
+
+  const result = env.api.importJSON({ v: 2, modules: spoofed, answers: {}, exercises: {}, started: 0 });
+  assert.equal(result.ok, false, `expected rejection, got ${JSON.stringify(result)}`);
+  assert.equal(JSON.stringify(env.api.getProgress()), beforeProgress, "existing progress is untouched");
+});
+
+test("import rejects an outcome record with a non-enumerable extra own property", () => {
+  const env = boot();
+  const beforeProgress = JSON.stringify(env.api.getProgress());
+
+  const rec = { c: true, n: 1, ts: 1 };
+  Object.defineProperty(rec, "hidden", { value: "secret", enumerable: false });
+  assert.deepEqual(Object.keys(rec), ["c", "n", "ts"], "sanity: Object.keys() cannot see the extra property");
+  assert.equal(Object.getOwnPropertyNames(rec).length, 4, "sanity: it is a genuine fourth own property");
+
+  const result = env.api.importJSON({ v: 2, modules: {}, answers: { "m1-q1": rec }, exercises: {}, started: 0 });
+  assert.equal(result.ok, false, `expected rejection, got ${JSON.stringify(result)}`);
+  assert.equal(JSON.stringify(env.api.getProgress()), beforeProgress, "existing progress is untouched");
+});
+
+test("import rejects an outcome record whose c field is an accessor (getter), not a data property", () => {
+  // A getter's value can legally differ between the read that validates it
+  // and the later read that persists it -- rejecting any accessor
+  // property closes that gap outright rather than trusting a single read.
+  const env = boot();
+  const beforeProgress = JSON.stringify(env.api.getProgress());
+
+  const rec = { n: 1, ts: 1 };
+  let reads = 0;
+  Object.defineProperty(rec, "c", {
+    get(){ reads += 1; return reads === 1; }, // true on the first read, false thereafter
+    enumerable: true, configurable: true,
+  });
+
+  const result = env.api.importJSON({ v: 2, modules: {}, answers: { "m1-q1": rec }, exercises: {}, started: 0 });
+  assert.equal(result.ok, false, `expected rejection, got ${JSON.stringify(result)}`);
+  assert.equal(JSON.stringify(env.api.getProgress()), beforeProgress, "existing progress is untouched");
+});
+
+test("import rejects a state with an own Symbol key", () => {
+  const env = boot();
+  const beforeProgress = JSON.stringify(env.api.getProgress());
+
+  const sym = Symbol("evil");
+  const hostile = { v: 2, modules: {}, answers: {}, exercises: {}, started: 0 };
+  hostile[sym] = "malicious payload smuggled via a symbol key";
+  assert.deepEqual(Object.keys(hostile).sort(), ["answers", "exercises", "modules", "started", "v"], "sanity: Object.keys() cannot see the symbol key");
+
+  const result = env.api.importJSON(hostile);
+  assert.equal(result.ok, false, `expected rejection, got ${JSON.stringify(result)}`);
+  assert.equal(JSON.stringify(env.api.getProgress()), beforeProgress, "existing progress is untouched");
+});
+
+test("import wrapper rejects a stats field that is an exotic built-in (Date), not a record object", () => {
+  const env = boot();
+  const beforeProgress = JSON.stringify(env.api.getProgress());
+
+  const hostile = {
+    exported: "x",
+    state: { v: 2, modules: {}, answers: {}, exercises: {}, started: 0 },
+    stats: new Date(0),
+  };
+  const result = env.api.importJSON(hostile);
+  assert.equal(result.ok, false, `expected rejection, got ${JSON.stringify(result)}`);
+  assert.equal(JSON.stringify(env.api.getProgress()), beforeProgress, "existing progress is untouched");
+});
+
+test("null-prototype objects are accepted as valid records at every level (state, containers, and outcome records)", () => {
+  // Documents the deliberate decision: a null-prototype object behaves
+  // identically to an ordinary plain object for every check this
+  // validator performs (all of them use explicit hasOwnProperty/bracket
+  // access, never the object's own inherited methods), so a direct
+  // (non-JSON-string) caller who builds one to avoid prototype-pollution
+  // surface entirely is not penalized for it.
+  const env = boot();
+
+  const rec = Object.create(null);
+  rec.c = true; rec.n = 1; rec.ts = 1;
+  const answers = Object.create(null);
+  answers["m1-q1"] = rec;
+  const state = Object.create(null);
+  state.v = 2; state.modules = Object.create(null); state.answers = answers;
+  state.exercises = Object.create(null); state.started = 0;
+  assert.equal(Object.getPrototypeOf(state), null, "sanity: state truly has no prototype");
+
+  const result = env.api.importJSON(state);
+  assert.equal(result.ok, true, `expected success, got ${JSON.stringify(result)}`);
+  assert.equal(env.api.getProgress().answers["m1-q1"].c, true);
 });
 
 /* ============================ print ============================ */

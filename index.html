@@ -3844,26 +3844,365 @@
      history can ever be lost: it is the best available choice given
      records with no provenance, not a guarantee every individual attempt
      survives.
+     Operates on an explicit `targetState` parameter (defaulting to the
+     live `state` for the loadProgress() call site, which already commits
+     directly to live state). Issue #2 import-hardening review: importJSON()
+     must be able to run migration on a CANDIDATE state that has not yet
+     been committed to live state, so this must never assume/reach for the
+     global `state` implicitly when a caller supplies its own target.
      Returns true if it changed anything, so the caller can decide whether
      the result needs persisting. */
-  function migrateExerciseIds(){
+  function migrateExerciseIds(targetState){
+    targetState = targetState || state;
     var changed = false;
     Object.keys(EXERCISES).forEach(function(key){
       EXERCISES[key].items.forEach(function(it){
         var legacyId = it.legacyId, stableId = it.id;
         if(!legacyId || legacyId === stableId){ return; } // no legacy key to move for this item
-        var legacyRec = state.exercises[legacyId];
+        var legacyRec = targetState.exercises[legacyId];
         if(!legacyRec){ return; }
-        var stableRec = state.exercises[stableId];
+        var stableRec = targetState.exercises[stableId];
         // No conflict: stableRec is undefined, so legacyRec is the only
         // available snapshot. Conflict: keep whichever ENTIRE record is
         // newer; a tie keeps the canonical stable-key record.
-        state.exercises[stableId] = (stableRec && stableRec.ts >= legacyRec.ts) ? stableRec : legacyRec;
-        delete state.exercises[legacyId];
+        targetState.exercises[stableId] = (stableRec && stableRec.ts >= legacyRec.ts) ? stableRec : legacyRec;
+        delete targetState.exercises[legacyId];
         changed = true;
       });
     });
     return changed;
+  }
+
+  /* ============================ IMPORT VALIDATION ============================
+     Issue #2 / QL-006: importJSON() used to check only the top-level `v`
+     field and then trust the rest of the payload completely -- malformed
+     nested values could corrupt live state, and passing an object (rather
+     than a JSON string) let the caller's own object become the app's live
+     `state` by reference, so the caller mutating it later silently mutated
+     the course's progress too. A first correction pass fixed both of
+     those, but independent review found three further gaps, all fixed
+     here (see docs/QUALITY_LOG.md QL-006's second addendum for the full
+     account of each, including how they were confirmed before fixing):
+
+     1. A successful validation could still be lost: importJSON() replaced
+        live `state` and only THEN called saveProgress(), which silently
+        swallows a localStorage.setItem() failure and still emits a
+        `progress` event -- so a full, valid import could report
+        {ok:true} and update the UI even though nothing was actually
+        saved. Fixed below by attempting persistence BEFORE committing to
+        live state (see importJSON()'s own comment).
+     2. Property ACCESS (`candidate.v`, `rec.c`, ...) follows the
+        prototype chain, but `Object.keys()` only lists OWN enumerable
+        properties -- so an object with the right values entirely on its
+        PROTOTYPE (zero own keys) passed every check here that only
+        counted or enumerated own keys, and an outcome record with
+        exactly three own keys that are NOT c/n/ts, plus c/n/ts inherited
+        from its prototype, satisfied the old `keys.length === 3` check
+        while reading the inherited values. Fixed by explicitly requiring
+        REQUIRED_STATE_KEYS and {c,n,ts} to be OWN properties
+        (`Object.prototype.hasOwnProperty`), not merely accessible ones.
+     3. `var s = o.state ? o.state : o;` accepted `o.state` whenever it
+        was object-valued and silently discarded the rest of the wrapper
+        (`exported`/`stats`) without validating it at all -- so a
+        malformed, extra-fielded, or dangerous-keyed wrapper around a
+        perfectly valid `state` was accepted. Fixed by
+        validateImportEnvelope() below, which requires the object to be
+        EITHER a bare state (matching the schema directly) OR an export
+        wrapper whose own keys are EXACTLY `exported`/`state`/`stats`,
+        with `state` validated against the same exact schema and
+        `exported`/`stats` checked to the basic types exportJSON() always
+        produces (a string; a plain object).
+
+     Accepted forms:
+
+     Bare state -- top-level object must have OWN properties matching
+     this exact schema, no more and no fewer:
+
+       { v: 2,                                 // must equal SCHEMA_V exactly
+         modules:   { <id>: true, ... },        // every value literally `true`
+         answers:   { <id>: {c,n,ts}, ... },     // see outcome-record shape
+         exercises: { <id>: {c,n,ts}, ... },     // see outcome-record shape
+         started: <finite, non-negative number>,
+         migratedFrom: <positive integer>        // OPTIONAL -- only ever
+       }                                          // written by v1->v2 migration
+
+     Export wrapper -- top-level object must have OWN properties matching
+     EXACTLY `exported`, `state`, and `stats` (what exportJSON() always
+     produces), where `state` passes the bare-state schema above and
+     `exported`/`stats` are checked only to the basic types exportJSON()
+     produces (a string; a plain object with no dangerous own keys) --
+     neither is persisted or otherwise used, so nothing deeper is checked.
+
+     Outcome-record shape (used for both `answers` and `exercises`
+     entries): the object's OWN properties must be EXACTLY `c`, `n`, and
+     `ts` -- no missing fields, no extras, and specifically not merely
+     "any three own keys while c/n/ts happen to be readable via
+     inheritance" (see gap 2 above):
+       { c: <boolean>, n: <integer, 1..1000000>, ts: <finite, >=0 number> }
+
+     Map keys (`modules`/`answers`/`exercises`, and the wrapper's own
+     keys) may be any non-empty string EXCEPT `__proto__`, `constructor`,
+     or `prototype` -- rejected outright wherever they appear, rather than
+     silently stripped, because a plain object built by bracket-assignment
+     (`out[key] = value`) can otherwise be prototype-polluted by exactly
+     those key names. This PR does not check whether a module/question/
+     exercise id is a *currently known* one -- that is the separate,
+     explicitly out-of-scope "stale ID policy" item still open in
+     docs/ROADMAP.md Milestone 1.
+
+     Every object this validator inspects -- the state, the wrapper, the
+     modules/answers/exercises containers, and every individual outcome
+     record -- must be a genuine RECORD OBJECT, not merely any non-array
+     `typeof x === 'object'` value (see isPlainObject() below): a `Date`,
+     `Map`, `Set`, `RegExp`, or similar exotic object satisfies the weaker
+     check while carrying no data reachable through ordinary own-property
+     enumeration, so a candidate like `{modules: new Date(0)}` was
+     previously accepted as an empty `modules` map instead of rejected --
+     confirmed as a real bug by direct execution before this defense was
+     added. A null-prototype object (`Object.create(null)`) IS accepted as
+     a valid record: a direct (non-JSON-string) caller may reasonably build
+     one to avoid prototype-pollution surface entirely, and every check
+     here operates on own properties via explicit `hasOwnProperty`/bracket
+     access, never through the object's own inherited methods, so a
+     null-prototype object behaves identically to an ordinary one for
+     every purpose this validator cares about. Distinguishing "genuine
+     record object" from "exotic object with no own enumerable
+     properties" (under which an empty `Date`/`Map`/`Set` would otherwise
+     vacuously pass a check phrased only as "every own property is
+     acceptable") requires checking prototype-chain SHAPE, not identity:
+     the object's own prototype must itself be `null`, or that prototype's
+     own prototype must be `null` -- true for an ordinary plain object or a
+     null-prototype object in ANY realm (this course's own dependency-free
+     test harness runs the app in a separate `vm` realm, so an
+     identity comparison against this realm's `Object.prototype` would
+     incorrectly reject every legitimate cross-realm plain object a test
+     passes in), and false for any exotic built-in, whose prototype chain
+     is at least one level deeper. A `Symbol.toStringTag`-spoofing exotic
+     object (e.g. a `Map` subclass overriding its tag to read as
+     `"[object Object]"`) does not defeat this check, since it inspects
+     prototype-chain shape, never `Object.prototype.toString`.
+
+     Additionally, every one of an accepted record object's own properties
+     must be a plain, enumerable, STRING-keyed DATA property: a symbol key
+     is rejected outright (it can never collide with any check here, but
+     silently accepting one would contradict the exact-own-property-shape
+     claims above); a non-enumerable own property is rejected, since
+     `Object.keys()` -- what every exact-shape check below is built on --
+     cannot see it, so an object with a non-enumerable fourth key
+     alongside a valid `{c,n,ts}` previously passed the "exactly three
+     own keys" check outright; and an ACCESSOR property (a getter/setter
+     pair) is rejected, since its value is computed fresh on every read --
+     a validated value is read again later when the accepted output is
+     rebuilt, and a getter could legally return something different (or
+     something invalid) the second time, defeating the "validate once,
+     then trust" contract this validator is built on.
+
+     Every check below runs against the RAW parsed/caller-supplied data and
+     builds an entirely NEW object graph (out/modules/answers/exercises are
+     all fresh object literals, and every outcome record is rebuilt field-
+     by-field) -- nothing from the input is ever referenced by the result,
+     so mutating the caller's original object after a successful import
+     cannot affect live state. validateImportEnvelope()/validateImportedState()
+     never touch the live `state`, localStorage, or the DOM, so importJSON()
+     can run them to completion, then attempt persistence, before ever
+     committing to live state -- atomicity falls out of that ordering, not
+     from a separate rollback mechanism. */
+
+  // A real full-course export (17 modules + 153 answers + 30 exercises, all
+  // recorded) measures 8,667 characters as of this course's current
+  // content; 262,144 is roughly 30x that, generous headroom for the
+  // planned 46-question expansion (docs/ROADMAP.md Milestone 2A) while
+  // still bounding the cost of parsing a hostile payload. This is a limit
+  // on JavaScript string length (UTF-16 code units), checked against the
+  // raw string BEFORE JSON.parse is ever called -- NOT a byte or KiB
+  // limit; a string of this length can be anywhere from ~256 KiB (ASCII)
+  // to ~512 KiB (entirely non-BMP characters) once UTF-8/UTF-16 encoded,
+  // and this course does not need byte-exact accounting to make the
+  // limit's purpose (bound hostile-payload parsing cost) work.
+  var MAX_IMPORT_JSON_LENGTH = 262144;
+  // Same real export above totals 200 entries (17+153+30); 2000 is roughly
+  // 8x that, comfortable headroom for the planned expansion (199 questions
+  // + 30 exercises + 17 modules = 246). Checked before the more expensive
+  // per-entry structural validation below.
+  var MAX_IMPORT_ENTRIES = 2000;
+  // An ARRAY, deliberately not an object literal like {'__proto__':true}:
+  // a bareword or quoted `__proto__:` key in an object literal doesn't
+  // create an own property at all when its value isn't itself an object
+  // (which `true` is not) -- the assignment is a silent no-op per the
+  // object-initializer spec -- so an object-literal DANGEROUS_KEYS would
+  // never actually register '__proto__', the single most important entry.
+  // An array plus indexOf() sidesteps the whole class of footgun, since
+  // these strings are never used as object keys here.
+  var DANGEROUS_KEYS = ['__proto__', 'constructor', 'prototype'];
+  var ALLOWED_STATE_KEYS = {v:true, modules:true, answers:true, exercises:true, started:true, migratedFrom:true};
+  var REQUIRED_STATE_KEYS = ['v', 'modules', 'answers', 'exercises', 'started'];
+  var EXPORT_WRAPPER_KEYS = ['exported', 'state', 'stats'];
+  var hasOwn = Object.prototype.hasOwnProperty;
+
+  /* True only for a genuine record-shaped object: an ordinary plain
+     object, or an explicit null-prototype object -- in ANY realm -- never
+     an exotic built-in (Date/Map/Set/RegExp/...), which this checks by
+     prototype-chain SHAPE (depth), not identity, so it holds correctly
+     for cross-realm input and cannot be defeated by an object spoofing
+     `Symbol.toStringTag`. See the file-level comment above for the full
+     reasoning and the confirmed counterexample this exists to reject. */
+  function isRecordObject(x){
+    if(!x || typeof x !== 'object' || Array.isArray(x)){ return false; }
+    var proto = Object.getPrototypeOf(x);
+    return proto === null || Object.getPrototypeOf(proto) === null;
+  }
+
+  /* True only if every one of x's own properties is a plain, enumerable,
+     string-keyed DATA property -- rejects any own symbol key, any
+     non-enumerable own property (invisible to the Object.keys()-based
+     exact-shape checks this validator otherwise relies on), and any
+     accessor (getter/setter) property (whose value could legally differ
+     between the read that validates it and the later read that persists
+     it). See the file-level comment above for the full reasoning. */
+  function hasOnlyOwnDataProperties(x){
+    if(Object.getOwnPropertySymbols(x).length > 0){ return false; }
+    var names = Object.getOwnPropertyNames(x);
+    for(var i=0;i<names.length;i++){
+      var d = Object.getOwnPropertyDescriptor(x, names[i]);
+      if(!d.enumerable || !hasOwn.call(d, 'value')){ return false; }
+    }
+    return true;
+  }
+
+  function isPlainObject(x){ return isRecordObject(x) && hasOnlyOwnDataProperties(x); }
+  function isSafeKey(k){
+    return typeof k === 'string' && k.length > 0 && DANGEROUS_KEYS.indexOf(k) === -1;
+  }
+  function isValidCorrectness(c){ return typeof c === 'boolean'; }
+  function isValidCount(n){ return typeof n === 'number' && Number.isInteger(n) && n >= 1 && n <= 1000000; }
+  function isValidTimestamp(ts){ return typeof ts === 'number' && Number.isFinite(ts) && ts >= 0; }
+
+  /* One outcome record must be a plain object whose OWN properties are
+     EXACTLY {c,n,ts} -- no missing fields, no extras, and (per gap 2
+     above) verified as OWN properties specifically, not merely readable
+     via `rec.c` etc., which would also succeed for an inherited value. */
+  function isValidOutcomeRecord(rec){
+    if(!isPlainObject(rec)){ return false; }
+    var keys = Object.keys(rec);
+    if(keys.length !== 3){ return false; }
+    if(!hasOwn.call(rec,'c') || !hasOwn.call(rec,'n') || !hasOwn.call(rec,'ts')){ return false; }
+    return isValidCorrectness(rec.c) && isValidCount(rec.n) && isValidTimestamp(rec.ts);
+  }
+
+  /* Validates and rebuilds a fresh, fully detached {id: {c,n,ts}} map (used
+     for both `answers` and `exercises`). Returns null on any problem. */
+  function normalizeOutcomeMap(src){
+    if(!isPlainObject(src)){ return null; }
+    var out = {}, keys = Object.keys(src);
+    for(var i=0;i<keys.length;i++){
+      var k = keys[i];
+      if(!isSafeKey(k)){ return null; }
+      var rec = src[k];
+      if(!isValidOutcomeRecord(rec)){ return null; }
+      out[k] = {c:rec.c, n:rec.n, ts:rec.ts};
+    }
+    return out;
+  }
+
+  /* Validates and rebuilds a fresh, fully detached {id: true} map. Every
+     value must be the literal boolean `true` -- the only value
+     markModule() ever writes; a module is otherwise simply absent. */
+  function normalizeModulesMap(src){
+    if(!isPlainObject(src)){ return null; }
+    var out = {}, keys = Object.keys(src);
+    for(var i=0;i<keys.length;i++){
+      var k = keys[i];
+      if(!isSafeKey(k)){ return null; }
+      if(src[k] !== true){ return null; }
+      out[k] = true;
+    }
+    return out;
+  }
+
+  /* Pure: never mutates its input, never touches the live `state`,
+     localStorage, or the DOM. Returns {ok:true, state:<fresh clone>} or
+     {ok:false, error:<string>}. See the file-level comment above for the
+     exact accepted bare-state schema. */
+  function validateImportedState(candidate){
+    if(!isPlainObject(candidate)){ return {ok:false, error:'imported state must be an object'}; }
+    var topKeys = Object.keys(candidate);
+    for(var i=0;i<topKeys.length;i++){
+      if(!isSafeKey(topKeys[i])){ return {ok:false, error:'imported state contains a disallowed key: ' + topKeys[i]}; }
+      if(!hasOwn.call(ALLOWED_STATE_KEYS, topKeys[i])){
+        return {ok:false, error:'unrecognized field in imported state: ' + topKeys[i]};
+      }
+    }
+    // Gap 2: a required field must be an OWN property, not merely
+    // accessible via the prototype chain (an object with zero own keys
+    // but a fully-populated prototype would pass every check above,
+    // since Object.keys() only lists own keys and the loop above would
+    // simply run zero times).
+    for(var j=0;j<REQUIRED_STATE_KEYS.length;j++){
+      if(!hasOwn.call(candidate, REQUIRED_STATE_KEYS[j])){
+        return {ok:false, error:'imported state is missing required own field: ' + REQUIRED_STATE_KEYS[j]};
+      }
+    }
+    if(candidate.v !== SCHEMA_V){ return {ok:false, error:'schema mismatch, expected v' + SCHEMA_V}; }
+    if(!isValidTimestamp(candidate.started)){ return {ok:false, error:'started must be a finite, non-negative timestamp'}; }
+    if(!isPlainObject(candidate.modules)){ return {ok:false, error:'modules must be an object'}; }
+    if(!isPlainObject(candidate.answers)){ return {ok:false, error:'answers must be an object'}; }
+    if(!isPlainObject(candidate.exercises)){ return {ok:false, error:'exercises must be an object'}; }
+
+    // Cheap size gate BEFORE the more expensive per-entry structural pass
+    // below -- see MAX_IMPORT_ENTRIES's comment for the real-export basis.
+    var roughEntryCount = Object.keys(candidate.modules).length + Object.keys(candidate.answers).length + Object.keys(candidate.exercises).length;
+    if(roughEntryCount > MAX_IMPORT_ENTRIES){
+      return {ok:false, error:'too many progress entries (' + roughEntryCount + ' > ' + MAX_IMPORT_ENTRIES + ')'};
+    }
+
+    var modules = normalizeModulesMap(candidate.modules);
+    if(!modules){ return {ok:false, error:'modules must map ids to the literal value true'}; }
+    var answers = normalizeOutcomeMap(candidate.answers);
+    if(!answers){ return {ok:false, error:'answers must map ids to {c,n,ts} records'}; }
+    var exercises = normalizeOutcomeMap(candidate.exercises);
+    if(!exercises){ return {ok:false, error:'exercises must map ids to {c,n,ts} records'}; }
+
+    var out = {v:SCHEMA_V, modules:modules, answers:answers, exercises:exercises, started:candidate.started};
+    if(hasOwn.call(candidate, 'migratedFrom')){
+      var mf = candidate.migratedFrom;
+      if(typeof mf !== 'number' || !Number.isInteger(mf) || mf < 1){
+        return {ok:false, error:'migratedFrom must be a positive integer'};
+      }
+      out.migratedFrom = mf;
+    }
+    return {ok:true, state:out};
+  }
+
+  /* Accepts either form documented in the file-level comment above: a bare
+     state object, or a full export-wrapper object. Pure, like
+     validateImportedState() above. An object is treated as an attempted
+     wrapper if and only if it has an OWN `state` property -- the bare-state
+     schema has no field named `state`, so this is unambiguous, and because
+     Object.keys() is own-only, an object whose `state` is only inherited
+     (not own) will not match here and instead falls through to the
+     bare-state path below, which will correctly reject it (it won't own
+     v/modules/answers/exercises/started either). */
+  function validateImportEnvelope(o){
+    if(!isPlainObject(o)){ return {ok:false, error:'import must be an object'}; }
+    if(!hasOwn.call(o, 'state')){ return validateImportedState(o); }
+
+    var ownKeys = Object.keys(o);
+    for(var i=0;i<ownKeys.length;i++){
+      if(!isSafeKey(ownKeys[i])){ return {ok:false, error:'import wrapper contains a disallowed key: ' + ownKeys[i]}; }
+      if(EXPORT_WRAPPER_KEYS.indexOf(ownKeys[i]) === -1){
+        return {ok:false, error:'unrecognized field in import wrapper: ' + ownKeys[i]};
+      }
+    }
+    if(!hasOwn.call(o, 'exported') || !hasOwn.call(o, 'stats')){
+      return {ok:false, error:'import wrapper is missing a required own field (exported/state/stats)'};
+    }
+    if(typeof o.exported !== 'string'){ return {ok:false, error:'wrapper exported field must be a string'}; }
+    if(!isPlainObject(o.stats)){ return {ok:false, error:'wrapper stats field must be an object'}; }
+    var statsKeys = Object.keys(o.stats);
+    for(var j=0;j<statsKeys.length;j++){
+      if(!isSafeKey(statsKeys[j])){ return {ok:false, error:'wrapper stats field contains a disallowed key: ' + statsKeys[j]}; }
+    }
+    return validateImportedState(o.state);
   }
 
   function loadProgress(){
@@ -4140,15 +4479,46 @@
     exportJSON:  function(){ return JSON.stringify({exported:new Date().toISOString(), state:state, stats:getStats()}, null, 2); },
 
     /* --- write --- */
+    /* Validates the ENTIRE import before anything observable changes -- see
+       validateImportEnvelope()/validateImportedState() above for the exact
+       accepted forms and schema. The transaction runs in this order, and
+       every step must succeed before the next begins:
+         1. size gate on the raw string, then JSON.parse
+         2. validateImportEnvelope() -- pure, builds a fresh detached
+            candidate state, touches nothing live
+         3. migrateExerciseIds() runs against that candidate, not live state
+         4. JSON.stringify(candidate) -- can throw (e.g. a BigInt slipped
+            through, or a circular structure impossibly reintroduced)
+         5. localStorage.setItem() -- can throw (quota exceeded, disabled
+            storage, private-browsing restrictions)
+         Only once step 5 has actually SUCCEEDED does this function commit
+         the candidate to live `state`, emit the `progress` event, and
+         refresh the rendered UI. If any step fails, {ok:false, error} is
+         returned having touched neither the live state, localStorage, the
+         rendered UI, nor any public API event -- a failed import cannot
+         silently report success while leaving nothing actually saved. This
+         intentionally does NOT call saveProgress() (which swallows storage
+         errors, by design, for its own callers like recordAnswer() --
+         changing that is separate, out-of-scope work), since import needs
+         to observe and react to a storage failure rather than ignore it. */
     importJSON: function(json){
       try{
+        if(typeof json === 'string' && json.length > MAX_IMPORT_JSON_LENGTH){
+          return {ok:false, error:'import too large (' + json.length + ' > ' + MAX_IMPORT_JSON_LENGTH + ' characters)'};
+        }
         var o = (typeof json === 'string') ? JSON.parse(json) : json;
-        var s = o && o.state ? o.state : o;
-        if(!s || s.v !== SCHEMA_V){ return {ok:false, error:'schema mismatch, expected v' + SCHEMA_V}; }
-        state = s;
-        state.modules = state.modules || {}; state.answers = state.answers || {}; state.exercises = state.exercises || {};
-        migrateExerciseIds();
-        saveProgress(); refreshProgressUI();
+        var result = validateImportEnvelope(o);
+        if(!result.ok){ return result; }
+        var candidate = result.state;
+        migrateExerciseIds(candidate);
+        var serialized;
+        try{ serialized = JSON.stringify(candidate); }
+        catch(serializeErr){ return {ok:false, error:'failed to serialize imported progress: ' + String(serializeErr)}; }
+        try{ localStorage.setItem(PKEY, serialized); }
+        catch(storageErr){ return {ok:false, error:'failed to save imported progress: ' + String(storageErr)}; }
+        state = candidate;
+        emit('progress', null);
+        refreshProgressUI();
         $all('.quiz-mount').forEach(buildQuiz);
         return {ok:true};
       }catch(e){ return {ok:false, error:String(e)}; }

@@ -336,7 +336,10 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
 
 ## QL-006 — Progress import trusts malformed nested state
 
-- **Status:** Open; Milestone 1
+- **Status:** Corrected on branch `claude/issue-2-import-hardening`
+  (Issue #2). The "define handling for stale IDs" clause of the original
+  correct action is intentionally NOT part of this correction — see
+  "Not corrected here" below.
 - **Finding:** `importJSON()` checks schema version but does not fully validate
   nested maps and outcome records.
 - **Impact:** Malformed imported data can break later operations or distort
@@ -344,7 +347,376 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
 - **Cause:** Version compatibility was treated as structural validity.
 - **Correct action:** Validate, normalize, and deep-clone imported state; define
   handling for stale IDs.
+- **Correction:** Added `validateImportedState()` (`index.html`), a pure
+  function that never mutates its input and never touches the live
+  `state`, `localStorage`, or the DOM. It checks, in order: the top-level
+  object is a plain object with only recognized keys (`v`, `modules`,
+  `answers`, `exercises`, and the optional `migratedFrom`); `v` equals
+  `SCHEMA_V` exactly; `started` is a finite, non-negative number;
+  `modules`/`answers`/`exercises` are each plain objects; a cheap combined
+  entry-count check against a documented cap (2000); then a full per-entry
+  structural pass building an entirely NEW, deep-cloned object graph —
+  every `modules` value must be the literal `true`, every `answers`/
+  `exercises` value must be a plain object with EXACTLY `{c: boolean,
+  n: integer 1..1000000, ts: finite number >=0}` (no missing or extra
+  fields), and no map key anywhere may be `__proto__`, `constructor`, or
+  `prototype`. `importJSON()` now checks a raw string's length (262,144 characters)
+  against `MAX_IMPORT_JSON_LENGTH` **before** ever calling `JSON.parse`,
+  and only assigns the validated, freshly-built object to the live
+  `state` (then runs `migrateExerciseIds()`, saves, and re-renders) after
+  `validateImportedState()` returns success — so a rejected import cannot
+  leave a partial write by construction, not via a separate rollback
+  step, and mutating the caller's own object (if `importJSON()` was
+  called with a plain object rather than a JSON string, which previously
+  aliased that object directly into live state) cannot affect progress
+  after the fact.
+
+  Both numeric limits are grounded in a real measurement, not a guess: a
+  synthetic full-course completion (17 modules + 153 questions + 30
+  exercise items, all recorded) was built via the real public API and
+  exported, producing exactly 200 entries and an 8,667-character
+  `exportJSON()` blob. `MAX_IMPORT_JSON_LENGTH` (262,144 characters) is
+  ~30x that; `MAX_IMPORT_ENTRIES` (2000) is ~8x that measured entry count
+  and ~8x the post-expansion target (199 questions + 30 exercises + 17
+  modules = 246, per `docs/ROADMAP.md` Milestone 2A) — comfortable
+  headroom without being unbounded.
+
+  27 new tests in `tests/dom-behavior.mjs`: a current export round-trips
+  (extended to also cover an exercise outcome, not only a module and a
+  quiz answer); importing a plain object and mutating it afterward — at
+  the top level, inside a nested record, and via a newly added key —
+  never changes live progress; both a wrong and an entirely missing
+  schema version are rejected; an oversized, deliberately-invalid-JSON
+  string is rejected with a size-specific error (proving the length check
+  runs before `JSON.parse`, not after a parse failure); a 2,001-entry
+  payload is rejected before the expensive per-entry pass; a dedicated
+  rejection case for each nested-type category named in the roadmap item
+  (wrong-typed/null/array `modules`/`answers`, a non-true modules value,
+  non-boolean `c`, an invalid `n` in four different ways, an invalid `ts`
+  in two different ways, an outcome record with an extra key, an
+  unrecognized top-level field, a non-numeric `started`, and
+  `constructor`/`prototype` used as map keys); a shared
+  `assertImportRejectedAtomically()` helper applied to every rejection
+  case above, asserting `getProgress()`, `localStorage`, the rendered
+  module-count label, and the fired-`progress`-event count are all
+  byte-for-byte unchanged; and a dedicated test
+  proving a payload with valid `modules`/`answers` but one malformed
+  `exercises` entry writes nothing at all, not even the fields that were
+  individually valid.
+- **Not corrected here:** the original correct action's "define handling
+  for stale IDs" clause is intentionally out of scope for this
+  correction — whether an id belongs to a module/question/exercise that
+  currently exists is a separate, still-open Milestone 1 roadmap item
+  ("stale ID policy"), not a structural-validity question. This
+  correction validates that an id is a syntactically safe non-empty
+  string, never whether it is a *currently known* one.
 - **Prevention:** Add hostile/malformed import fixtures and round-trip tests.
+
+### Addendum — independent review found three further blocking gaps, plus a terminology inaccuracy
+
+- **Status:** Corrected on the same branch (`claude/issue-2-import-hardening`),
+  before merge.
+- **Finding 1 — a successful validation could still be silently lost to a
+  storage failure.** `importJSON()` replaced live `state` and only *then*
+  called `saveProgress()`, which wraps its `localStorage.setItem()` call in
+  a bare `try{}catch(e){}` and unconditionally emits the `progress` event —
+  a design that is correct for `saveProgress()`'s other callers
+  (`recordAnswer()`/`recordExercise()`/`markModule()`, where in-memory
+  progress should keep advancing even if persistence is temporarily
+  unavailable) but wrong for `importJSON()`, whose entire contract is "this
+  either fully took effect or it didn't." A full, validated import could
+  therefore return `{ok:true}`, update the rendered UI, and fire a
+  `progress` event, while `localStorage` silently kept the pre-import data
+  — confirmed by temporarily reverting the fix below and observing exactly
+  that outcome before writing the correction.
+- **Impact:** None shipped — this entire gap was found and fixed within the
+  same draft PR, before merge or independent sign-off. Had it shipped, a
+  learner importing progress in a full or disabled-storage browser (private
+  browsing, a full quota, a locked-down profile) would have believed the
+  import succeeded — the UI and the return value both said so — while
+  losing it on the next reload.
+- **Correction:** Rewrote `importJSON()`'s transaction order so persistence
+  is attempted *before* anything observable changes, not after:
+  validate the full envelope into a fresh, fully detached candidate state
+  (touches nothing live) → run `migrateExerciseIds()` against that
+  candidate, not global `state` → `JSON.stringify()` the candidate → 
+  `localStorage.setItem()` it. Only once that write has actually succeeded
+  does the function assign `state = candidate`, emit `progress`, and
+  refresh the rendered UI; a thrown error at the serialize or storage step
+  returns `{ok:false, error}` immediately, having touched none of those four
+  surfaces. `importJSON()` deliberately does **not** call `saveProgress()`
+  — it needs to observe and react to a storage failure, not swallow it —
+  and `saveProgress()` itself is unchanged, since redesigning its
+  swallow-and-emit behavior for its other callers is separate, out-of-scope
+  work. `migrateExerciseIds()` was refactored to accept an explicit target
+  state parameter (defaulting to global `state` for its other caller,
+  `loadProgress()`) instead of always mutating global state directly, so it
+  can run against the not-yet-committed candidate. One new test seeds real
+  progress, monkey-patches the test harness's storage object so `setItem()`
+  throws mid-import, and asserts `getProgress()`, `localStorage`, the
+  rendered module-count label, and the fired-`progress`-event count are all
+  unchanged, that `importJSON()` returns `{ok:false}`, and that the same
+  import succeeds once storage is restored (proving the failure was
+  specifically about persistence, not an unrelated validation rejection).
+  **Mutation-tested:** moving `state = candidate` back before the storage
+  write (reintroducing the original bug) failed exactly that one new test;
+  restored and confirmed identical via `diff`.
+- **Finding 2 — required fields were checked by property access, not
+  ownership, letting prototype-chain values substitute for real data.**
+  Property access (`candidate.v`, `rec.c`) follows the prototype chain, but
+  `Object.keys()` lists only *own* enumerable properties. The previous
+  validator counted/enumerated own keys but then read values via plain
+  access — so an object built with `Object.create(realStateShapedProto)`,
+  owning **zero** keys of its own, passed every check (the "unrecognized
+  key" loop ran zero times; `candidate.v !== SCHEMA_V` read `2` off the
+  prototype and passed), and an outcome record with three own keys that
+  were *not* `c`/`n`/`ts`, plus genuine `c`/`n`/`ts` inherited from its
+  prototype, passed the old `Object.keys(rec).length === 3` check while
+  reading the inherited values. Both were confirmed as real, working
+  exploits by direct execution against the pre-fix validator before any
+  fix was written, not assumed from reading the code.
+- **Impact:** None shipped — found and fixed within the same draft PR.
+  Had it shipped, a hand-crafted import (not producible by this app's own
+  `exportJSON()`, but trivially constructable by any caller of the public
+  `importJSON()` API) could have been accepted as a fully valid state
+  update while carrying attacker-chosen values that never appeared as this
+  object's own data.
+- **Correction:** Added `REQUIRED_STATE_KEYS` and an explicit
+  `Object.prototype.hasOwnProperty` ownership check for
+  `v`/`modules`/`answers`/`exercises`/`started` before any of those fields
+  is read, and the same ownership check for `c`/`n`/`ts` inside
+  `isValidOutcomeRecord()` (replacing the previous "own-key count is 3,
+  then read whatever's there" logic). Six new tests: a state object built
+  via `Object.create()` with every required field only on its prototype and
+  zero own keys; an outcome record with three own keys that are none of
+  `c`/`n`/`ts`, plus `c`/`n`/`ts` inherited from its prototype; and each of
+  `modules`/`answers`/`exercises`/`started` individually absent as an own
+  property (the fifth, `v` entirely absent, was already covered by an
+  existing test). Deliberately did **not** adopt a same-realm prototype
+  equality rule (e.g. rejecting any object whose prototype isn't exactly
+  `Object.prototype`) — `importJSON()` is a public API method, and a
+  legitimate caller running this course's test harness under Node's `vm`
+  module passes objects from a different realm, whose plain object
+  prototype is a different (but equally legitimate) `Object.prototype`;
+  ownership-of-property is the correct check, cross-realm identity is not.
+  **Mutation-tested:** two separate mutations, each reverted and confirmed
+  identical via `diff`: (1) removing the `hasOwn` check in
+  `isValidOutcomeRecord()` failed exactly the inherited-outcome-record
+  test; (2) removing the `REQUIRED_STATE_KEYS` ownership loop failed
+  exactly the six tests above that depend on it (the prototype-only state
+  test, the four individually-missing-field tests, and the pre-existing
+  missing-`v` test).
+- **Finding 3 — the export-wrapper envelope was unwrapped without
+  validating its own shape.** `var candidate = isPlainObject(o.state) ?
+  o.state : o;` selected `o.state` whenever it was object-valued and
+  silently discarded everything else about `o` — an extra field alongside
+  `state`, a dangerous key on the wrapper itself, or (per Finding 2's
+  pattern) a `state` value that was only *inherited*, not owned, by the
+  outer object all passed through un-validated, contradicting this course's
+  own documentation, which described the "complete envelope" as validated.
+- **Impact:** None shipped — found and fixed within the same draft PR.
+  Had it shipped, a malformed or hostile wrapper around an otherwise valid
+  `state` (including one carrying a dangerous own key like `__proto__`
+  alongside `state`) would have been silently accepted rather than
+  rejected as documented.
+- **Correction:** Added `validateImportEnvelope()`, which defines exactly
+  two accepted forms: a **bare state** object (owns
+  `v`/`modules`/`answers`/`exercises`/`started`, no `state` field of its
+  own) validated directly against `validateImportedState()`; or an
+  **export wrapper**, distinguished by owning a `state` key
+  (`hasOwn.call(o,'state')`), whose own keys must be *exactly*
+  `exported`/`state`/`stats` — no more, no fewer, none of them
+  `__proto__`/`constructor`/`prototype` — with `state` validated against
+  the identical bare-state schema, and `exported`/`stats` checked to the
+  basic types `exportJSON()` actually produces (a string; a plain object
+  with no dangerous own keys), since neither is persisted or otherwise
+  used. An object whose `state` is only *inherited* (not own) correctly
+  falls through to the bare-state branch, which rejects it on the same
+  ownership grounds as Finding 2 — this was verified as the actual
+  behavior, not assumed from the branch condition. Six new tests: an
+  unknown wrapper field, a dangerous own key on the wrapper (a genuine
+  own `__proto__` built via `JSON.parse`, per QL-023's established
+  technique), a wrapper whose `state` is prototype-inherited rather than
+  own, a wrapper missing `exported`, wrong types for `exported`/`stats`,
+  and a full current `exportJSON()` → `importJSON()` round trip proving
+  the accepted wrapper shape still matches what this app actually
+  produces. **Mutation-tested:** reverting `validateImportEnvelope()` to
+  the original `isPlainObject(o.state) ? o.state : o` logic failed exactly
+  those five rejection tests (the round-trip test continued to pass, as
+  expected, since a genuinely valid wrapper is accepted by both versions);
+  restored and confirmed identical via `diff`.
+- **Finding 4 — terminology: "256 KiB" mischaracterized a character
+  limit as a byte limit.** `MAX_IMPORT_JSON_LENGTH` (262144) bounds a
+  JavaScript string's `.length` — UTF-16 code units — checked before
+  `JSON.parse`. 262,144 UTF-16 code units is not reliably 256 KiB of
+  bytes: once UTF-8 or UTF-16 encoded, that same string ranges from
+  ~256 KiB (all-ASCII/BMP content, one byte or two bytes per unit) up to
+  ~512 KiB (entirely non-BMP characters, which JavaScript counts as two
+  `.length` units — a surrogate pair — but which encode to 4 bytes in
+  UTF-8 or UTF-16). "256 KiB" was simply the wrong unit for what the code
+  actually measures.
+- **Impact:** Documentation-only; the limit's behavior was never wrong,
+  only its description. `MAX_IMPORT_JSON_LENGTH` still bounds hostile-input
+  parsing cost the same way regardless of what the comment called it.
+- **Correction:** Reworded every occurrence (`index.html`'s
+  `MAX_IMPORT_JSON_LENGTH` comment, `docs/ARCHITECTURE.md`,
+  `docs/ROADMAP.md`, `docs/VALIDATION.md`, `docs/CLAUDE_HANDOFF.md`,
+  `CHANGELOG.md`, and this entry) to describe the limit as
+  "262,144 characters" (a JS string-length/code-unit limit), removing every
+  "256 KiB" claim rather than switching to a byte-accurate implementation —
+  the limit's actual purpose (bound hostile-payload parsing cost with
+  generous headroom over a real measured export) does not need byte-exact
+  accounting to hold.
+- **Cause:** All three correctness gaps share a root cause with QL-005's
+  addendum above: a design choice (persist-then-commit ordering; "own key
+  count" as a stand-in for "own keys"; "if `.state` is object-valued, use
+  it") was implemented and, in two of the three cases, actually tested —
+  but the test doubles/fixtures used ordinary object literals and JSON
+  round-trips that happen to always produce own properties, so the
+  property-access-vs-ownership distinction and the storage-failure path
+  were never exercised by any existing test. The terminology gap is a
+  simpler cause: "KB"/"KiB" was used as a familiar shorthand for "a large
+  number of characters" without checking that the code path being
+  described actually measured bytes.
+- **Correct action:** When a validator's job is specifically to resist
+  adversarial input, "the mechanism worked in the tests I wrote" is not
+  sufficient evidence — construct the adversarial input that most directly
+  attacks the stated guarantee (own vs. inherited; a failing dependency;
+  the surrounding envelope) and confirm the mechanism actually holds
+  against it, the same discipline QL-005's addendum, QL-013, and QL-023
+  all converged on independently.
+- **Prevention:** `docs/ARCHITECTURE.md`, `docs/VALIDATION.md`,
+  `docs/ROADMAP.md`, and `docs/CLAUDE_HANDOFF.md` were all updated to
+  describe only the schema, transaction order, and terminology now proven
+  by the corrected tests above; see `docs/VALIDATION.md` "Progress-import
+  validation and cloning" for the corrected test-coverage record.
+
+### Addendum 2 — independent review found a contract-level gap: `isPlainObject()` accepted any non-array object, not a genuine record
+
+- **Status:** Corrected on the same branch (`claude/issue-2-import-hardening`),
+  before merge.
+- **Finding.** `isPlainObject(x)` was `!!x && typeof x === 'object' &&
+  !Array.isArray(x)` — true of *any* non-array object, including exotic
+  built-ins (`Date`, `Map`, `Set`, `RegExp`, …) that carry no data
+  reachable through ordinary own-property enumeration. Every exact-shape
+  check in this validator (the state, the wrapper, the
+  `modules`/`answers`/`exercises` containers, and every outcome record) is
+  built on `Object.keys()`, which lists only OWN ENUMERABLE STRING keys —
+  so it was also blind to an own SYMBOL key, a genuine own property marked
+  NON-ENUMERABLE, and an ACCESSOR (getter/setter) property, none of which
+  `Object.keys()` can see. Four counterexamples were independently
+  reproduced by direct execution against the pre-fix validator, through
+  the same `vm`-sandboxed `importJSON()` the test suite exercises, before
+  any fix was written: (1) `{v:2, modules: new Date(0), answers: new
+  Map(), exercises:{}, started:0}` was accepted, with `modules`/`answers`
+  silently stored as empty objects (`Object.keys(new Date(0))` and
+  `Object.keys(new Map())` are both `[]`); (2) an otherwise-valid outcome
+  record `{c:true,n:1,ts:1}` with a fourth own property added via
+  `Object.defineProperty(rec,'hidden',{value:'secret',enumerable:false})`
+  was accepted — `Object.keys(rec)` still reported exactly `['c','n','ts']`
+  despite `Object.getOwnPropertyNames(rec)` confirming four real own
+  properties; (3) a state object with a genuine own `Symbol('evil')` key
+  alongside otherwise-valid fields was accepted, the symbol key completely
+  invisible to `Object.keys()`; (4) a wrapper `{exported:'x', state:{...
+  valid...}, stats:new Date(0)}` was accepted, `stats` silently treated as
+  an empty object.
+- **Impact:** None shipped — this entire gap was found and fixed within
+  the same draft PR, before independent sign-off or merge. Had it shipped,
+  a direct-object caller of the public `importJSON()` API (not achievable
+  via a JSON string, since `JSON.parse` cannot produce a `Date`/`Map`/
+  symbol key/accessor/non-enumerable property — but trivially achievable
+  by any JavaScript caller passing an object directly, which this API
+  explicitly supports and has a dedicated detachment test for) could have
+  had `modules`/`answers`/`exercises`/wrapper `stats` silently replaced
+  with empty data while `importJSON()` reported `{ok:true}`, or smuggled a
+  fourth outcome-record field or a symbol-keyed state field past checks
+  that document themselves as exact-own-property-shape.
+- **Correction.** Added `isRecordObject(x)`, which rejects exotic
+  built-ins by checking prototype-chain SHAPE rather than identity or
+  `Object.prototype.toString`: the object's own prototype must be `null`,
+  or that prototype's own prototype must be `null` — true for an ordinary
+  plain object or a null-prototype object in *any* realm (verified
+  directly against Node's `vm` module before relying on it, since this
+  course's own test harness runs the app in a separate realm from its
+  test file), and false for any exotic built-in, whose prototype chain is
+  at least one level deeper. This also resists a
+  `Symbol.toStringTag`-spoofing exotic object (e.g. a `Map` subclass
+  overriding its tag to read as `"[object Object]"`, which would defeat a
+  `Object.prototype.toString.call(x) === '[object Object]'`-style check)
+  — verified directly: the spoofed tag reads as `"[object Object]"` while
+  `isRecordObject()` still correctly returns `false` for it, since it
+  never consults `toString` at all. Added `hasOnlyOwnDataProperties(x)`,
+  which rejects any own symbol key (`Object.getOwnPropertySymbols(x).length
+  > 0`), any own property whose descriptor is not `enumerable`, and any
+  own property that is an accessor rather than a data property (no
+  `'value'` key on its descriptor). `isPlainObject(x)` is now
+  `isRecordObject(x) && hasOnlyOwnDataProperties(x)` — both checks are
+  necessary together, confirmed by mutation testing below: an exotic
+  built-in with zero own properties at all (`new Date(0)`, `new Map()`,
+  `new Set()`) vacuously satisfies `hasOnlyOwnDataProperties()` alone, and
+  neither check subsumes the other.
+
+  **Deliberate design decision, documented:** a null-prototype object
+  (`Object.create(null)`) IS accepted as a valid record at every level.
+  Every check in this validator reads own properties via explicit
+  `hasOwnProperty`/bracket access, never through an object's own inherited
+  methods, so a null-prototype object behaves identically to an ordinary
+  plain object for every purpose this validator cares about — and a
+  direct (non-JSON-string) caller may reasonably build one specifically to
+  avoid prototype-pollution surface entirely. Rejecting it would
+  needlessly penalize that defensive habit for no security benefit. A
+  dedicated positive test constructs a complete state, entirely out of
+  `Object.create(null)` objects at every level (state, `modules`,
+  `answers`, `exercises`, and an outcome record), and confirms it imports
+  successfully.
+
+  9 new tests in `tests/dom-behavior.mjs`: the four reproduced
+  counterexamples above; a state whose `exercises` is a `Set` and,
+  separately, whose `modules` is a `RegExp` in the same test (a `RegExp`
+  instance owns a non-enumerable `lastIndex` property, so it is
+  independently caught by `hasOnlyOwnDataProperties()` too — confirming
+  the two defenses are not redundant with each other for every exotic
+  type); the `Symbol.toStringTag`-spoofing case; an outcome record whose
+  `c` field is an accessor (getter) that legally returns a different value
+  on a second read; and the null-prototype-acceptance positive test.
+  Additionally, one existing test ("a state object with required fields
+  only on its prototype is rejected, not read through the prototype
+  chain") was rebuilt to use a null-prototype intermediate object (rather
+  than an ordinary plain-object-literal prototype), since a plain-object
+  prototype now makes the whole chain two levels deep and gets correctly
+  rejected by `isRecordObject()` before the OWNERSHIP check it was written
+  to isolate is ever reached — a new companion test
+  ("...whose prototype chain is deeper than a plain record...") covers
+  that now-earlier rejection path explicitly, so no coverage was lost, and
+  the original test still isolates the specific ownership-only exploit it
+  was written for.
+- **Mutation-tested:** two mutations, each reverted and confirmed
+  byte-identical via `diff`: (1) weakening `isRecordObject()` to accept
+  any non-array object failed exactly the four exotic-built-in tests and
+  none of the own-data-property tests; (2) weakening
+  `hasOnlyOwnDataProperties()` to always return `true` failed exactly the
+  three own-property-shape tests (non-enumerable extra, accessor `c`,
+  symbol key) and none of the exotic-built-in tests — confirming neither
+  check is redundant with the other.
+- **Cause:** Same root cause as this entry's first addendum and QL-005's
+  addendum: `isPlainObject()`'s original check and the exact-shape checks
+  built on `Object.keys()` were both correct for every fixture any
+  existing test constructed (ordinary object literals, JSON round-trips),
+  because nothing had yet tried to construct an object that is
+  `typeof === 'object'` yet not record-shaped, or an own property that
+  `Object.keys()` cannot see.
+- **Correct action:** Same discipline restated once more, now across four
+  independent findings in this one file: a validator's job is to resist
+  input its own author did not think to construct, so audit each
+  primitive JavaScript check it relies on (`typeof x === 'object'`,
+  `Object.keys()`, property access) against what that primitive actually
+  guarantees versus what the surrounding code assumes it guarantees, and
+  construct the gap directly rather than trusting that existing tests
+  would have caught it.
+- **Prevention:** `docs/ARCHITECTURE.md` and `docs/VALIDATION.md` updated
+  to document the record-object requirement, the null-prototype
+  acceptance decision, and the corrected test/mutation-test record;
+  `CHANGELOG.md` updated with the corrected test and mutation counts.
 
 ## QL-007 — A test instrument produced a false defect report
 
@@ -1954,4 +2326,101 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   candidates, where a superficially matching title is exactly the
   situation most likely to produce a false positive if the actual image
   content is never checked.
+
+## QL-023 — A `{'__proto__':true}`-shaped dangerous-key list never actually contained `__proto__`
+
+- **Status:** Corrected before merge, self-caught while writing the test
+  for the exact defense this bug lived in (branch
+  `claude/issue-2-import-hardening`, QL-006)
+- **Finding:** The first version of `importJSON()`'s dangerous-key defense
+  defined its blocklist as an object literal:
+  `var DANGEROUS_KEYS = {'__proto__':true, 'constructor':true, 'prototype':true};`,
+  checked via `Object.prototype.hasOwnProperty.call(DANGEROUS_KEYS, k)`. A
+  bareword or quoted `__proto__:` key in a JS object literal does not
+  create an own property when its assigned value is not itself an object
+  or `null` — per the object-initializer special-casing in the
+  ECMAScript spec, the assignment is a silent no-op in that case. `true`
+  is neither an object nor `null`, so `DANGEROUS_KEYS` ended up with only
+  `constructor` and `prototype` as real own keys —
+  `Object.keys(DANGEROUS_KEYS)` is `['constructor', 'prototype']`, and
+  `hasOwnProperty.call(DANGEROUS_KEYS, '__proto__')` is `false`. The
+  single most important entry in a three-entry blocklist was silently
+  absent the entire time, so `isSafeKey('__proto__')` incorrectly
+  returned `true`.
+- **Impact:** None shipped — caught while authoring the dedicated test for
+  this exact defense, before any commit. Had it shipped, a hostile
+  `answers`/`exercises`/`modules` map containing a genuine own `__proto__`
+  key (which `JSON.parse` — unlike an object literal or plain bracket
+  assignment — really does produce; see the next finding) would have
+  passed `isSafeKey()` and reached `out[k] = value` inside
+  `normalizeOutcomeMap()`/`normalizeModulesMap()`, which — because `out`
+  is an ordinary object inheriting `Object.prototype`'s accessor
+  `__proto__` property — would have set `out`'s prototype to attacker-
+  controlled data instead of rejecting the import: the one defense this
+  whole PR exists to prove actually works would have been a no-op for
+  the one key it most needed to catch.
+- **Confirmed directly, not assumed, before writing the fix:** reproduced
+  in a bare Node one-liner —
+  `Object.keys({'__proto__':true,'constructor':true,'prototype':true})`
+  returns `['constructor', 'prototype']`, not all three — before touching
+  any code, per the standing discipline in this log of confirming an
+  unexpected result against real behavior rather than a mental model of
+  what "should" happen.
+- **Cause:** The same object-literal special-casing this whole PR's
+  `__proto__` defense is designed to protect *against* also silently
+  broke the definition of the blocklist meant to detect it — an
+  unusually self-referential instance of the exact footgun being
+  guarded against. `constructor` and `prototype` are not
+  special-cased by object-literal syntax (only `__proto__` is), so they
+  worked correctly, which made the object-literal approach look
+  superficially fine — 2 of 3 keys behaved as expected, masking that the
+  most important one didn't.
+- **Correct action:** For a small fixed list of dangerous strings being
+  checked for membership, use a data structure with no analogous
+  special-casing risk — an array checked via `indexOf()`/`includes()` —
+  rather than an object whose keys happen to include one of exactly the
+  handful of JavaScript identifiers with literal-syntax special meaning.
+- **Correction:** Replaced `DANGEROUS_KEYS` with a plain array,
+  `['__proto__', 'constructor', 'prototype']`, and `isSafeKey()` with
+  `DANGEROUS_KEYS.indexOf(k) === -1`. No object-literal key is ever
+  written for any of these three strings anywhere in the fix.
+- **A second, related test-authoring mistake caught in the same pass:**
+  the first version of the dedicated `__proto__` test itself tried to
+  build the hostile fixture as a JS object literal
+  (`answers: { "__proto__": {...} }`), which has the identical problem —
+  it sets the prototype of that specific object literal instead of
+  creating an own property, and `JSON.stringify` then silently drops it
+  entirely, so the resulting "hostile" JSON string was actually
+  harmless. A second attempt using plain bracket assignment
+  (`answers['__proto__'] = {...}`) has the *same* problem for a
+  different reason: on an ordinary object, bracket assignment for a key
+  named `__proto__` goes through `Object.prototype`'s inherited
+  `__proto__` *accessor* (a getter/setter pair), not a normal own-
+  property write — confirmed directly with a Node one-liner showing
+  `Object.keys()` empty and the prototype silently polluted instead.
+  Neither produces what `JSON.parse` produces from real hostile JSON
+  text (confirmed as a genuine own property via the same kind of
+  one-liner). The committed test instead writes the hostile fixture as a
+  raw JSON string and calls `JSON.parse` on it directly to build a
+  sanity-check assertion (`Object.keys(parsed.answers)` includes
+  `"__proto__"`) before ever calling `importJSON()`, so the test cannot
+  silently test nothing the way both JS-source construction attempts did.
+- **Mutation-tested:** reverting `DANGEROUS_KEYS` to the broken
+  object-literal form made exactly the dedicated `__proto__` test fail
+  (`expected rejection, got {"ok":true}`); reverted, confirmed identical
+  to the pre-mutation file via `diff`, and the full suite passed again.
+- **Prevention:** When a fixed list of strings includes one of
+  JavaScript's object-literal-special-cased property names (`__proto__`
+  is effectively the only one with real special-casing in this context —
+  `constructor`/`prototype` are ordinary keys, but treating all "keys
+  that could theoretically collide with something on Object.prototype"
+  with the same caution is the safer habit), prefer a data structure
+  with no such special-casing (an array, a `Map`, or a
+  `Object.create(null)` base plus `Object.defineProperty` for the risky
+  entries) over a plain object literal — and when writing a test fixture
+  meant to contain such a key, prefer building it via `JSON.parse` of a
+  literal JSON string over any JS-source object construction, since both
+  object-literal syntax and ordinary bracket assignment are affected by
+  the exact same special-casing a hostile-input test is trying to
+  exercise.
 
