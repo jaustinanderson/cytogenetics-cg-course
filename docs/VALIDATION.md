@@ -1068,7 +1068,18 @@ on import. Covers:
 
 - every one of the 30 exercise items has an explicit, unique, non-blank
   `id` **and** a unique, non-blank `legacyId`, with no accidental
-  `id`/`legacyId` collision (`tests/validate-course.mjs`)
+  `id`/`legacyId` collision, **and** the complete live `id → legacyId`
+  mapping matches an independently hard-coded, frozen historical table
+  exactly — key-for-key and value-for-value, not merely "every value
+  happens to be unique" (`tests/validate-course.mjs`). Uniqueness alone
+  cannot catch two items' `legacyId` values being swapped with each
+  other: both values would still be present, still unique, and still
+  non-colliding with any stable id, while migration would silently
+  attach one item's saved history to a different item. The expected
+  table is written directly into the test, never computed from
+  `EXERCISES`, an item's current array position, or `item.legacyId`
+  itself — computing "expected" from the data under test cannot detect a
+  mistake in that same data
 - an item's id is a literal property of the item, not derived from array
   position (reversing a cloned items array moves each id with its item)
 - a legacy-format record migrates to its item's stable id on load, with
@@ -1125,7 +1136,7 @@ before each test proceeds:
   computation would reintroduce (see QL-005's addendum)
 
 **Mutation-tested**, per the standing discipline this log already
-establishes elsewhere, across four separate mutations, each reverted and
+establishes elsewhere, across five separate mutations, each reverted and
 confirmed byte-identical to the pre-mutation file via `diff` before
 committing: (1) disabling the `migrateExerciseIds()` call in
 `loadProgress()` failed exactly the migration/conflict/idempotency/export
@@ -1136,8 +1147,13 @@ compute the legacy key from the item's current array index instead of
 reading its frozen `legacyId` failed exactly the two reorder-before-
 migration tests; (4) reverting the snapshot conflict policy back to
 summing `n` failed exactly the five conflict-resolution tests, including
-the mixed-tab overlap example. All `tests/dom-behavior.mjs` checks passed
-again after each revert.
+the mixed-tab overlap example; (5) swapping two items' `legacyId` values
+in `index.html` (`ex7-i1`↔`ex7-i2`) — a mistake that leaves every count,
+uniqueness, and collision check still satisfied, confirmed directly by
+isolating and re-running just those checks against the mutated data —
+failed the `tests/validate-course.mjs` exact-mapping assertion with a
+diff naming exactly the two swapped entries. All checks passed again
+after each revert.
 
 `tests/e2e/progressive-disclosure.spec.mjs`'s existing seeded-record test
 (`"loading a page with existing persisted answer/exercise records writes

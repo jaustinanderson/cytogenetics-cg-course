@@ -187,8 +187,8 @@ review status stable before adding 46 questions.
   deterministic snapshot, not an arithmetic merge, since these records
   carry no provenance and their histories cannot be assumed disjoint).
   Does not bump `SCHEMA_V`. See `docs/QUALITY_LOG.md` QL-005 (including
-  its addendum, documenting two correctness problems independent review
-  found and fixed before merge) for the full decision record, and
+  its addenda, documenting three correctness/coverage problems independent
+  review found and fixed before merge) for the full decision record, and
   `docs/VALIDATION.md` for test coverage. This closes only this item —
   the remaining Milestone 1 work below (import hardening, stale-ID
   policy, Reset/import re-render, storage-failure UI, analytics

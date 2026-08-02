@@ -1048,6 +1048,31 @@ sequences," "sum," or "never double-counts" claims. `npm test` and the
 full local Playwright suite passed after this correction. PR #16 remains
 draft, open, and unmerged pending a second independent review.
 
+A second independent review of the same draft PR found one remaining
+test-coverage blocker, corrected 2026-08-02 on the same branch — full
+diagnosis and mutation-test evidence in `docs/QUALITY_LOG.md` QL-005's
+second addendum: the structural check added above (every item has a
+unique `id` and a unique, non-colliding `legacyId`) proves presence and
+uniqueness, but never proves each `legacyId` is paired with the *correct*
+item — swapping two items' `legacyId` values with each other would leave
+every count/uniqueness/non-collision assertion satisfied while migration
+silently attached each item's history to the other one. Confirmed
+directly (not assumed): swapping `ex7-i1`/`ex7-i2`'s `legacyId` values
+and isolating just the old assertions against the mutated data showed
+every one of them still reporting `true`. Fixed by adding
+`EXPECTED_STABLE_TO_LEGACY_ID` to `tests/validate-course.mjs` — a
+literal table of all 30 stable-id-to-historical-legacy-id pairs,
+hard-coded independently of `EXERCISES`/`index.html` (never computed
+from an item's current position or from `item.legacyId` itself, since
+that couldn't detect a mistake in the very data being checked) — and
+asserting the complete live mapping matches it exactly, key set first
+then value-for-value. Mutation-tested: the same swap made the new
+exact-mapping assertion fail with a diff naming exactly the two swapped
+entries, while the pre-existing checks still passed unchanged; reverted
+and confirmed `index.html` byte-identical via `diff` before committing.
+`npm test` and the full local Playwright suite passed again. PR #16
+remains draft, open, and unmerged pending further review.
+
 ## Read these files first
 
 1. `README.md`

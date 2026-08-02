@@ -119,8 +119,12 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   the migration is already safe to run on every load indefinitely.
 
   Tests in `tests/dom-behavior.mjs` (17 total) and a structural
-  completeness check in `tests/validate-course.mjs` cover: every item has
-  an explicit unique id and a unique, non-colliding `legacyId`; an item's
+  check in `tests/validate-course.mjs` cover: every item has an explicit
+  unique id and a unique, non-colliding `legacyId`, **and** the complete
+  live `id → legacyId` mapping matches an independently hard-coded,
+  frozen historical table exactly — not merely that every value happens
+  to be unique, which a swap between two items' `legacyId` values would
+  still satisfy (see the second addendum below); an item's
   id is a literal property (verified by reordering a cloned array and
   confirming ids travel with their items, not their positions); legacy
   records migrate correctly on load, with the legacy key gone from both
@@ -155,8 +159,8 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   `key + '-' + (idx+1)` made exactly the "answering a fresh exercise item
   records ... only under the stable id" and the reordering end-to-end
   test fail, each for the correct reason; restored (confirmed identical
-  to the pre-mutation file via `diff`), all checks passed again. Two
-  further mutations from the addendum below are recorded there.
+  to the pre-mutation file via `diff`), all checks passed again. Three
+  further mutations from the addenda below are recorded there.
 
   `tests/e2e/progressive-disclosure.spec.mjs`'s existing seeded-record
   test was updated to seed under `"ex7-i1"` (the real stable id) instead
@@ -260,6 +264,75 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   all updated so none retain the disproven "disjoint sequences," "sum,"
   or "never double-counts" claims; see `docs/VALIDATION.md` "Stable
   exercise-item identity" for the corrected test-coverage record.
+
+### Addendum — independent review found a remaining test-coverage blocker
+
+- **Status:** Corrected on the same branch, before merge
+- **Finding:** The structural check added in the addendum above (every
+  item has a unique `id` and a unique, non-colliding `legacyId`) proves
+  presence and uniqueness, but never proves each `legacyId` is paired
+  with the *correct* item. Swapping two items' `legacyId` values with
+  each other — e.g. giving `ex7-i1` the value `"ex7-2"` and `ex7-i2` the
+  value `"ex7-1"` — leaves every one of those checks satisfied: both
+  values are still present, still unique among all 30, and still don't
+  collide with any stable id. The check could not have caught this class
+  of authoring mistake, even though it is exactly the mistake this
+  correction pass exists to make impossible: migration would attach
+  `ex7-1`'s saved history to `ex7-i2` and `ex7-2`'s to `ex7-i1`, silently
+  swapping the two items' recorded progress.
+- **Confirmed directly, not assumed, before writing the fix:** swapped
+  `ex7-i1`/`ex7-i2`'s `legacyId` values in `index.html` and re-ran the
+  then-current structural test in isolation — it passed. A separate
+  standalone script isolated and re-ran just the count/uniqueness/
+  collision assertions against the mutated data and printed `true` for
+  every one of them, confirming the gap precisely rather than inferring
+  it.
+- **Impact:** None shipped — caught in independent review before merge.
+  Had a real authoring mistake of this shape ever landed, the committed
+  test suite would have reported full coverage while silently permitting
+  the exact identity-swap bug this whole correction pass was written to
+  prevent.
+- **Cause:** Uniqueness and non-collision are necessary conditions for a
+  correct mapping but not sufficient ones — a permutation of otherwise-
+  valid values satisfies both while still being wrong. The original check
+  tested the *shape* of the id/legacyId data (right count, right
+  distinctness) without testing its *content* (the right value is
+  attached to the right item).
+- **Correct action:** For any per-item mapping where a permutation of
+  valid-looking values would be an undetected wrong answer, assert the
+  complete mapping against an independently authored expected value — not
+  a property (uniqueness, count, non-collision) that a permutation would
+  still satisfy.
+- **Correction:** Added `EXPECTED_STABLE_TO_LEGACY_ID` to
+  `tests/validate-course.mjs`: a literal, hard-coded object mapping all 30
+  stable ids to their exact historical legacy keys, written independently
+  of `EXERCISES`/`index.html` — deliberately not computed from an item's
+  current array position, from `item.legacyId` itself, or from any other
+  transformation of the live data under test, since computing "expected"
+  from the same data being checked cannot detect a mistake in that data.
+  The test now builds the complete actual `id → legacyId` mapping from
+  live `EXERCISES` data and asserts, in order: the key sets match exactly
+  (so a missing or unexpected stable id is reported as a set mismatch, not
+  a confusing value diff), then the complete mapping matches the frozen
+  table exactly, value-for-value. The pre-existing count/uniqueness/
+  non-collision assertions are unchanged and still run first.
+- **Mutation-tested:** the same `ex7-i1`/`ex7-i2` `legacyId` swap used to
+  confirm the original gap was re-applied to `index.html` after the fix.
+  The pre-existing count/uniqueness/non-collision assertions still
+  passed, exactly as before (confirmed directly, not assumed, by
+  isolating and re-running just those checks against the mutated data).
+  The new exact-mapping assertion failed with a diff naming exactly the
+  two swapped entries (`'ex7-i1': 'ex7-2'` / `'ex7-i2': 'ex7-1'` where
+  `'ex7-i1': 'ex7-1'` / `'ex7-i2': 'ex7-2'` was expected). Reverted;
+  `index.html` confirmed byte-identical to the pre-mutation file via
+  `diff` before committing; the full test passed again.
+- **Prevention:** `docs/VALIDATION.md`, `docs/QUALITY_LOG.md` (this
+  entry), and `CHANGELOG.md` now describe this check as verifying the
+  complete frozen mapping, not merely uniqueness. When a structural check
+  claims an id/key *pairing* is correct, confirm it actually tests the
+  pairing (value-for-value against an independent source of truth), not
+  only properties (count, uniqueness, non-collision) a wrong-but-
+  permuted pairing would still satisfy.
 
 ## QL-006 — Progress import trusts malformed nested state
 

@@ -20,8 +20,12 @@ All notable repository changes are recorded here.
   arithmetic merge, because these records carry no attempt-level
   provenance and their histories cannot be assumed disjoint. Does not
   require a `SCHEMA_V` bump. 17 new dependency-free regression tests in
-  `tests/dom-behavior.mjs` plus a structural completeness check in
-  `tests/validate-course.mjs`, including a true end-to-end reordering
+  `tests/dom-behavior.mjs` plus a structural check in
+  `tests/validate-course.mjs` that verifies all 30 `id`/`legacyId` pairs
+  against an independently hard-coded, frozen historical mapping table —
+  exact key-for-key and value-for-value equality, not merely that every
+  value happens to be unique, which a swap between two items' `legacyId`
+  values would still satisfy. Also includes a true end-to-end reordering
   proof and a reorder-before-migration proof that both run the real
   product script with `EXERCISES.ex7.items.reverse()` injected into a copy
   of the exact inline script text. Mutation-tested. See
