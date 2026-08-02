@@ -196,32 +196,43 @@ review status stable before adding 46 questions.
   normalization, and broader API contract tests) is explicitly out of
   scope for that PR and stays open
 - [x] Define and validate a versioned progress-import schema — branch
-  `claude/issue-2-import-hardening` (Issue #2, PR #17): `importJSON()` now
-  validates the complete envelope and every nested `modules`/`answers`/
-  `exercises` entry against an exact, documented schema before anything
-  observable changes, rejects unsupported schema versions and any
-  unrecognized top-level field, and enforces a documented size limit
-  (256 KiB, checked before `JSON.parse`) and entry-count cap (2000),
-  both grounded in a real measured full-course export (~8.7 KB, 200
-  entries). Does not bump `SCHEMA_V` — the accepted record shape is
-  unchanged, only what was previously silently trusted is now checked.
+  `claude/issue-2-import-hardening` (Issue #2, PR #17): `importJSON()`
+  accepts exactly two forms — a bare state object, or an export wrapper
+  whose own keys are exactly `exported`/`state`/`stats` — validates every
+  required field as an OWN property (not merely accessible via the
+  prototype chain) against an exact, documented schema before anything
+  observable changes, rejects unsupported schema versions, unrecognized or
+  inherited-only top-level/wrapper fields, and enforces a documented size
+  limit (262,144 characters — a JS string-length/code-unit count, not a
+  byte or KiB limit — checked before `JSON.parse`) and entry-count cap
+  (2000), both grounded in a real measured full-course export (~8.7 KB,
+  200 entries). Does not bump `SCHEMA_V` — the accepted record shape is
+  unchanged, only what was previously silently trusted (or checked by
+  access rather than ownership) is now checked.
 - [x] Deep-clone imported state and reject malformed nested values — same
   branch/PR: validation builds an entirely new, fully detached object
   graph (mutating the caller's source object after import cannot affect
   live progress, even when `importJSON()` is called with a plain object
   rather than a JSON string, which previously aliased the caller's object
   directly), and rejects incorrect types, nulls, arrays, invalid
-  counters/timestamps/correctness values, extra/missing outcome-record
-  fields, and dangerous keys (`__proto__`/`constructor`/`prototype`)
-  wherever they appear. A rejected import is atomic: `getProgress()`,
+  counters/timestamps/correctness values, extra/missing/inherited-only
+  outcome-record fields, and dangerous keys (`__proto__`/`constructor`/
+  `prototype`) wherever they appear, including on the export wrapper
+  itself. A rejected *or unsaved* import is atomic: persistence is
+  attempted before live state is ever committed, so `getProgress()`,
   `localStorage`, the rendered UI, and public API events are all left
-  completely unchanged. See `docs/QUALITY_LOG.md` QL-006 (including a
-  self-caught bug in the first version of the `__proto__` defense itself)
-  and `docs/VALIDATION.md` "Progress-import validation and cloning" for
-  the full record. This closes only these two items — the remaining
-  Milestone 1 work below (stale-ID policy, Reset/import re-render,
-  storage-failure UI, analytics semantics, content-pack decision,
-  provenance fields, image-manifest normalization, and broader API
+  completely unchanged whether validation fails or the underlying
+  `localStorage.setItem()` write itself fails (full quota, private
+  browsing). See `docs/QUALITY_LOG.md` QL-006 and its addendum (three
+  correctness gaps independent review found and fixed before merge:
+  persistence-failure atomicity, own-property vs. inherited-property
+  validation, and export-wrapper shape) and `docs/VALIDATION.md`
+  "Progress-import validation and cloning" for the full record. This
+  closes only these two items — the remaining Milestone 1 work below
+  (stale-ID policy, Reset/import re-render, storage-failure UI for
+  `recordAnswer()`/`recordExercise()`/`markModule()`, analytics semantics,
+  content-pack decision, provenance fields, image-manifest normalization,
+  and broader API
   contract tests) is explicitly out of scope for that PR and stays open
 - [ ] Decide how stale question/exercise IDs are handled during import
 - [ ] Ensure API Reset and import re-render both quizzes and exercises

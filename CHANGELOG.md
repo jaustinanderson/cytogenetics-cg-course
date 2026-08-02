@@ -6,30 +6,43 @@ All notable repository changes are recorded here.
 
 ### Added
 
-- `validateImportedState()` in `index.html`: `importJSON()` now validates
-  the complete import — exact top-level envelope, every nested
-  `modules`/`answers`/`exercises` entry, and a documented size limit
-  (256 KiB, checked before `JSON.parse`) and entry-count cap (2000), both
-  grounded in a real measured full-course export (~8.7 KB, 200 entries) —
-  before anything observable changes. Rejects unsupported schema
-  versions, unrecognized top-level fields, incorrect nested types (nulls,
-  arrays, wrong primitives), invalid counters/timestamps/correctness
-  values, extra/missing outcome-record fields, and dangerous map keys
-  (`__proto__`/`constructor`/`prototype`) wherever they appear. Builds an
-  entirely new, deep-cloned object graph, so mutating the caller's source
-  object after a successful import (including when `importJSON()` is
-  called with a plain object rather than a JSON string, which previously
-  aliased that object directly into live state) cannot affect course
-  progress, and a rejected import leaves `getProgress()`, `localStorage`,
-  the rendered UI, and public API events completely unchanged. Does not
-  bump `SCHEMA_V`. 27 new dependency-free regression tests in
-  `tests/dom-behavior.mjs`, mutation-tested across three separate
-  mutations. Found and fixed a real self-contained bug in the process: a
-  `{'__proto__':true, ...}`-shaped blocklist never actually contained
-  `__proto__` as an own key (object-literal syntax silently drops it when
-  the value isn't itself an object), replaced with a plain array. See
-  `docs/QUALITY_LOG.md` QL-006 and QL-023, and `docs/VALIDATION.md`
-  "Progress-import validation and cloning" (Issue #2)
+- `validateImportedState()`/`validateImportEnvelope()` in `index.html`:
+  `importJSON()` now validates the complete import — either a bare state
+  object or an export wrapper whose own keys are exactly
+  `exported`/`state`/`stats` — checking every required field (including
+  `c`/`n`/`ts` inside each outcome record) as an OWN property, not merely
+  one reachable via the prototype chain, plus a documented size limit
+  (262,144 characters — a JS string-length/code-unit count, not a byte or
+  KiB limit — checked before `JSON.parse`) and entry-count cap (2000),
+  both grounded in a real measured full-course export (~8.7 KB, 200
+  entries) — before anything observable changes. Rejects unsupported
+  schema versions, unrecognized or inherited-only top-level/wrapper
+  fields, incorrect nested types (nulls, arrays, wrong primitives),
+  invalid counters/timestamps/correctness values, extra/missing/inherited-
+  only outcome-record fields, and dangerous map keys
+  (`__proto__`/`constructor`/`prototype`) wherever they appear, including
+  on the wrapper itself. Builds an entirely new, deep-cloned object graph,
+  so mutating the caller's source object after a successful import
+  (including when `importJSON()` is called with a plain object rather
+  than a JSON string, which previously aliased that object directly into
+  live state) cannot affect course progress. The full transaction —
+  validate, migrate the candidate, serialize, then attempt the
+  `localStorage` write — runs to completion *before* live state is ever
+  committed, so a rejected import, and now also one whose persistence
+  itself fails (full quota, private browsing), both leave `getProgress()`,
+  `localStorage`, the rendered UI, and public API events completely
+  unchanged. Does not bump `SCHEMA_V`. 40 dependency-free regression tests
+  in `tests/dom-behavior.mjs` (27 from the initial pass, 13 from a
+  correction pass after independent review found three further gaps —
+  persistence-failure atomicity, own-property vs. inherited-property
+  validation, and the wrapper contract — plus a terminology fix), mutation-
+  tested across seven separate mutations in total. Found and fixed a real
+  self-contained bug in the process: a `{'__proto__':true, ...}`-shaped
+  blocklist never actually contained `__proto__` as an own key
+  (object-literal syntax silently drops it when the value isn't itself an
+  object), replaced with a plain array. See `docs/QUALITY_LOG.md` QL-006
+  and its addendum, and QL-023, and `docs/VALIDATION.md` "Progress-import
+  validation and cloning" (Issue #2)
 - Explicit, stable `id` fields, plus a literal frozen `legacyId` recording
   each item's original position-derived key, on all 30 exercise items
   (`EXERCISES.ex7`/`ex9group`/`ex9chrom`/`ex10`/`ex14`/`ex15` in

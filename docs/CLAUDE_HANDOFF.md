@@ -1108,7 +1108,7 @@ malformed nested values" items, and `docs/QUALITY_LOG.md` QL-006:
   `docs/ARCHITECTURE.md` "Import validation"), builds an entirely new
   deep-cloned object graph, and only `importJSON()` commits it to live
   state after full success — atomic by construction, not by a rollback
-  step. A raw string is checked against a 256 KiB length limit *before*
+  step. A raw string is checked against a 262,144-character length limit *before*
   `JSON.parse`; the parsed data against a 2000-entry cap before the more
   expensive per-entry pass. Both limits are grounded in a real measured
   full-course export (~8.7 KB, 200 entries), not a guess.
@@ -1146,6 +1146,65 @@ malformed nested values" items, and `docs/QUALITY_LOG.md` QL-006:
   equally affected by the same or a related special-casing) was also
   caught and fixed by building the fixture from a raw JSON string via
   `JSON.parse` instead. Full account: `docs/QUALITY_LOG.md` QL-023.
+
+A subsequent **correction pass**, same branch/PR, before merge: independent
+review found three further blocking correctness gaps in the above, plus a
+terminology inaccuracy, all recorded as an addendum to QL-006:
+
+- **Persistence-failure atomicity:** the original version committed
+  `state = candidate` and only then called `saveProgress()` (which
+  swallows a `localStorage.setItem()` failure and unconditionally emits
+  `progress`) — so a fully valid import could report `{ok:true}` and
+  update the UI while nothing was actually saved. Fixed by reordering
+  `importJSON()`'s transaction: validate → `migrateExerciseIds()` against
+  the candidate (not global `state`, which required refactoring that
+  function to accept an explicit target state) → serialize →
+  `localStorage.setItem()` → only then commit to live state, emit, and
+  re-render. `importJSON()` no longer calls `saveProgress()` at all, since
+  it needs to observe a storage failure rather than swallow it;
+  `saveProgress()`'s swallow-and-emit behavior is unchanged for its other
+  callers, where it is correct by design.
+- **Own-property vs. inherited-property validation:** the original
+  validator checked required fields by property *access*
+  (`candidate.v`, `rec.c`), which follows the prototype chain, while
+  counting/enumerating only *own* keys — so an object built via
+  `Object.create()` with the right values entirely on its prototype (zero
+  own keys) passed every check. Both the state-level and outcome-record-
+  level versions of this exploit were confirmed as real by direct
+  execution against the pre-fix code before being fixed. Fixed with
+  explicit `hasOwnProperty` checks for every required field, added as
+  `REQUIRED_STATE_KEYS` in `validateImportedState()` and inline in
+  `isValidOutcomeRecord()`.
+- **Export-wrapper contract:** `var candidate = isPlainObject(o.state) ?
+  o.state : o;` selected `o.state` whenever object-valued and silently
+  discarded everything else about the wrapper, contradicting this course's
+  own documentation that the complete envelope was validated. Fixed with
+  `validateImportEnvelope()`, which requires a wrapper's own keys to be
+  exactly `exported`/`state`/`stats`, with `state` on the same exact
+  schema and `exported`/`stats` checked to the basic types `exportJSON()`
+  actually produces.
+- **Terminology:** `MAX_IMPORT_JSON_LENGTH` (262144) bounds a JS string's
+  `.length` (UTF-16 code units), which the docs previously called
+  "256 KiB" — not reliably true once encoded. Every occurrence was
+  reworded to "262,144 characters"; the limit's behavior never changed.
+- **13 new tests** (`tests/dom-behavior.mjs`, 79 → 92 checks): a
+  persistence-failure test (test harness's storage `setItem()`
+  monkey-patched to throw mid-import, then restored to prove the failure
+  was specifically about persistence); a state built via `Object.create()`
+  with required fields only on its prototype; an outcome record with
+  inherited `c`/`n`/`ts` plus three unrelated own keys; each of
+  `modules`/`answers`/`exercises`/`started` individually missing as an own
+  property; and six wrapper-contract tests (unknown field, dangerous own
+  key, inherited — not own — `state`, missing `exported`, wrong types for
+  `exported`/`stats`, and a valid current-export round trip). **Mutation-
+  tested**, four further mutations beyond the original three, each
+  reverted and confirmed byte-identical via `diff`: reordering the commit
+  before the storage write; removing the outcome-record ownership check;
+  removing the state-level required-own-key loop; and reverting the
+  wrapper validator to the original permissive logic — each failed exactly
+  the tests written to cover it, and no others.
+- Full record: `docs/QUALITY_LOG.md` QL-006's addendum. `SCHEMA_V` stays
+  `2` — nothing here changes the accepted record shape.
 - Strictly scoped: no question, answer, rationale, scoring, quiz
   progress, analytics semantics, image, styling, layout, or accessibility
   presentation changed, and none of the other Issue #2 items (stale-ID

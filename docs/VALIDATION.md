@@ -1172,12 +1172,16 @@ cheap enough to always run rather than gate behind a version number.
 No question, answer, rationale, scoring, quiz progress, analytics
 semantics, image, styling, layout, or accessibility presentation changed.
 
-## Progress-import validation and cloning — added 2026-08-02
+## Progress-import validation and cloning — added 2026-08-02, corrected 2026-08-02
 
-`tests/dom-behavior.mjs` (Issue #2, `docs/QUALITY_LOG.md` QL-006) adds 27
-dependency-free checks covering `importJSON()`'s full validation and
-atomicity contract. See `docs/ARCHITECTURE.md` "Import validation" for the
-exact accepted schema. Covers:
+`tests/dom-behavior.mjs` (Issue #2, `docs/QUALITY_LOG.md` QL-006 and its
+addendum) adds 40 dependency-free checks covering `importJSON()`'s full
+validation and atomicity contract — 27 from the initial hardening pass, 13
+more from a correction pass after independent review found three further
+gaps (persistence-failure atomicity, own-property vs. inherited-property
+validation, and export-wrapper shape). See `docs/ARCHITECTURE.md` "Import
+validation" for the exact accepted bare-state and wrapper schemas and the
+transaction order. Covers:
 
 - **round-trip:** a current `exportJSON()` output (now including an
   exercise outcome, not only a module and a quiz answer) imports correctly
@@ -1220,19 +1224,57 @@ exact accepted schema. Covers:
   but one malformed `exercises` entry leaves `getProgress()` completely
   unchanged, proving earlier-validated fields never leak into live state
   before a later field fails
+- **missing required own fields:** each of `modules`/`answers`/`exercises`/
+  `started` individually absent as an own property is rejected (`v` absent
+  is covered by the dedicated missing-schema-version test above)
+- **persistence-failure atomicity (correction pass):** with the test
+  harness's storage object monkey-patched so `setItem()` throws mid-import,
+  an otherwise fully valid import returns `{ok:false}`, and `getProgress()`,
+  `localStorage`, the rendered module-count label, and the fired-`progress`-
+  event count are all unchanged — then, with storage restored, confirms the
+  identical import now succeeds, proving the earlier failure was
+  specifically about persistence, not an unrelated rejection
+- **own-property vs. inherited-property (correction pass):** a state object
+  built via `Object.create()` with every required field only on its
+  prototype (zero own keys) is rejected; an outcome record with three own
+  keys that are none of `c`/`n`/`ts`, plus genuine `c`/`n`/`ts` values
+  inherited from its prototype, is rejected
+- **export-wrapper contract (correction pass):** an unknown wrapper field,
+  a dangerous own key on the wrapper itself (a genuine own `__proto__` via
+  `JSON.parse`), a wrapper whose `state` is only prototype-inherited (not
+  own — falls through to bare-state validation and is rejected there, not
+  silently unwrapped), a wrapper missing `exported`, and wrong types for
+  `exported`/`stats` are each rejected; a full current `exportJSON()` →
+  `importJSON()` round trip confirms the accepted wrapper shape still
+  matches what this app actually produces
 
-**Mutation-tested**, three separate mutations, each reverted and confirmed
-byte-identical to the pre-mutation file via `diff`: (1) weakening
-`isValidCount()` to accept any number (removing the integer/range checks)
-failed exactly the counter-related rejection tests plus the partial-write
-test; (2) reverting `DANGEROUS_KEYS` to the broken `{'__proto__':true, ...}`
-object-literal form failed exactly the `__proto__`-pollution test; (3)
-writing `candidate.modules` into live `state` *before* `validateImportedState()`
-completes failed exactly the tests whose rejection depends on atomicity
-(wrong schema version, too many entries, the mixed valid/invalid payload,
-a bad `modules` entry, and a dangerous key in `modules`) — each of these
-mutations left a real, observable partial write that the shared atomicity
-assertion caught immediately.
+**Mutation-tested**, three separate mutations from the initial hardening
+pass, each reverted and confirmed byte-identical to the pre-mutation file
+via `diff`: (1) weakening `isValidCount()` to accept any number (removing
+the integer/range checks) failed exactly the counter-related rejection
+tests plus the partial-write test; (2) reverting `DANGEROUS_KEYS` to the
+broken `{'__proto__':true, ...}` object-literal form failed exactly the
+`__proto__`-pollution test; (3) writing `candidate.modules` into live
+`state` *before* `validateImportedState()` completes failed exactly the
+tests whose rejection depends on atomicity (wrong schema version, too many
+entries, the mixed valid/invalid payload, a bad `modules` entry, and a
+dangerous key in `modules`) — each of these mutations left a real,
+observable partial write that the shared atomicity assertion caught
+immediately.
+
+**Mutation-tested, correction pass**, four further mutations, each
+reverted and confirmed byte-identical via `diff`: (1) committing `state =
+candidate` before (rather than after) the `localStorage.setItem()` attempt
+failed exactly the new persistence-failure test; (2) removing the
+`hasOwn` ownership check inside `isValidOutcomeRecord()` failed exactly
+the inherited-outcome-record test; (3) removing the `REQUIRED_STATE_KEYS`
+ownership loop in `validateImportedState()` failed exactly the six tests
+that depend on it (the prototype-only state test, the four individually-
+missing-field tests, and the pre-existing missing-`v` test); (4) reverting
+`validateImportEnvelope()` to the original `isPlainObject(o.state) ?
+o.state : o` logic failed exactly the five wrapper-rejection tests (the
+valid-wrapper round-trip test correctly continued to pass, since a
+genuinely valid wrapper is accepted by both versions).
 
 **Schema-version decision:** `SCHEMA_V` stays `2`. The accepted record
 shape is completely unchanged from before this work — every field that

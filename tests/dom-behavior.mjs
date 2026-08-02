@@ -791,7 +791,12 @@ test("imports with the wrong schema version are rejected without corrupting stat
   const env = boot();
   env.body.querySelectorAll(".mark-complete")[0].click();
 
-  const rejected = env.api.importJSON(JSON.stringify({ state: { v: 1, modules: { m4: true } } }));
+  // A bare (unwrapped) state object -- every required field present and
+  // own, but v is the wrong version -- isolates the schema-version check
+  // from wrapper-shape validation (covered separately below).
+  const rejected = env.api.importJSON(JSON.stringify({
+    v: 1, modules: { m4: true }, answers: {}, exercises: {}, started: 0,
+  }));
   assert.equal(rejected.ok, false);
   assert.match(rejected.error, /schema/i);
   assert.equal(env.api.getStats().modulesComplete, 1, "existing progress is untouched");
@@ -889,7 +894,7 @@ test("importing a plain object (not a JSON string) fully detaches live state fro
 test("an import missing the schema version entirely is rejected", () => {
   const env = boot();
   const missingV = JSON.stringify({ modules: {}, answers: {}, exercises: {}, started: 0 });
-  assertImportRejectedAtomically(env, missingV, { errorPattern: /schema/i });
+  assertImportRejectedAtomically(env, missingV, { errorPattern: /missing required own field: v/i });
 });
 
 test("an oversized import string is rejected before it is ever parsed", () => {
@@ -1052,6 +1057,163 @@ for (const fixture of REJECTION_FIXTURES) {
     assertImportRejectedAtomically(env, fixture.raw || JSON.stringify(fixture.input));
   });
 }
+
+const MISSING_REQUIRED_STATE_FIELDS = ["modules", "answers", "exercises", "started"];
+for (const field of MISSING_REQUIRED_STATE_FIELDS) {
+  // "v" missing entirely is covered by its own dedicated test above; this
+  // covers the remaining four required own fields the same way.
+  test(`import rejects a state object missing the required own field: ${field}`, () => {
+    const env = boot();
+    const full = { v: 2, modules: {}, answers: {}, exercises: {}, started: 0 };
+    delete full[field];
+    assertImportRejectedAtomically(env, JSON.stringify(full), {
+      errorPattern: new RegExp(`missing required own field: ${field}`, "i"),
+    });
+  });
+}
+
+/* ============================ import hardening — correction pass ============================
+   Independent review found three further gaps in the hardening above, all
+   fixed in index.html's IMPORT VALIDATION block and importJSON(): (1) a
+   successful validation could still be silently lost to a storage failure,
+   (2) required fields were checked by property ACCESS rather than OWN-ness,
+   letting an object with the right values entirely on its prototype pass,
+   and (3) the export-wrapper envelope was unwrapped without validating its
+   own shape. See that block's comment for the full account of each. */
+
+test("a persistence failure during import leaves state, storage, the UI, and events entirely unchanged", () => {
+  const env = boot();
+  env.body.querySelectorAll(".mark-complete")[0].click();
+  const beforeProgress = JSON.stringify(env.api.getProgress());
+  const beforeStorage = env.storage.getItem(V2_KEY);
+  const beforeLabel = env.document.getElementById("tpLabel").textContent;
+  let progressEvents = 0;
+  env.api.on("progress", () => { progressEvents += 1; });
+
+  const originalSetItem = env.storage.setItem;
+  env.storage.setItem = () => { throw new Error("QuotaExceededError"); };
+  let result;
+  try {
+    const validImport = JSON.stringify({ v: 2, modules: { m4: true }, answers: {}, exercises: {}, started: 0 });
+    result = env.api.importJSON(validImport);
+  } finally {
+    env.storage.setItem = originalSetItem;
+  }
+
+  assert.equal(result.ok, false, `an otherwise-valid import must fail when persistence fails, got ${JSON.stringify(result)}`);
+  assert.match(result.error, /save|storage|quota/i);
+  assert.equal(JSON.stringify(env.api.getProgress()), beforeProgress, "getProgress() must be unchanged");
+  assert.equal(env.storage.getItem(V2_KEY), beforeStorage, "localStorage must be unchanged");
+  assert.equal(env.document.getElementById("tpLabel").textContent, beforeLabel, "rendered state must be unchanged");
+  assert.equal(progressEvents, 0, "a persistence failure must fire no progress event");
+
+  // Prove the write really would have succeeded afterward -- i.e. this
+  // wasn't rejected for some unrelated reason -- confirming the failure
+  // above was specifically about persistence, not validation.
+  const retryResult = env.api.importJSON(JSON.stringify({ v: 2, modules: { m4: true }, answers: {}, exercises: {}, started: 0 }));
+  assert.equal(retryResult.ok, true, `the same import must succeed once storage works again, got ${JSON.stringify(retryResult)}`);
+});
+
+test("a state object with required fields only on its prototype is rejected, not read through the prototype chain", () => {
+  const env = boot();
+  const beforeProgress = JSON.stringify(env.api.getProgress());
+
+  const proto = { v: 2, modules: { m4: true }, answers: {}, exercises: {}, started: 0 };
+  const hostile = Object.create(proto);
+  assert.deepEqual(Object.keys(hostile), [], "sanity: the hostile object owns nothing");
+  assert.equal(hostile.v, 2, "sanity: v is still readable via the prototype chain");
+
+  const result = env.api.importJSON(hostile);
+  assert.equal(result.ok, false, `expected rejection, got ${JSON.stringify(result)}`);
+  assert.match(result.error, /missing required own field/i);
+  assert.equal(JSON.stringify(env.api.getProgress()), beforeProgress, "existing progress is untouched");
+});
+
+test("an outcome record with inherited c/n/ts plus three unrelated own keys is rejected", () => {
+  const env = boot();
+  const beforeProgress = JSON.stringify(env.api.getProgress());
+
+  const proto = { c: true, n: 1, ts: 1 };
+  const hostileRecord = Object.create(proto);
+  hostileRecord.foo = 1; hostileRecord.bar = 2; hostileRecord.baz = 3;
+  assert.deepEqual(Object.keys(hostileRecord).sort(), ["bar", "baz", "foo"], "sanity: three own keys, none of them c/n/ts");
+  assert.equal(hostileRecord.c, true, "sanity: c is still readable via the prototype chain");
+
+  const hostileState = { v: 2, modules: {}, answers: { "m1-q1": hostileRecord }, exercises: {}, started: 0 };
+  const result = env.api.importJSON(hostileState);
+  assert.equal(result.ok, false, `expected rejection, got ${JSON.stringify(result)}`);
+  assert.equal(JSON.stringify(env.api.getProgress()), beforeProgress, "existing progress is untouched");
+});
+
+test("import wrapper rejects an unknown top-level field", () => {
+  const env = boot();
+  const validState = { v: 2, modules: {}, answers: {}, exercises: {}, started: 0 };
+  const hostile = JSON.stringify({ exported: "x", state: validState, stats: {}, bogus: true });
+  assertImportRejectedAtomically(env, hostile, { errorPattern: /unrecognized field in import wrapper/i });
+});
+
+test("import wrapper rejects a dangerous own key", () => {
+  const env = boot();
+  const hostile = '{"exported":"x","state":{"v":2,"modules":{},"answers":{},"exercises":{},"started":0},'
+    + '"stats":{},"__proto__":{"polluted":true}}';
+  const sanity = JSON.parse(hostile);
+  assert.ok(Object.prototype.hasOwnProperty.call(sanity, "__proto__"), "sanity: __proto__ is a real own key here");
+  assertImportRejectedAtomically(env, hostile, { errorPattern: /disallowed key/i });
+});
+
+test("a wrapper whose state is only inherited (not own) is rejected, not silently unwrapped", () => {
+  const env = boot();
+  const beforeProgress = JSON.stringify(env.api.getProgress());
+
+  const proto = { state: { v: 2, modules: { m4: true }, answers: {}, exercises: {}, started: 0 } };
+  const hostile = Object.create(proto);
+  hostile.exported = "x";
+  hostile.stats = {};
+  assert.equal(Object.prototype.hasOwnProperty.call(hostile, "state"), false, "sanity: state is only inherited");
+  assert.equal(hostile.state.modules.m4, true, "sanity: state is still readable via the prototype chain");
+
+  const result = env.api.importJSON(hostile);
+  assert.equal(result.ok, false, `expected rejection, got ${JSON.stringify(result)}`);
+  assert.equal(JSON.stringify(env.api.getProgress()), beforeProgress, "existing progress is untouched");
+});
+
+test("import wrapper rejects a missing required field (exported)", () => {
+  const env = boot();
+  const validState = { v: 2, modules: {}, answers: {}, exercises: {}, started: 0 };
+  const missingExported = JSON.stringify({ state: validState, stats: {} });
+  assertImportRejectedAtomically(env, missingExported, { errorPattern: /missing a required own field/i });
+});
+
+test("import wrapper rejects wrong field types for exported/stats", () => {
+  const env = boot();
+  const validState = { v: 2, modules: {}, answers: {}, exercises: {}, started: 0 };
+  assertImportRejectedAtomically(
+    env,
+    JSON.stringify({ exported: 12345, state: validState, stats: {} }),
+    { errorPattern: /exported field must be a string/i },
+  );
+  assertImportRejectedAtomically(
+    env,
+    JSON.stringify({ exported: "x", state: validState, stats: "nope" }),
+    { errorPattern: /stats field must be an object/i },
+  );
+});
+
+test("a valid current export wrapper round-trips through import", () => {
+  const env = boot();
+  env.body.querySelectorAll(".mark-complete")[0].click();
+  const exported = env.api.exportJSON();
+  const parsed = JSON.parse(exported);
+  assert.ok(Object.prototype.hasOwnProperty.call(parsed, "exported"));
+  assert.ok(Object.prototype.hasOwnProperty.call(parsed, "state"));
+  assert.ok(Object.prototype.hasOwnProperty.call(parsed, "stats"));
+  assert.deepEqual(Object.keys(parsed).sort(), ["exported", "state", "stats"]);
+
+  const fresh = boot();
+  const result = fresh.api.importJSON(exported);
+  assert.equal(result.ok, true, `expected success, got ${JSON.stringify(result)}`);
+  assert.equal(fresh.api.getStats().modulesComplete, 1);
+});
 
 /* ============================ print ============================ */
 

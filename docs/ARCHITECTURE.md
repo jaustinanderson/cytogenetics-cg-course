@@ -93,55 +93,105 @@ decision record, conflict-resolution rule, and test evidence.
 
 ### Import validation
 
-As of 2026-08-02 (Issue #2, `docs/QUALITY_LOG.md` QL-006),
-`CytoCourse.importJSON()` validates the complete import — top-level
-envelope, every nested `modules`/`answers`/`exercises` entry, and a
-documented size limit — before anything observable changes. The accepted
-envelope is either a full `exportJSON()`-shaped object
-(`{exported, state, stats}`; `exported`/`stats` are informational only and
-never persisted or validated) or a bare state object directly (existing,
-documented lenience). The candidate state object itself must match this
-exact schema, no more and no fewer top-level fields:
+As of 2026-08-02 (Issue #2, `docs/QUALITY_LOG.md` QL-006 and its
+addendum), `CytoCourse.importJSON()` validates the complete import — the
+top-level envelope's own shape, every nested `modules`/`answers`/
+`exercises` entry, and a documented size limit — before anything
+observable changes, and only commits to live state after persistence has
+actually succeeded.
 
-```js
-{
-  v: 2,                          // must equal SCHEMA_V exactly
-  modules:   { <id>: true },     // every value literally `true`
-  answers:   { <id>: {c,n,ts} }, // see outcome-record shape below
-  exercises: { <id>: {c,n,ts} }, // see outcome-record shape below
-  started: <finite, non-negative number>,
-  migratedFrom: <positive integer>  // OPTIONAL; only ever written by v1→v2 migration
-}
-```
+**Accepted forms.** Exactly two are accepted, decided by
+`hasOwnProperty.call(o, 'state')`:
 
-Every outcome record (`answers`/`exercises` entries) must have EXACTLY
+- **Bare state** — the top-level object's OWN properties must match this
+  exact schema, no more and no fewer:
+
+  ```js
+  {
+    v: 2,                          // must equal SCHEMA_V exactly
+    modules:   { <id>: true },     // every value literally `true`
+    answers:   { <id>: {c,n,ts} }, // see outcome-record shape below
+    exercises: { <id>: {c,n,ts} }, // see outcome-record shape below
+    started: <finite, non-negative number>,
+    migratedFrom: <positive integer>  // OPTIONAL; only ever written by v1→v2 migration
+  }
+  ```
+
+- **Export wrapper** — the top-level object's OWN properties must be
+  *exactly* `exported`, `state`, and `stats` (what `exportJSON()` actually
+  produces); `state` must pass the bare-state schema above; `exported`
+  must be a string and `stats` a plain object with no dangerous own keys —
+  neither is persisted or otherwise used, so nothing deeper than that is
+  checked.
+
+Every required field above — including `c`/`n`/`ts` inside an outcome
+record — must be an **own** property, not merely accessible via the
+prototype chain: property access (`candidate.v`, `rec.c`) follows
+inheritance, but the "no unrecognized top-level field" check only
+enumerates own keys, so an object built via `Object.create()` with the
+right values entirely on its prototype (zero own keys) would otherwise
+satisfy every value check while owning none of the required data. The
+same reasoning applies to a wrapper's `state`: if `state` is only
+inherited, `hasOwnProperty.call(o, 'state')` is `false`, so validation
+falls through to the bare-state branch, which correctly rejects `o`
+(it won't own `v`/`modules`/etc. either) instead of silently unwrapping an
+inherited value.
+
+Every outcome record (`answers`/`exercises` entries) must OWN exactly
 `{c: <boolean>, n: <integer, 1..1000000>, ts: <finite, >=0 number>}` — no
-missing or extra fields. Map keys may be any non-empty string except
-`__proto__`, `constructor`, or `prototype`, rejected outright wherever
-they appear (see QL-006 for a self-caught bug in the first version of this
+missing, extra, or merely-inherited fields. Map keys (including a
+wrapper's own keys) may be any non-empty string except `__proto__`,
+`constructor`, or `prototype`, rejected outright wherever they appear (see
+QL-006 and QL-023 for two self-caught bugs in earlier versions of this
 defense). This does **not** check whether an id is a *currently known*
 module/question/exercise — that remains the separate, still-open
 "stale ID policy" item in `docs/ROADMAP.md` Milestone 1.
 
 A raw string import is also checked against a documented length limit
-(256 KiB) **before** `JSON.parse` is ever called, and the parsed entry
-count against a documented cap (2000) before the more expensive per-entry
-pass — both grounded in a real measured full-course export (~8.7 KB,
-200 entries; see QL-006). Validation builds an entirely new, deep-cloned
+(262,144 characters — a JavaScript string-length/code-unit limit, not a
+byte or KiB limit) **before** `JSON.parse` is ever called, and the parsed
+entry count against a documented cap (2000) before the more expensive
+per-entry pass — both grounded in a real measured full-course export
+(~8.7 KB, 200 entries; see QL-006).
+
+**Transaction order.** Validation builds an entirely new, deep-cloned
 object graph and never touches the live `state`, `localStorage`, or the
-DOM until every check has passed, so a caller's own object can never
-alias — and later mutate — course progress, and a rejected import leaves
-existing progress completely untouched (atomic by construction, not by a
-separate rollback step). This did **not** require a `SCHEMA_V` bump: the
-accepted record shape is unchanged from before, only what was previously
-silently trusted is now checked. Full record, test coverage, and the
-schema-version reasoning: `docs/QUALITY_LOG.md` QL-006 and
-`docs/VALIDATION.md`.
+DOM — so a caller's own object can never alias, and later mutate, course
+progress. `importJSON()` runs, in order: validate the full envelope into a
+fresh candidate → run `migrateExerciseIds()` against that candidate (not
+global `state`) → `JSON.stringify()` it → `localStorage.setItem()` it.
+Only once that write has actually succeeded does it assign `state =
+candidate`, emit the `progress` event, and refresh the rendered UI; a
+thrown error at any step — validation, serialization, or the storage write
+itself — returns `{ok:false, error}` having touched none of those four
+observable surfaces. This means a rejected *or unsaved* import leaves
+existing progress completely untouched, atomic by construction and not by
+a separate rollback step — deliberately including the case where
+validation fully succeeds but the storage write itself fails (a full
+quota, private browsing, a locked-down profile), which the initial
+hardening pass did not cover: it committed to live state before calling
+`saveProgress()`, whose swallow-and-emit behavior is correct for its other
+callers (`recordAnswer()`/`recordExercise()`/`markModule()`, which should
+keep in-memory progress advancing even when persistence is temporarily
+unavailable) but would have let a fully validated, storage-failed import
+report success anyway. `saveProgress()` itself is unchanged; `importJSON()`
+does not call it.
+
+This did **not** require a `SCHEMA_V` bump: the accepted record shape is
+unchanged from before, only what was previously silently trusted (or
+checked by access rather than ownership) is now checked. Full record, test
+coverage, and the schema-version reasoning: `docs/QUALITY_LOG.md` QL-006
+and its addendum, and `docs/VALIDATION.md`.
 
 Known design debt:
 
 - runtime-injected questions are session-only
-- storage failure is silently tolerated
+- storage failure is silently tolerated for `recordAnswer()`/
+  `recordExercise()`/`markModule()` (via `saveProgress()`), by design —
+  in-memory progress should keep advancing even when persistence is
+  temporarily unavailable. `importJSON()` is the deliberate exception: its
+  all-or-nothing contract requires observing a storage failure rather than
+  swallowing it, per the transaction order above.
 
 These are Milestone 1 work, not hidden behavior.
 
