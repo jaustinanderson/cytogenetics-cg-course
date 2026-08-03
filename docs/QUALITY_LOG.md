@@ -2934,3 +2934,138 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   catch block around a persistence operation should be treated as a
   point requiring an explicit, documented decision about what the user
   is told, not a place to make failure invisible.
+
+### Addendum — independent review of draft PR #20 found three blocking corrections, all fixed before merge
+
+- **Status:** Corrected on the same branch
+  (`claude/issue-2-storage-failure-mode`), before merge. Independent
+  review at head `cf0a815b90e408f6a5dde41844f9ac26ee85525b` confirmed CI
+  green, `npm test` passing 139/139, no unresolved review comments, and
+  the general read-failure/write-failure model coherent — but reproduced
+  three real defects in the implementation itself.
+- **Finding 1 — confirmed, a failed import could clobber unseen prior
+  progress.** Reproduced exactly: seed genuine prior v2 progress in the
+  backing store → make `localStorage.getItem()` throw during
+  initialization (status correctly becomes `{persistent:false,
+  reason:'unavailable'}`, having never actually read the seeded record)
+  → attempt an otherwise-valid `importJSON()` call while
+  `localStorage.setItem()` also throws → `importJSON()` correctly
+  returned `{ok:false}`, but its catch block unconditionally called
+  `markSessionOnly('write-failed')`, downgrading the reason from the
+  sticky `'unavailable'` to the non-sticky `'write-failed'` → restore
+  write access while read access remains unavailable → an ordinary
+  action (`markModule()`) then successfully wrote the session's
+  blank/partial in-memory state over the genuine prior progress that
+  initialization never actually read — the exact clobber `'unavailable'`
+  exists to prevent, and the primary safety guarantee the original
+  QL-026 entry claimed to provide.
+- **Finding 2 — confirmed, the warning could be off-screen while
+  reporting as "visible."** `#storageWarning` was an ordinary in-flow
+  element placed immediately below `<header>`, at the top of a page that
+  can run tens of thousands of pixels tall. A sighted learner working in
+  a later module when a write failed would have the element become
+  CSS-visible (non-zero size, not `hidden`) while remaining tens of
+  thousands of pixels outside the current viewport. The existing
+  Playwright `toBeVisible()` assertions proved only that the element
+  renders — not that a learner could actually see it — and could not
+  detect this class of defect by construction.
+- **Finding 3 — confirmed, API `reset()`'s partial-failure status was
+  inaccurate.** Reproduced: seed a legacy v1 key → make only
+  `removeItem(PKEY_V1)` throw → the API Reset's canonical v2 blank-state
+  write (`localStorage.setItem(PKEY, ...)`) succeeds → `reset()`
+  correctly returned `{ok:false}` (both requested cleanup operations did
+  not succeed) — but `persistState` was also downgraded to
+  `{persistent:false, reason:'write-failed'}` and `#storageWarning`
+  displayed, even though the current v2 state was genuinely, durably
+  written, and `loadProgress()` always prefers a valid v2 record over
+  ever reading `PKEY_V1` at all, making the surviving legacy key provably
+  inert. The status and warning falsely implied the learner's current
+  progress might be lost, when only dormant legacy-key cleanup had
+  failed.
+- **Impact:** None shipped — PR #20 remained draft/unmerged throughout;
+  all three found and fixed before merge.
+- **Cause:** (1) `importJSON()`'s failure branch treated every prior
+  `persistState.reason` identically, not accounting for `'unavailable'`
+  being a strictly more conservative state that must never be weakened
+  by a failed (as opposed to successful) explicit action. (3) similarly
+  treated the API and UI Reset paths identically
+  (`v1Removed && v2Cleared`), not accounting for the fact that the two
+  paths clear `PKEY` by fundamentally different mechanisms (removal vs.
+  durable overwrite) with different actual risk profiles for the
+  already-inert legacy key. (2) was a placement decision (in-flow,
+  top-of-page) made without testing perceivability at realistic scroll
+  depth — the original test suite's own `toBeVisible()` checks could not
+  have caught it even in principle.
+- **Correct action:** A persistence-status transition must be reasoned
+  about per *prior state*, not just per *action outcome* — "did this
+  write fail" is not sufficient; "was the prior state already more
+  conservative than what a failure would produce" must also be checked
+  before transitioning. Similarly, two code paths that superficially
+  return the same shape (`{v1Removed, v2Cleared}`) can still warrant
+  different status logic if their underlying storage operations carry
+  different real risk. A "the element is visible" test is not evidence
+  of "the element is visible to the user right now" for anything that
+  is not always within the initial viewport.
+- **Correction 1:** `importJSON()`'s catch block now only calls
+  `markSessionOnly('write-failed')` when `persistState.reason !==
+  'unavailable'`; when it is already `'unavailable'`, the status is left
+  untouched (no transition, no duplicate `'persistence'` event,
+  `saveProgress()` keeps skipping every write). A successful import is
+  unaffected and still clears `'unavailable'` as before. See
+  `docs/ARCHITECTURE.md`'s corrected transition table for the complete
+  policy.
+- **Correction 2:** `.storage-warning` changed from in-flow to
+  `position:fixed; left:0; right:0; bottom:0`, anchored to the viewport's
+  bottom edge specifically to avoid competing for screen position with
+  the sticky header (`top:0`) and sticky/fixed sidebar (both anchored at
+  `top:var(--header-h)`). Remains non-modal, non-auto-dismissing,
+  `role="status"`, and never focus-stealing. Added to the `@media print`
+  hide list to avoid a repeating fixed element across printed pages.
+- **Correction 3:** `performReset()`'s status logic is now path-dependent:
+  the API path (`usePkeyRemoval:false`) durability now depends on
+  `v2Cleared` alone (a leftover, unremoved `PKEY_V1` is provably inert
+  once a valid v2 record exists); the UI path (`usePkeyRemoval:true`,
+  which clears `PKEY` by removal, so a genuinely absent `PKEY` plus a
+  surviving `PKEY_V1` risks real v1-migration resurrection on reload)
+  still correctly depends on both `v1Removed` and `v2Cleared`. `reset()`'s
+  returned `{ok: v1Removed && v2Cleared}` is unchanged in both paths —
+  the smallest accurate representation, per the review's own guidance:
+  no new `persistState.reason` value was added, and `ok` still honestly
+  reports the legacy-key cleanup failure; only the *separate* persistence
+  status stopped conflating that cleanup failure with current-state
+  durability on the API path specifically.
+- **6 new dependency-free tests** in `tests/dom-behavior.mjs` (139 → 145)
+  and **3 new real-browser Playwright tests** in
+  `tests/e2e/storage-failure-warning.spec.mjs` (6 → 9, both configured
+  projects) — full coverage list in `docs/VALIDATION.md`'s "Correction —
+  sticky `'unavailable'` clobber and warning viewport visibility."
+- **Mutation-tested**, each reverted and confirmed `index.html`
+  byte-identical via `diff` before committing:
+  1. Restored the unconditional `markSessionOnly('write-failed')` in
+     `importJSON()`'s catch — failed exactly the new dependency-free
+     clobber-sequence test and the new real-browser clobber-sequence
+     test, and no others.
+  2. Restored the API Reset path's status gate to
+     `v1Removed && v2Cleared` — failed exactly the new "only legacy-key
+     removal fails" dependency-free test, and no others.
+  3. Restored the original in-flow, non-`position:fixed`
+     `.storage-warning` CSS — failed both new deep-scroll Playwright
+     tests, under both configured projects (4 failures total), and no
+     others.
+- **Full local validation:** `npm test` (145/145),
+  `npx playwright test tests/e2e/storage-failure-warning.spec.mjs`
+  (18/18 across both projects), and the complete `npx playwright test`
+  suite (196 passed, 4 pre-existing viewport-conditional skips, 0
+  failed).
+- **Prevention:** When implementing a state machine with a
+  "more conservative wins" invariant (here: `'unavailable'` must never
+  be weakened by a failed action), explicitly test the case where the
+  action fails *while starting from the most conservative state* — not
+  only from the default/optimistic state, which is what the original
+  test suite exercised. When two code paths share a return shape but
+  clear storage by different underlying mechanisms, test each path's
+  partial-failure behavior separately rather than assuming shared logic
+  is safe to share. Any "is this UI element visible" test for content
+  that is not guaranteed to be within the initial viewport should assert
+  viewport intersection (e.g. Playwright's `toBeInViewport()`), not
+  merely CSS visibility.

@@ -477,40 +477,117 @@ involvement, and not itself written to storage.
   the warning in the same step. It never clears merely because a
   lightweight probe succeeds — only because a real full-state write did.
 - `reason: 'unavailable'` — the *read* itself failed during
-  `loadProgress()`. **Sticky for the session**: `saveProgress()` skips
+  `loadProgress()`. **Sticky against ordinary, incremental writes** for
+  the rest of the session: `saveProgress()` (used by `recordAnswer()`,
+  `recordExercise()`, `markModule()`, and the mark-complete UI) skips
   every write attempt while this reason holds (`localStorage.setItem()`
   is never even called), because a read failure means real prior
   progress could exist unseen, and letting an incremental write
   "succeed" anyway risks silently clobbering it the moment storage
-  becomes writable again. Only a reload (a fresh `loadProgress()` read)
-  can clear it.
+  becomes writable again. A reload (a fresh `loadProgress()` read)
+  always clears it. So does a **successful** explicit Reset or
+  `importJSON()` call in the same session, with no reload — both are
+  deliberate, complete-replacement actions the learner explicitly asked
+  for, not incremental accumulation, so a genuinely successful write
+  from either is trusted as real recovery. What must never happen — see
+  the corrected transition table below — is a **failed** `importJSON()`
+  write downgrading this reason to the non-sticky `'write-failed'`,
+  which would let the very next ordinary action's write through and
+  silently overwrite the unseen prior progress this reason exists to
+  protect.
 - Corrupt-but-readable stored JSON is explicitly **not** an availability
   failure — `loadProgress()` splits the `getItem()` call (wrapped in its
   own try/catch, setting `'unavailable'` on failure) from `JSON.parse()`
   of the result (a separate try/catch that falls through to a blank
   state on failure, exactly as before this change, with no warning).
 
-**Explicit-action exception.** `performReset()` (shared by the UI
-`#resetBtn` handler and the API `reset()` method) and `importJSON()`
-always attempt their storage operations regardless of the sticky
-`'unavailable'` reason. Both are deliberate, explicit "replace
-everything" actions — Reset requires `window.confirm()`, import takes an
-explicit caller-supplied payload — fundamentally different in risk
-profile from incremental, easy-to-overlook accumulation from ordinary
-learning actions.
+**Explicit-action exception, and the corrected transition table.**
+`performReset()` (shared by the UI `#resetBtn` handler and the API
+`reset()` method) and `importJSON()` always *attempt* their storage
+operations regardless of the sticky `'unavailable'` reason. Both are
+deliberate, explicit "replace everything" actions — Reset requires
+`window.confirm()`, import takes an explicit caller-supplied payload —
+fundamentally different in risk profile from incremental, easy-to-overlook
+accumulation from ordinary learning actions. What each does to
+`persistState` on success vs. failure, corrected 2026-08-03 (`docs/QUALITY_LOG.md`
+QL-026's addendum) after independent review reproduced a real data-loss
+sequence in the original implementation:
 
-**User-visible warning.** `#storageWarning`, a non-modal, in-flow
-`role="status"` region (implicit `aria-live="polite"`/`aria-atomic="true"`)
-between the header and the main layout. `role="status"` was chosen over
-`role="alert"` specifically so it never steals focus while a learner is
-mid-answer. `setPersistState()` only touches the DOM and fires the
-`'persistence'` event when the status *genuinely changes* — repeated
-failures update it once, not once per failed action. Per-module
-`.mark-status` text ("Saved — nice work.") now also requires
-`persistState.persistent`, so it never appears for a module change that
-was not actually durably written; it goes blank (not an alternate
-message) when session-only, to avoid 17 redundant messages competing
-with the one global banner.
+| Prior `persistState.reason` | Action | Outcome | New `persistState` |
+|---|---|---|---|
+| any | `importJSON()` | write succeeds | `{persistent:true, reason:null}` |
+| `null` (persistent) or `'write-failed'` | `importJSON()` | write fails | `{persistent:false, reason:'write-failed'}` (unchanged from before this correction) |
+| `'unavailable'` | `importJSON()` | write fails | **stays** `{persistent:false, reason:'unavailable'}` — no transition, no `'persistence'` event, `ok:false` still returned |
+| any | Reset, canonical v2 write succeeds | — | `{persistent:true, reason:null}` |
+| any | Reset, canonical v2 write fails | — | `{persistent:false, reason:'write-failed'}` |
+
+The original implementation let a *failed* `importJSON()` write always
+call `markSessionOnly('write-failed')`, regardless of the prior reason.
+Independent review reproduced the resulting defect directly: seed
+genuine prior v2 progress → make reads fail at init (`reason:'unavailable'`,
+correctly never having seen that seeded record) → attempt an
+otherwise-valid import while writes also fail → the reason was
+incorrectly downgraded to `'write-failed'` → restore write access while
+reads remain broken → an ordinary action (e.g. `markModule()`) then
+successfully overwrote the seeded record with the session's
+blank/partial in-memory state, because `'write-failed'` (unlike
+`'unavailable'`) does not block `saveProgress()`. Fixed by gating the
+failure branch: `importJSON()` only calls `markSessionOnly('write-failed')`
+when the reason was not already `'unavailable'`; when it was, the status
+is left untouched. A *successful* import is unaffected by this
+correction and always clears `'unavailable'` as before, since a
+deliberate, complete, caller-supplied replacement that a real write
+confirms is genuine recovery regardless of what state preceded it.
+
+`performReset()`'s own status logic is similarly path-dependent, also
+corrected in the same addendum: the UI path (`usePkeyRemoval:true`)
+clears `PKEY` by *removing* it, so on reload `loadProgress()` falls
+through to a blank state and then — only because `PKEY` is genuinely
+absent — checks `PKEY_V1` and migrates it back in; a failed `PKEY_V1`
+removal here genuinely risks resurrecting old progress, so its
+persistence status honestly depends on **both** `v1Removed` and
+`v2Cleared` succeeding. The API path (`usePkeyRemoval:false`) instead
+clears `PKEY` by durably *overwriting* it with the current blank state,
+and `loadProgress()` always prefers a valid v2 record over ever reading
+`PKEY_V1` at all — so once the canonical v2 write succeeds, a
+surviving, unremoved `PKEY_V1` is provably inert and can never be read
+back. The original implementation still gated the API path's status on
+`v1Removed && v2Cleared`, so a Reset whose only failure was the already-
+inert legacy key falsely reported `{persistent:false, reason:'write-failed'}`
+and showed `#storageWarning` for a Reset that was, in fact, fully
+durable. Fixed: the API path's status now depends on `v2Cleared` alone.
+`reset()`'s returned `{ok: v1Removed && v2Cleared}` is unchanged — it
+still honestly reports the legacy-key cleanup failure — only the
+*persistence status* no longer conflates that separate, inert cleanup
+failure with the durability of current live progress.
+
+**User-visible warning.** `#storageWarning`, a non-modal `role="status"`
+region (implicit `aria-live="polite"`/`aria-atomic="true"`), corrected
+2026-08-03 (QL-026's addendum) to `position:fixed` at the viewport's
+bottom edge, after independent review found the original in-flow
+placement — directly under `<header>`, at the very top of a page that
+can run tens of thousands of pixels tall — left it CSS-visible but far
+outside the viewport for a learner scrolled into a later module; the
+existing Playwright `toBeVisible()` assertion could not catch this,
+since it proves only that the element renders, not that it intersects
+the current viewport (the corrected test suite uses `toBeInViewport()`
+instead — see `docs/VALIDATION.md`). Anchored to the bottom edge
+specifically so it never competes for screen position with the sticky
+header (`position:sticky; top:0`) or the sticky/fixed sidebar (both
+anchored at `top:var(--header-h)`). `role="status"` was chosen over
+`role="alert"` specifically so the warning banner itself never steals
+focus while a learner is mid-answer — proven only for the banner itself,
+**not** as a claim that the overall quiz-answer interaction preserves
+focus generally: a clicked, now-disabled quiz option can independently
+return focus to the document on its own, a pre-existing, unrelated
+behavior this task does not change or claim to preserve.
+`setPersistState()` only touches the DOM and fires the `'persistence'`
+event when the status *genuinely changes* — repeated failures update it
+once, not once per failed action. Per-module `.mark-status` text
+("Saved — nice work.") now also requires `persistState.persistent`, so
+it never appears for a module change that was not actually durably
+written; it goes blank (not an alternate message) when session-only, to
+avoid 17 redundant messages competing with the one global banner.
 
 **Public API.** `CytoCourse.getPersistenceStatus()` returns
 `{persistent, reason}` (a plain object, not a DOM-scraping requirement).
@@ -528,15 +605,18 @@ persistence.
 
 **Reset failure honesty.** `performReset(usePkeyRemoval)` tracks each
 storage operation's own success independently (`v1Removed`, `v2Cleared`)
-and reports `{ok: v1Removed && v2Cleared}` — a partial failure (one key
-cleared, the other not) is still a failure, since the browser gives no
-transactional guarantee across two separate calls. The blank state is
-still applied in memory and every widget still rebuilt either way. The
-UI `#resetBtn` handler calls `location.reload()` only when both
-operations actually succeeded; on a partial or full failure it leaves
-the already-applied blank state and the session-only warning in place
-instead of reloading into a state that might silently restore whatever
-did not actually clear.
+and `reset()`/the UI handler report `{ok: v1Removed && v2Cleared}` — a
+partial failure (one key cleared, the other not) is still a failure,
+since the browser gives no transactional guarantee across two separate
+calls. This `ok` value is unchanged by the correction above; only the
+*persistence status* the API path reports now depends on `v2Cleared`
+alone (see the transition table above for why this differs from the UI
+path). The blank state is still applied in memory and every widget
+still rebuilt either way. The UI `#resetBtn` handler calls
+`location.reload()` only when both operations actually succeeded; on a
+partial or full failure it leaves the already-applied blank state and
+the session-only warning in place instead of reloading into a state
+that might silently restore whatever did not actually clear.
 
 **Import boundary — narrow status-only exception.** `importJSON()`'s
 existing all-or-nothing guarantee is unchanged: a storage-write failure
@@ -549,7 +629,7 @@ success) — this is a status-only side effect, not a weakening of the
 atomic guarantee, since it changes no progress data and fires no
 progress-bearing event.
 
-15 new tests in `tests/dom-behavior.mjs` (124 → 139) and 6 new
+21 new tests in `tests/dom-behavior.mjs` (124 → 145) and 9 new
 real-browser Playwright tests in
 `tests/e2e/storage-failure-warning.spec.mjs` cover: ordinary actions
 (quiz answer, exercise answer, module-completion UI, `markModule()`)
@@ -558,16 +638,28 @@ at initialization, including proof that a read failure never lets a
 later action silently overwrite unseen prior storage content; repeated-
 failure deduplication; full-state recovery after a write-only failure,
 including survival across a real reload; UI and API Reset honesty under
-full and partial failure; and `importJSON()`'s narrow status-only
-exception without weakening atomicity. **Mutation-tested** (4 targeted
-reversions, each confirmed to fail exactly the tests that depend on the
-guard it removed, then reverted and confirmed byte-identical via
-`diff`): restoring the old silent catch in `saveProgress()`; allowing
-"Saved — nice work." without checking `persistState.persistent`;
-clearing session-only status before a write is confirmed to succeed
-(`markPersistent()` moved ahead of the `setItem()` call); and letting
-the UI Reset handler reload unconditionally. Full record:
-`docs/QUALITY_LOG.md` QL-026.
+full and partial failure (including the API/UI path-dependent partial-
+legacy-key-failure distinction above); `importJSON()`'s narrow
+status-only exception without weakening atomicity; the corrected
+sticky-`'unavailable'`-survives-a-failed-import sequence, in both a
+dependency-free and a real-browser test; and the corrected
+`position:fixed` warning's viewport-intersection proof at a deep scroll
+position, in both configured Playwright projects. **Mutation-tested**
+(7 targeted reversions total, each confirmed to fail exactly the tests
+that depend on the guard it removed, then reverted and confirmed
+byte-identical via `diff`): restoring the old silent catch in
+`saveProgress()`; allowing "Saved — nice work." without checking
+`persistState.persistent`; clearing session-only status before a write
+is confirmed to succeed (`markPersistent()` moved ahead of the
+`setItem()` call); letting the UI Reset handler reload unconditionally;
+restoring the unconditional `markSessionOnly('write-failed')` in
+`importJSON()`'s catch (caught by both the dependency-free and the
+real-browser sticky-`'unavailable'` test); restoring the
+`v1Removed && v2Cleared` gate for the API Reset path's persistence
+status; and restoring the original in-flow, non-fixed
+`.storage-warning` CSS (caught by both deep-scroll Playwright tests,
+under both projects). Full record: `docs/QUALITY_LOG.md` QL-026 and its
+addendum.
 
 ## Public API
 

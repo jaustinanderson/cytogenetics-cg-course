@@ -378,14 +378,34 @@
   .backdrop{display:none;position:fixed;inset:0;background:rgba(10,25,40,.5);z-index:80}
   .backdrop.show{display:block}
 
-  /* Non-modal, in-flow (never fixed/overlay) so it cannot obscure the
-     course, and never auto-dismissable -- it reflects live persistence
-     status, so it can only change when that status genuinely changes
-     (see updateStorageWarning() in the PROGRESS section). role="status"
+  /* Fixed to the viewport's bottom edge -- corrected 2026-08-03 (Issue #2,
+     docs/QUALITY_LOG.md QL-026 addendum) after independent review found
+     the original in-flow placement (directly under <header>, at the very
+     top of a page that can run tens of thousands of pixels tall) meant a
+     learner scrolled into a later module would never see it: it was
+     CSS-visible but far outside the current viewport, and the existing
+     Playwright toBeVisible() assertion could not catch this because it
+     proves only that the element renders, not that it intersects the
+     viewport. position:fixed guarantees it is always within the current
+     viewport at any scroll depth, without requiring any scroll-tracking
+     JS. Anchored to the BOTTOM edge specifically so it never competes
+     for the same screen position as the sticky header (position:sticky;
+     top:0) or the sticky/fixed sidebar (both anchored at top:var(--header-h))
+     -- see tests/e2e/storage-failure-warning.spec.mjs's deep-scroll test
+     for the real-browser proof this does not overlap either.
+     Still non-modal (no backdrop, page fully usable underneath) and
+     never auto-dismissable -- it reflects live persistence status, so it
+     can only change when that status genuinely changes (see
+     updateStorageWarning() in the PROGRESS section). role="status"
      (implicit aria-live="polite"/aria-atomic="true") announces it to
      assistive tech without moving focus, so answering a question while
-     it is visible is never interrupted. */
-  .storage-warning{background:var(--no-bg);border-bottom:1px solid var(--no-line);color:var(--no-ink);padding:.7rem 1.2rem;font-size:.88rem;font-weight:600;text-align:center;line-height:1.4}
+     it is visible is never interrupted -- proven only for the warning
+     itself, not as a claim about quiz-answer focus behavior generally
+     (a clicked, now-disabled quiz option can still return focus to the
+     document on its own, an existing, unrelated behavior this task does
+     not change or claim to preserve). No transition/animation is used,
+     so there is nothing for prefers-reduced-motion to need to disable. */
+  .storage-warning{position:fixed;left:0;right:0;bottom:0;z-index:100;background:var(--no-bg);border-top:1px solid var(--no-line);color:var(--no-ink);padding:.7rem 1.2rem;font-size:.88rem;font-weight:600;text-align:center;line-height:1.4;box-shadow:0 -2px 12px rgba(10,25,40,.12)}
   .storage-warning[hidden]{display:none}
 
   /* ---------- Responsive ---------- */
@@ -415,7 +435,7 @@
 
   /* ---------- Print ---------- */
   @media print{
-    .topbar,.sidebar,.backdrop,.topbar-actions,.hamburger,.exer-nav,.flash-nav,.flash-cats{display:none !important}
+    .topbar,.sidebar,.backdrop,.topbar-actions,.hamburger,.exer-nav,.flash-nav,.flash-cats,.storage-warning{display:none !important}
     body{background:#fff;font-size:11.5pt}
     .layout{display:block;max-width:none}
     .content{max-width:none;padding:0}
@@ -3930,15 +3950,28 @@
        persistent:false, reason:'unavailable'    -- localStorage READ
          access itself failed during loadProgress() (not merely corrupt
          JSON -- see loadProgress()'s own comment for how those are told
-         apart). Sticky for the rest of this session: saveProgress()
-         below deliberately stops attempting writes entirely once this
+         apart). Sticky against ORDINARY, incremental writes for the rest
+         of this session: saveProgress() below (used by recordAnswer(),
+         recordExercise(), markModule(), and the mark-complete click
+         handler) deliberately stops attempting writes entirely once this
          reason is set, specifically because a read failure means we
          never learned what (if anything) is already sitting in
-         localStorage -- letting a later write "succeed" could silently
-         overwrite real prior progress we never saw. Only a reload (a
-         fresh loadProgress() call, which will succeed if storage has
-         since become readable) can clear this reason; no in-session
-         write, however successful it looks, is trusted to mean recovery.
+         localStorage -- letting an ordinary, incremental write "succeed"
+         could silently overwrite real prior progress we never saw. A
+         reload (a fresh loadProgress() call, which will succeed if
+         storage has since become readable) always clears this reason.
+         So does a SUCCESSFUL explicit Reset or importJSON() call, in the
+         same session, with no reload -- corrected 2026-08-03 (Issue #2,
+         QL-026 addendum): both are deliberate, explicit, complete-
+         replacement actions the learner asked for, not incremental
+         accumulation, so a genuinely successful write from either is
+         trusted as real recovery, same as it already was from
+         persistent:true or reason:'write-failed'. What must NEVER
+         happen -- the exact clobber independent review found and this
+         correction fixes -- is a FAILED importJSON() write silently
+         downgrading this reason to the non-sticky 'write-failed', which
+         would then let the next ordinary action's write through; see
+         importJSON()'s own comment for the corrected guard.
        persistent:false, reason:'write-failed'   -- storage was
          confirmed readable (loadProgress() saw it), but a later
          localStorage.setItem() call threw. NOT sticky: because the read
@@ -3950,10 +3983,12 @@
      An explicit Reset (UI or API) is the one action that always attempts
      its storage operations regardless of either reason above -- see
      performReset()'s own comment for why overwriting is safe there but
-     not for ordinary actions. importJSON() also always attempts its
-     write regardless (see its own comment) -- both are explicit,
-     deliberate replace-everything actions, not incremental accumulation
-     that could compound an unnoticed clobber.
+     not for ordinary actions, and for why the API path's persistence
+     status depends only on its canonical v2 write succeeding, not on
+     whether the separate, inert legacy key was also removed. importJSON()
+     also always attempts its write regardless (see its own comment) --
+     both are explicit, deliberate replace-everything actions, not
+     incremental accumulation that could compound an unnoticed clobber.
 
      No raw browser exception (message, name, stack) is ever stored here
      or exposed through getPersistenceStatus() -- only these two fixed,
@@ -4745,7 +4780,32 @@
     } else {
       try{ localStorage.setItem(PKEY, JSON.stringify(state)); }catch(e){ v2Cleared = false; }
     }
-    if(v1Removed && v2Cleared){ markPersistent(); } else { markSessionOnly('write-failed'); }
+    /* Whether the CURRENT live state is durably persisted differs by
+       path -- corrected 2026-08-03 (QL-026 addendum) after independent
+       review found the previous `v1Removed && v2Cleared` gate here
+       falsely reported session-only (and showed #storageWarning) for a
+       real, durable Reset whose only failure was legacy-key cleanup:
+         - usePkeyRemoval (UI path): clears PKEY by REMOVING it. On
+           reload, loadProgress() falls through to a blank state, and
+           only THEN -- when PKEY is genuinely absent -- checks PKEY_V1
+           and migrates it back in. A failed v1Removed here means the
+           legacy key survives; if v2Cleared also succeeded (PKEY
+           genuinely gone), a reload really would resurrect that old v1
+           data. Either operation failing therefore risks old progress
+           returning, so durability here honestly depends on BOTH.
+         - !usePkeyRemoval (API path): clears PKEY by durably
+           OVERWRITING it with the current blank state. loadProgress()
+           always prefers a valid v2 record over ever reading PKEY_V1 at
+           all (see loadProgress()'s own comment) -- so once v2Cleared
+           succeeds, a leftover, unremoved PKEY_V1 is provably inert; it
+           can never be read back. Whether the CURRENT live state is
+           durable therefore depends only on v2Cleared here; v1Removed
+           failing is a real but separate cleanup failure -- still
+           reflected honestly in the returned {v1Removed, v2Cleared} and
+           therefore in reset()'s {ok:...} -- not a persistence-status
+           regression. */
+    var currentStateDurable = usePkeyRemoval ? (v1Removed && v2Cleared) : v2Cleared;
+    if(currentStateDurable){ markPersistent(); } else { markSessionOnly('write-failed'); }
     emit('progress', null);
     refreshProgressUI();
     rebuildContentWidgets();
@@ -4862,15 +4922,30 @@
          normally-sticky 'unavailable' value) -- import is an explicit,
          deliberate replace-everything action, not incremental
          accumulation, so the same clobber concern saveProgress() guards
-         against does not apply. The shared persistState IS updated by
-         this write's own genuinely-observed outcome (markPersistent()
-         on success, markSessionOnly('write-failed') on failure) -- a
-         narrow, deliberate status-only side effect that does NOT weaken
-         the atomic guarantee above: a failed import still returns
-         {ok:false}, still touches neither live state nor the rendered
-         UI, and still fires no progress/answer/exercise event -- only
-         the separate 'persistence' event (if the status genuinely
-         changed) and the #storageWarning banner are affected. */
+         against does not apply TO ATTEMPTING the write. The shared
+         persistState IS updated by this write's own genuinely-observed
+         outcome -- markPersistent() unconditionally on success (a
+         successful import is a deliberate, complete, caller-supplied
+         replacement, trusted as genuine recovery even from 'unavailable'
+         -- see persistState's own comment) -- but on FAILURE, corrected
+         2026-08-03 (QL-026 addendum) after independent review found a
+         real data-loss sequence: a failed import must never WEAKEN an
+         already more-conservative 'unavailable' status to 'write-failed',
+         because 'write-failed' is not sticky -- doing so would let the
+         very next ordinary action (e.g. markModule()) successfully write
+         this session's blank/partial in-memory state over genuine prior
+         progress that the initial read failure meant we never actually
+         saw, the exact clobber 'unavailable' exists to prevent. So a
+         failed import only calls markSessionOnly('write-failed') when
+         the reason was NOT already 'unavailable'; when it was, status is
+         left untouched (no new transition, no duplicate 'persistence'
+         event, saveProgress() keeps skipping every write). Either way
+         this remains a narrow, deliberate status-only side effect that
+         does NOT weaken the atomic guarantee above: a failed import
+         still returns {ok:false}, still touches neither live state nor
+         the rendered UI, and still fires no progress/answer/exercise
+         event -- only the separate 'persistence' event (if the status
+         genuinely changed) and the #storageWarning banner are affected. */
     importJSON: function(json){
       try{
         if(typeof json === 'string' && json.length > MAX_IMPORT_JSON_LENGTH){
@@ -4885,7 +4960,13 @@
         try{ serialized = JSON.stringify(candidate); }
         catch(serializeErr){ return {ok:false, error:'failed to serialize imported progress: ' + String(serializeErr)}; }
         try{ localStorage.setItem(PKEY, serialized); }
-        catch(storageErr){ markSessionOnly('write-failed'); return {ok:false, error:'failed to save imported progress: ' + String(storageErr)}; }
+        catch(storageErr){
+          // Never downgrade the sticky 'unavailable' reason to the
+          // self-healing 'write-failed' one -- see this function's own
+          // comment above for the exact clobber this prevents.
+          if(persistState.reason !== 'unavailable'){ markSessionOnly('write-failed'); }
+          return {ok:false, error:'failed to save imported progress: ' + String(storageErr)};
+        }
         markPersistent();
         state = candidate;
         emit('progress', null);

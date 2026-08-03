@@ -1680,6 +1680,118 @@ stable-ID format, migration policy, `SCHEMA_V`, stale-ID policy, import
 schema, or content-pack decision changed. `markModule()`/`addQuestions()`
 return-value semantics are unchanged.
 
+### Correction — sticky `'unavailable'` clobber and warning viewport visibility, added 2026-08-03
+
+Independent review of PR #20 (the entry above) at head `cf0a815`
+confirmed CI green, `npm test` passing 139/139, and the general
+read-failure/write-failure model coherent, but reproduced three real
+defects, all fixed on the same branch without merging:
+
+1. **A failed `importJSON()` could clobber unseen prior progress.**
+   Reproduced exactly: seed genuine prior v2 progress → make reads fail
+   at init (`reason:'unavailable'`, correctly never having read that
+   seeded record) → attempt an otherwise-valid import while writes also
+   fail → the reason was incorrectly downgraded to the non-sticky
+   `'write-failed'` → restore write access while reads remain broken →
+   an ordinary action (`markModule()`) then successfully wrote the
+   session's blank/partial state over the seeded record, since
+   `'write-failed'` (unlike `'unavailable'`) does not block
+   `saveProgress()`. This defeated the primary safety guarantee of the
+   state machine described above. Fixed in `importJSON()`'s catch: only
+   call `markSessionOnly('write-failed')` when the reason was not
+   already `'unavailable'`. A failed import beginning from
+   `persistent:true` or `'write-failed'` still transitions to
+   `'write-failed'`, unchanged. A successful import still clears
+   `'unavailable'` as before (unaffected by this correction).
+2. **The warning banner could be off-screen while "visible."** The
+   original `#storageWarning` sat in normal document flow directly under
+   `<header>`, at the top of a page that can run tens of thousands of
+   pixels tall. `toBeVisible()` (used throughout the entry above) proves
+   only that an element renders and has non-zero size — not that it
+   intersects the viewport a scrolled-down learner is actually looking
+   at. Fixed by making `.storage-warning` `position:fixed` to the
+   viewport's bottom edge (see `docs/ARCHITECTURE.md`'s "User-visible
+   warning" for the full CSS rationale, including why the bottom edge
+   was chosen over the top to avoid the sticky header/sidebar). New
+   tests use Playwright's `toBeInViewport()` specifically because
+   `toBeVisible()` cannot detect this class of defect.
+3. **API `reset()`'s partial-failure status was inaccurate.** When only
+   the legacy `PKEY_V1` removal failed but the canonical v2 blank-state
+   write succeeded, the API path reported `{persistent:false,
+   reason:'write-failed'}` and showed `#storageWarning` — even though
+   the current live state genuinely was durably saved, and
+   `loadProgress()` always prefers a valid v2 record over ever reading
+   `PKEY_V1` at all, so the surviving legacy key is provably inert. Fixed:
+   the API path's (`usePkeyRemoval:false`) persistence status now
+   depends on `v2Cleared` alone; the UI path (`usePkeyRemoval:true`,
+   which clears `PKEY` by *removing* it rather than overwriting it)
+   still correctly depends on both operations, since either failing
+   there risks a real v1-migration resurrection of old progress on
+   reload. `reset()`'s returned `{ok: v1Removed && v2Cleared}` is
+   unchanged in both paths — the legacy-key cleanup failure is still
+   honestly reported there; only the separate persistence status no
+   longer conflates it with current-state durability on the API path.
+
+See `docs/ARCHITECTURE.md` "Storage-failure detection and session-only
+mode" for the corrected transition table and full account, and
+`docs/QUALITY_LOG.md` QL-026's addendum for the finding-by-finding
+record.
+
+**6 new dependency-free tests** in `tests/dom-behavior.mjs` (139 → 145)
+add: the full clobber-reproduction sequence (seed → read-failure init →
+failed import → status stays `'unavailable'` → write access restored →
+ordinary action still skips the write → seeded record still
+byte-for-byte intact), a regression guard that a failed import from
+`persistent:true` still transitions normally, API `reset()` with
+only-legacy-key failure (status stays persistent, no warning, legacy key
+honestly still reported present, reload proves the durable v2 state
+authoritative over it), API `reset()` with a genuine v2-write failure
+(status correctly session-only), a fully successful API `reset()`
+regression guard, and the UI path's only-legacy-key failure (correctly
+remains session-only, unlike the API path).
+
+**3 new real-browser Playwright tests** in
+`tests/e2e/storage-failure-warning.spec.mjs` (6 → 9, all under both
+configured projects) add: the full clobber-reproduction sequence against
+real `localStorage` (seeding via `page.addInitScript` before the
+read-failure patch, inspecting the raw store through a captured
+pre-override `getItem` reference so the test's own inspection isn't
+blocked by the same patch the app experiences); the warning's
+`toBeInViewport()` proof after scrolling to module 15 and triggering a
+failure from there, including that it still does not receive focus and
+does not duplicate on a second failure from the same scroll position;
+and a recovery test proving the warning clears and the page layout was
+never disturbed (checked via a document-relative — not viewport-relative
+— position, since clicking a later module in the same test legitimately
+scrolls the page and would otherwise produce a false layout-shift
+signal).
+
+**Mutation-tested** (3 additional targeted reversions in `index.html`,
+each reverted and confirmed byte-identical via `diff` before
+committing):
+
+5. Restored the unconditional `markSessionOnly('write-failed')` in
+   `importJSON()`'s catch (removing the `reason !== 'unavailable'`
+   guard) — failed exactly the new dependency-free clobber-sequence test
+   *and* the new real-browser clobber-sequence test, and no others,
+   confirming both layers genuinely exercise this guard.
+6. Restored the API Reset path's status gate to `v1Removed && v2Cleared`
+   (removing the `usePkeyRemoval`-conditional `currentStateDurable`
+   logic) — failed exactly the new "only legacy-key removal fails"
+   dependency-free test, and no others.
+7. Restored the original in-flow, non-`position:fixed` `.storage-warning`
+   CSS — failed both new deep-scroll Playwright tests, under both
+   configured projects (4 failures total: 2 tests × 2 projects), and no
+   others.
+
+Full local validation after this correction: `npm test` (145/145),
+`npx playwright test tests/e2e/storage-failure-warning.spec.mjs` (18/18
+across both projects), and the complete `npx playwright test` suite.
+
+No question, answer, exercise, scoring, mastery/accuracy semantics,
+stable-ID format, migration policy, `SCHEMA_V`, stale-ID policy, import
+schema, or content-pack decision changed by this correction either.
+
 ## Gates still open
 
 ### Browser behavior

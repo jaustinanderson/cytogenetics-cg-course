@@ -2388,6 +2388,144 @@ test("a successful import clears session-only mode", () => {
   assert.equal(JSON.stringify(env.api.getPersistenceStatus()), JSON.stringify({ persistent: true, reason: null }));
 });
 
+/* ============================ storage-failure detection: correction addendum (QL-026 addendum) ============================
+   Independent review of the original QL-026 implementation reproduced a
+   real data-loss sequence: seed genuine prior v2 progress; make reads
+   fail at init (status becomes {persistent:false, reason:'unavailable'},
+   sticky against ordinary writes specifically because the app never saw
+   what might already be in storage); attempt an otherwise-valid import
+   while writes ALSO fail; the failed import incorrectly downgraded the
+   status to the non-sticky 'write-failed'; a later ordinary action
+   (e.g. markModule()) then successfully wrote the session's blank/
+   partial in-memory state over the genuine prior progress that was
+   never actually read -- the exact clobber 'unavailable' exists to
+   prevent. Also independently found: the API reset() path could report
+   session-only (and show #storageWarning) for a Reset whose canonical
+   v2 write fully succeeded, purely because the separate, already-inert
+   legacy v1 key could not be removed -- an inaccurate, alarming status
+   for a Reset that is, in fact, fully durable. Both corrected; see
+   index.html's importJSON()/performReset() comments and
+   docs/QUALITY_LOG.md QL-026's addendum for the full record. */
+
+test("a failed import while storage is unavailable-at-init never weakens the sticky 'unavailable' status, and a later ordinary action still cannot clobber the unseen prior record", () => {
+  const genuinePriorProgress = JSON.stringify({ v: 2, modules: { m5: true }, answers: {}, exercises: {}, started: 1 });
+  const env = boot({ storage: { [V2_KEY]: genuinePriorProgress }, failStorageReads: true });
+  assert.equal(
+    JSON.stringify(env.api.getPersistenceStatus()),
+    JSON.stringify({ persistent: false, reason: "unavailable" }),
+    "sanity: the course starts in the sticky unavailable state, having never actually read the seeded record",
+  );
+  assert.equal(env.api.getProgress().modules.m5, undefined, "sanity: the app genuinely could not see the seeded prior progress");
+
+  let persistenceEvents = 0;
+  env.api.on("persistence", () => { persistenceEvents += 1; });
+
+  const originalSetItem = env.storage.setItem;
+  env.storage.setItem = () => { throw new Error("fail"); };
+  const result = env.api.importJSON({ v: 2, modules: { m9: true }, answers: {}, exercises: {}, started: 0 });
+
+  assert.equal(result.ok, false, "the failed import still reports failure -- atomicity is unaffected");
+  assert.equal(JSON.stringify(env.api.getProgress().modules), JSON.stringify({}), "live state is untouched by the failed import (still the blank init state, not the candidate)");
+  assert.equal(
+    JSON.stringify(env.api.getPersistenceStatus()),
+    JSON.stringify({ persistent: false, reason: "unavailable" }),
+    "the failed import must NOT downgrade the sticky 'unavailable' reason to the non-sticky 'write-failed'",
+  );
+  assert.equal(persistenceEvents, 0, "no persistence transition/event for a status that did not actually change");
+  assert.equal(env.storage._raw[V2_KEY], genuinePriorProgress, "the unseen prior progress in storage is still byte-for-byte untouched after the failed import");
+
+  // Restore write access while READ access remains broken -- exactly the
+  // scenario that previously let saveProgress() clobber the seeded record.
+  let setItemCalled = false;
+  env.storage.setItem = (...args) => { setItemCalled = true; return originalSetItem.apply(env.storage, args); };
+
+  env.api.markModule("m1", true);
+
+  assert.equal(setItemCalled, false, "an ordinary action still never attempts a write while the sticky 'unavailable' reason holds");
+  assert.equal(env.storage._raw[V2_KEY], genuinePriorProgress, "the seeded prior progress remains completely unclobbered");
+  assert.equal(JSON.stringify(env.api.getPersistenceStatus()), JSON.stringify({ persistent: false, reason: "unavailable" }));
+});
+
+test("a failed import that begins from persistent:true still transitions to 'write-failed', unchanged from before this correction", () => {
+  const env = boot();
+  env.storage.setItem = () => { throw new Error("fail"); };
+  const result = env.api.importJSON({ v: 2, modules: { m1: true }, answers: {}, exercises: {}, started: 0 });
+  assert.equal(result.ok, false);
+  assert.equal(JSON.stringify(env.api.getPersistenceStatus()), JSON.stringify({ persistent: false, reason: "write-failed" }));
+});
+
+test("API reset(): only legacy-key removal fails -- the canonical v2 blank state is still durably written, so persistence status stays accurate (not falsely session-only)", () => {
+  const env = boot({ storage: { [V1_KEY]: JSON.stringify({ m1: true }) } });
+  env.storage.removeItem = () => { throw new Error("legacy key removal blocked"); };
+
+  const result = env.api.reset();
+
+  assert.equal(result.ok, false, "reset() still honestly reports the legacy-key cleanup failure");
+  assert.equal(JSON.stringify(env.api.getProgress().modules), JSON.stringify({}));
+  assert.equal(
+    JSON.stringify(env.api.getPersistenceStatus()),
+    JSON.stringify({ persistent: true, reason: null }),
+    "the current live (blank) state IS durably written -- this must not be reported as session-only",
+  );
+  assert.equal(env.document.getElementById("storageWarning").hidden, true, "no alarming warning for a Reset whose current state is genuinely durable");
+
+  const stored = JSON.parse(env.storage.getItem(V2_KEY));
+  assert.equal(JSON.stringify(stored.modules), JSON.stringify({}), "the canonical v2 key holds the durable blank state");
+  // The legacy key is honestly still present -- never falsely reported as removed.
+  assert.notEqual(env.storage.getItem(V1_KEY), null);
+
+  // A subsequent reload proves the durable v2 blank state is authoritative
+  // over the surviving (but now provably inert) legacy key.
+  const reloaded = boot({ storage: { ...env.storage._raw } });
+  assert.equal(JSON.stringify(reloaded.api.getProgress().modules), JSON.stringify({}), "reload stays blank -- the legacy key is never read back once a valid v2 record exists");
+});
+
+test("API reset(): the canonical v2 write itself fails -- session-only/write-failed remains correct", () => {
+  const env = boot();
+  env.body.querySelectorAll(".mark-complete")[0].click();
+  env.storage.setItem = () => { throw new Error("v2 write blocked"); };
+
+  const result = env.api.reset();
+
+  assert.equal(result.ok, false);
+  assert.equal(JSON.stringify(env.api.getProgress().modules), JSON.stringify({}), "the blank state is still applied in memory");
+  assert.equal(
+    JSON.stringify(env.api.getPersistenceStatus()),
+    JSON.stringify({ persistent: false, reason: "write-failed" }),
+    "the current state is genuinely NOT durable here -- session-only is the accurate status",
+  );
+  assert.equal(env.document.getElementById("storageWarning").hidden, false);
+});
+
+test("API reset(): a fully successful reset (both operations succeed) reports {ok:true} and persistent status, a regression guard", () => {
+  const env = boot({ storage: { [V1_KEY]: JSON.stringify({ m1: true }) } });
+  const result = env.api.reset();
+  assert.equal(result.ok, true);
+  assert.equal(JSON.stringify(env.api.getPersistenceStatus()), JSON.stringify({ persistent: true, reason: null }));
+  assert.equal(env.storage.getItem(V1_KEY), null, "the legacy key is genuinely removed when nothing fails");
+});
+
+test("UI #resetBtn: only legacy-key removal fails -- old progress could still return via v1 migration on reload, so this remains a genuine session-only failure (unlike the API path)", () => {
+  const env = boot({ confirmResponses: [true], storage: { [V1_KEY]: JSON.stringify({ m1: true }) } });
+  env.body.querySelectorAll(".mark-complete")[0].click();
+  const originalRemoveItem = env.storage.removeItem;
+  env.storage.removeItem = (key) => {
+    if (key === V1_KEY) { throw new Error("legacy key removal blocked"); }
+    return originalRemoveItem(key);
+  };
+
+  env.document.getElementById("resetBtn").click();
+
+  assert.equal(env.reloads.length, 0, "no reload -- the surviving legacy key could still repopulate progress via migration");
+  assert.equal(JSON.stringify(env.api.getProgress().modules), JSON.stringify({}), "the blank state is still applied and rendered in place");
+  assert.equal(
+    JSON.stringify(env.api.getPersistenceStatus()),
+    JSON.stringify({ persistent: false, reason: "write-failed" }),
+    "unlike the API path, the UI path's PKEY removal succeeding does not make this durable: a surviving legacy key can still resurrect old progress on a future reload",
+  );
+  assert.equal(env.document.getElementById("storageWarning").hidden, false);
+});
+
 /* ============================ print ============================ */
 
 test("the print control invokes printing and toggles the print class", () => {

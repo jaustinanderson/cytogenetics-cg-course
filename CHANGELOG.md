@@ -35,7 +35,26 @@ All notable repository changes are recorded here.
   `tests/e2e/storage-failure-warning.spec.mjs`, mutation-tested across
   4 reversions. See `docs/QUALITY_LOG.md` QL-026 and
   `docs/ARCHITECTURE.md` "Storage-failure detection and session-only
-  mode" for the full record.
+  mode" for the full record. **Corrected** after independent review of
+  the draft PR found three blocking defects, all fixed before merge
+  (`docs/QUALITY_LOG.md` QL-026's addendum): (1) a failed `importJSON()`
+  attempt could downgrade the sticky `'unavailable'` read-failure status
+  to the non-sticky `'write-failed'`, letting a later ordinary action
+  silently write over genuine prior progress a read failure at init had
+  never actually seen — fixed by never letting a *failed* import weaken
+  `'unavailable'` (a *successful* one may still clear it); (2)
+  `#storageWarning` was an ordinary in-flow element that could scroll far
+  outside the viewport in a long page — changed to `position:fixed` at
+  the viewport's bottom edge, verified with Playwright's
+  `toBeInViewport()` rather than `toBeVisible()`; (3) the API `reset()`
+  path's persistence status falsely reported session-only when only the
+  already-inert legacy `PKEY_V1` key failed to remove while the
+  canonical v2 state was genuinely durable — status logic is now
+  path-dependent between the API and UI Reset paths, while `reset()`'s
+  `{ok:...}` return value is unchanged. 6 additional dependency-free
+  tests (139 → 145) and 3 additional real-browser Playwright tests
+  (6 → 9, both configured projects), mutation-tested across 3 further
+  reversions (7 total).
 - Exercise widgets now correctly re-render after `CytoCourse.importJSON()`
   and `CytoCourse.reset()` (`index.html`, Issue #2): both previously
   rebuilt only `.quiz-mount` widgets, never `.exer` (exercise) ones, so a

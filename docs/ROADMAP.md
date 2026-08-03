@@ -322,7 +322,16 @@ review status stable before adding 46 questions.
   change `SCHEMA_V`, stable-ID formats, migration policy, the stale-ID
   policy, scoring, or existing `progress`/`answer`/`exercise` event
   semantics. See `docs/QUALITY_LOG.md` QL-026 for the full decision
-  record and `docs/VALIDATION.md` for test coverage. Left unchecked
+  record and `docs/VALIDATION.md` for test coverage. **Independent
+  review found and this branch corrected three blocking defects before
+  merge** (QL-026's addendum): a failed `importJSON()` could downgrade
+  the sticky `'unavailable'` read-failure status and let a later
+  ordinary action clobber unseen prior progress; the warning banner was
+  placed in normal document flow and could be scrolled far out of view;
+  and the API `reset()` path falsely reported session-only when only an
+  already-inert legacy key failed to remove. All three fixed and
+  re-validated (145 dependency-free checks, 9 real-browser Playwright
+  tests across both projects, 7 mutation tests total). Left unchecked
   pending independent review and merge; the remaining Milestone 1 work
   below (analytics semantics, content-pack decision, provenance fields,
   image-manifest normalization, broader API contract tests) is out of
