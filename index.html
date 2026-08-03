@@ -3611,7 +3611,20 @@
     // keyed by each item's own explicit, stable `id` -- see EXERCISES.* --
     // not by array position) rather than assuming a fresh "Not started"
     // state -- see the matching comment in buildQuiz. Read-only: never
-    // writes or emits.
+    // writes or emits. Deliberately does NOT seed `answered`/idx from
+    // state.exercises: every rebuild -- whether from init(), importJSON(),
+    // or reset() -- always starts at item 0 with fresh, enabled controls,
+    // exactly matching buildQuiz's own established behavior (a rebuilt
+    // quiz mount never disables an already-answered question's options
+    // either), and this is a load-bearing, already-tested contract, not
+    // an oversight: tests/e2e/progressive-disclosure.spec.mjs's
+    // "reattempting an exercise item after reload" test (predating this
+    // fix) depends on clicking item 0 again, after a reload, to correct a
+    // previous answer -- a resume-to-first-unanswered-item version of
+    // this fix was tried and reverted specifically because it silently
+    // broke that existing, shipped reattempt path by navigating away from
+    // item 0 the moment it had any persisted record. See
+    // docs/QUALITY_LOG.md QL-025.
     items.forEach(function(it){
       var rec = state.exercises[it.id];
       if(rec){ answeredCount++; if(rec.c){ score++; } }
@@ -4512,13 +4525,42 @@
     }); }
   }
 
+  /* Rebuilds every quiz and exercise widget from the current `state`, in
+     one place, so importJSON()/reset()/init() cannot drift into three
+     separate, differently-incomplete selector loops (Issue #2: import and
+     Reset previously rebuilt only `.quiz-mount` widgets, never `.exer`
+     ones -- a real, confirmed defect; see docs/QUALITY_LOG.md QL-025).
+     buildQuiz()/buildExercise() are both full innerHTML replacements
+     seeded fresh from persisted records, so calling either again is
+     idempotent -- no duplicate DOM nodes or event listeners accumulate,
+     the old subtree (and every listener attached to it) is simply
+     discarded. Neither ever calls recordAnswer()/recordExercise() or
+     emits any event; they only read `state` to seed the initial render
+     (see each function's own comment) -- so calling this rebuilds the
+     UI without ever manufacturing an `answer`/`exercise`/`progress`
+     event.
+
+     Disclosure state: a `.quiz-mount` is a plain container `<div>` whose
+     entire innerHTML -- including a fresh `<details class="quiz">` with
+     no `open` attribute -- is replaced on every buildQuiz() call, so a
+     quiz widget has always collapsed back to closed on any rebuild; that
+     pre-existing behavior is unchanged here. A `.exer` element IS the
+     `<details>` itself (see index.html's static markup), and
+     buildExercise() only ever replaces `host.innerHTML` (its children),
+     never touching `host`'s own `open` attribute -- so an exercise
+     widget's open/closed state survives a rebuild by construction, with
+     no extra code required to preserve it. */
+  function rebuildContentWidgets(){
+    $all('.quiz-mount').forEach(buildQuiz);
+    $all('.exer').forEach(buildExercise);
+  }
+
   /* ============================ INIT ============================ */
   function init(){
     loadProgress();
     buildNav();
     buildDashboard();
-    $all('.quiz-mount').forEach(buildQuiz);
-    $all('.exer').forEach(buildExercise);
+    rebuildContentWidgets();
     var fm = $('#flashMount'); if(fm){ buildFlash(fm); }
     injectFigures();
     refreshProgressUI();
@@ -4619,7 +4661,7 @@
         state = candidate;
         emit('progress', null);
         refreshProgressUI();
-        $all('.quiz-mount').forEach(buildQuiz);
+        rebuildContentWidgets();
         return {ok:true};
       }catch(e){ return {ok:false, error:String(e)}; }
     },
@@ -4658,7 +4700,7 @@
       state = blankState();
       saveProgress();
       refreshProgressUI();
-      $all('.quiz-mount').forEach(buildQuiz);
+      rebuildContentWidgets();
       return {ok:true};
     },
 

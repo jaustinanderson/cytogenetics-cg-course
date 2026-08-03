@@ -278,7 +278,32 @@ review status stable before adding 46 questions.
   content-pack decision, provenance fields, image-manifest normalization,
   and broader API contract tests) is explicitly out of scope for that PR
   and stays open
-- [ ] Ensure API Reset and import re-render both quizzes and exercises
+- [x] Ensure API Reset and import re-render both quizzes and exercises —
+  branch `claude/issue-2-exercise-rerender` (Issue #2, draft PR):
+  `importJSON()` and `CytoCourse.reset()` previously rebuilt only
+  `.quiz-mount` widgets, never `.exer` (exercise) ones — a rendered
+  exercise widget's score, status, and controls silently disagreed with
+  `getProgress()` immediately after either call, confirmed as a real,
+  currently-shipped defect by direct execution before any fix. Fixed by
+  routing `init()`, `importJSON()`, and `reset()` through one shared
+  `rebuildContentWidgets()` helper instead of three separately maintained
+  selector loops; `buildExercise()`'s own rendering logic is otherwise
+  byte-for-byte unchanged. A resume-to-first-unanswered-item positioning
+  change was tried while investigating this, then reverted before
+  committing: it broke `tests/e2e/progressive-disclosure.spec.mjs`'s
+  pre-existing "reattempting an exercise item after reload" test (caught
+  by running the complete local suite, not only the new tests), which
+  depends on an exercise widget always restarting at item 0 with
+  fresh/enabled controls so a learner can correct a previous answer after
+  a reload — confirmed as the app's existing, intentional design, not an
+  oversight this item needed to close. Does not change stable-ID
+  formats, migration policy, `SCHEMA_V`, or the stale-ID policy. See
+  `docs/QUALITY_LOG.md` QL-025 for the full decision record, including
+  the reverted positioning attempt, and `docs/VALIDATION.md` for test
+  coverage. This closes only this item — the remaining Milestone 1 work below
+  (storage-failure UI, analytics semantics, content-pack decision,
+  provenance fields, image-manifest normalization, broader API contract
+  tests) is explicitly out of scope for that PR and stays open
 - [ ] Validate and communicate `localStorage` availability instead of silently
   claiming progress was saved
 - [ ] Define analytics semantics:
