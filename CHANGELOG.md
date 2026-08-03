@@ -54,7 +54,23 @@ All notable repository changes are recorded here.
   `{ok:...}` return value is unchanged. 6 additional dependency-free
   tests (139 → 145) and 3 additional real-browser Playwright tests
   (6 → 9, both configured projects), mutation-tested across 3 further
-  reversions (7 total).
+  reversions (7 total). **Corrected again** after a second round of
+  independent review found the fixed-position banner itself could
+  obstruct content (`docs/QUALITY_LOG.md` QL-026's second addendum):
+  `position:fixed` removes the banner from document flow, so nothing
+  reserved room for it — it could sit on top of the page's own
+  bottom-most content and, at narrow widths, on top of the mobile
+  sidebar's own bottom-most nav links, both still clickable underneath
+  it. Fixed with a `--storage-warning-h` custom property kept in sync
+  with the banner's live rendered height, which `.content`'s bottom
+  padding and `.sidebar`'s own height (desktop and mobile) both reserve
+  space for whenever it is shown; `pointer-events:none` alone was
+  considered and rejected, since it would let clicks through without
+  removing the visual obstruction. Verified with real
+  `document.elementFromPoint()` hit-testing and rectangle-intersection
+  checks. 3 additional dependency-free tests (145 → 148) and 6
+  additional real-browser Playwright tests (9 → 15), mutation-tested
+  across 1 further reversion (8 total for this feature).
 - Exercise widgets now correctly re-render after `CytoCourse.importJSON()`
   and `CytoCourse.reset()` (`index.html`, Issue #2): both previously
   rebuilt only `.quiz-mount` widgets, never `.exer` (exercise) ones, so a

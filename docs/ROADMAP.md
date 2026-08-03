@@ -331,7 +331,16 @@ review status stable before adding 46 questions.
   and the API `reset()` path falsely reported session-only when only an
   already-inert legacy key failed to remove. All three fixed and
   re-validated (145 dependency-free checks, 9 real-browser Playwright
-  tests across both projects, 7 mutation tests total). Left unchecked
+  tests across both projects, 7 mutation tests total). **A second round
+  of independent review then found the fix for the second defect above
+  (making the banner `position:fixed`) had itself introduced a real
+  obstruction defect** (QL-026's second addendum): a fixed banner
+  reserves no layout space, so it could visually cover the page's own
+  bottom-most content and, at narrow widths, the mobile sidebar's own
+  bottom-most nav links, both still clickable underneath it. Fixed with
+  a live-measured `--storage-warning-h` reservation that `.content` and
+  `.sidebar` both account for (148 dependency-free checks, 15
+  real-browser Playwright tests, 8 mutation tests total). Left unchecked
   pending independent review and merge; the remaining Milestone 1 work
   below (analytics semantics, content-pack decision, provenance fields,
   image-manifest normalization, broader API contract tests) is out of

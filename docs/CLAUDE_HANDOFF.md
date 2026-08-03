@@ -1572,7 +1572,7 @@ key* an outcome is stored under, not *whether* the exercise DOM re-renders
 after `importJSON()`/`reset()` — those still only call
 `$all('.quiz-mount').forEach(buildQuiz)`, unchanged.)
 
-### Storage failure — draft PR open 2026-08-03, corrected 2026-08-03, not yet merged
+### Storage failure — draft PR open 2026-08-03, corrected 2026-08-03 (twice), not yet merged
 
 ~~The application silently tolerates `localStorage` write failure while the
 UI may still imply that progress was saved.~~ Addressed on branch
@@ -1607,6 +1607,21 @@ key failed to remove while the canonical v2 state was genuinely durable
 — now path-dependent (API path depends only on the v2 write; the UI
 path, which removes rather than overwrites `PKEY`, still correctly
 depends on both operations).
+
+**A second round of independent review then found the fixed-position
+warning banner itself could obstruct content** (`docs/QUALITY_LOG.md`
+QL-026's second addendum): `position:fixed` (added to fix viewport
+visibility) removes the banner from document flow, so nothing
+downstream reserved room for it — it could sit on top of the page's own
+bottom-most content and, at narrow widths, on top of the mobile
+sidebar's own bottom-most nav links, both still clickable underneath it.
+Fixed by keeping a `--storage-warning-h` custom property in sync with
+the banner's live rendered height and having `.content`/`.sidebar`
+reserve that much space whenever it is shown — `pointer-events:none` on
+the banner alone was considered and rejected, since it would let clicks
+through without removing the visual obstruction. Verified with real
+`document.elementFromPoint()` hit-testing and rectangle-intersection
+checks, not rectangle math alone.
 
 **Draft PR titled "Communicate session-only progress when storage fails
 (Issue 2)" is open against `main`, CI green, awaiting independent review

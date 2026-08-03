@@ -589,6 +589,34 @@ it never appears for a module change that was not actually durably
 written; it goes blank (not an alternate message) when session-only, to
 avoid 17 redundant messages competing with the one global banner.
 
+**Non-obstruction (corrected 2026-08-03, QL-026's second addendum).**
+`position:fixed` removes an element from normal flow, so nothing
+downstream previously reserved room for the banner — independent review
+found it could sit visually on top of the page's own bottom-most course
+content and, at narrow widths, on top of the mobile sidebar's own
+bottom-most nav links, both still fully hit-testable underneath it
+(`position:fixed` does not disable pointer events). `pointer-events:none`
+on the banner alone was rejected as a fix: it would let clicks pass
+through but the banner would still visually cover whatever is under it.
+Instead, a `--storage-warning-h` custom property (declared on `:root`,
+default `0px`) is kept in sync with the banner's actual live rendered
+height by `setStorageWarningReservedHeight()` — called synchronously
+inside `updateStorageWarning()` whenever it shows/hides the banner (an
+immediate `getBoundingClientRect()` read right after the DOM mutation,
+forcing an on-demand layout rather than waiting a frame), and reactively
+by a `ResizeObserver` (`wireStorageWarningReservedSpace()`, wired once
+from `init()`) for any later size change with no accompanying
+`persistState` transition — text rewrapping at a new width, browser
+zoom, a web font finishing load, or a longer localized message. `.content`'s
+bottom padding and `.sidebar`'s own `height` (both the desktop sticky
+version and the mobile fixed/off-canvas version) each add or subtract
+this same variable, so real layout space is reserved for the banner in
+every affected scroll region whenever it is shown, and the reservation
+collapses back to exactly `0px` the moment it hides, with no separate
+class-toggling required — the variable is the single source of truth.
+`ResizeObserver` is assumed present (no polyfill), consistent with this
+file's existing unguarded `IntersectionObserver` usage.
+
 **Public API.** `CytoCourse.getPersistenceStatus()` returns
 `{persistent, reason}` (a plain object, not a DOM-scraping requirement).
 No raw browser exception text is ever exposed. A new `'persistence'`
@@ -629,7 +657,7 @@ success) — this is a status-only side effect, not a weakening of the
 atomic guarantee, since it changes no progress data and fires no
 progress-bearing event.
 
-21 new tests in `tests/dom-behavior.mjs` (124 → 145) and 9 new
+24 new tests in `tests/dom-behavior.mjs` (124 → 148) and 15 new
 real-browser Playwright tests in
 `tests/e2e/storage-failure-warning.spec.mjs` cover: ordinary actions
 (quiz answer, exercise answer, module-completion UI, `markModule()`)
@@ -642,24 +670,35 @@ full and partial failure (including the API/UI path-dependent partial-
 legacy-key-failure distinction above); `importJSON()`'s narrow
 status-only exception without weakening atomicity; the corrected
 sticky-`'unavailable'`-survives-a-failed-import sequence, in both a
-dependency-free and a real-browser test; and the corrected
-`position:fixed` warning's viewport-intersection proof at a deep scroll
-position, in both configured Playwright projects. **Mutation-tested**
-(7 targeted reversions total, each confirmed to fail exactly the tests
-that depend on the guard it removed, then reverted and confirmed
-byte-identical via `diff`): restoring the old silent catch in
-`saveProgress()`; allowing "Saved — nice work." without checking
-`persistState.persistent`; clearing session-only status before a write
-is confirmed to succeed (`markPersistent()` moved ahead of the
-`setItem()` call); letting the UI Reset handler reload unconditionally;
-restoring the unconditional `markSessionOnly('write-failed')` in
-`importJSON()`'s catch (caught by both the dependency-free and the
-real-browser sticky-`'unavailable'` test); restoring the
-`v1Removed && v2Cleared` gate for the API Reset path's persistence
-status; and restoring the original in-flow, non-fixed
+dependency-free and a real-browser test; the corrected `position:fixed`
+warning's viewport-intersection proof at a deep scroll position, in both
+configured Playwright projects; and the non-obstruction correction —
+rectangle-intersection and real `elementFromPoint()` hit-testing proving
+a course control and the mobile sidebar's final nav link both remain
+fully outside the banner's rectangle and fully operable, reserved-space
+stability under repeated failures, clean reservation collapse on
+recovery (with scroll-extent and scroll-position proof, not just the
+custom property's own value), correct behavior when the message wraps to
+multiple lines at 390px, and no transition applied under a
+reduced-motion preference. **Mutation-tested** (8 targeted reversions
+total, each confirmed to fail exactly the tests that depend on the guard
+it removed, then reverted and confirmed byte-identical via `diff`):
+restoring the old silent catch in `saveProgress()`; allowing "Saved —
+nice work." without checking `persistState.persistent`; clearing
+session-only status before a write is confirmed to succeed
+(`markPersistent()` moved ahead of the `setItem()` call); letting the UI
+Reset handler reload unconditionally; restoring the unconditional
+`markSessionOnly('write-failed')` in `importJSON()`'s catch (caught by
+both the dependency-free and the real-browser sticky-`'unavailable'`
+test); restoring the `v1Removed && v2Cleared` gate for the API Reset
+path's persistence status; restoring the original in-flow, non-fixed
 `.storage-warning` CSS (caught by both deep-scroll Playwright tests,
-under both projects). Full record: `docs/QUALITY_LOG.md` QL-026 and its
-addendum.
+under both projects); and removing only the `.content`/`.sidebar`
+space-reservation `calc()` terms while leaving the fixed banner and its
+measurement JS intact (caught by the mobile-sidebar overlap test and
+both recovery/scroll-extent tests, for genuine overlap and
+missing-reservation reasons respectively). Full record:
+`docs/QUALITY_LOG.md` QL-026 and its two addenda.
 
 ## Public API
 

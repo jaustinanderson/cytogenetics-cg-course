@@ -1792,6 +1792,127 @@ No question, answer, exercise, scoring, mastery/accuracy semantics,
 stable-ID format, migration policy, `SCHEMA_V`, stale-ID policy, import
 schema, or content-pack decision changed by this correction either.
 
+### Correction — the fixed warning could obstruct content and navigation, added 2026-08-03
+
+Independent review of the correction above (head `e84cf6b`) confirmed
+the three prior fixes correct — CI green, the sticky-`'unavailable'`
+clobber genuinely prevented, the API Reset path's status genuinely
+path-dependent — but found one further real defect: making
+`#storageWarning` `position:fixed` (to guarantee viewport visibility at
+any scroll depth) removed it from normal document flow, so nothing
+downstream reserved room for it. While shown, it could sit visually on
+top of the page's own bottom-most course content and, at narrow widths,
+on top of the mobile sidebar's own bottom-most nav links — both still
+fully hit-testable underneath it, since `position:fixed` does not
+disable pointer events. The prior "document position unchanged" test
+proved the banner didn't shift *earlier* content, which is necessary but
+not sufficient: it says nothing about whether anything ended up
+underneath the banner's own rectangle.
+
+**Fix:** a `--storage-warning-h` custom property (declared on `:root`,
+default `0px`) is kept in sync with the banner's actual live rendered
+height by a new `setStorageWarningReservedHeight()` — called
+synchronously inside `updateStorageWarning()` whenever it shows/hides
+the banner, and reactively by a new `ResizeObserver`
+(`wireStorageWarningReservedSpace()`, wired once from `init()`) for any
+later size change with no accompanying `persistState` transition (text
+rewrapping at a new width, browser zoom, a web font finishing load, a
+longer localized message). `.content`'s bottom padding and `.sidebar`'s
+own `height` (both the desktop sticky version and the mobile
+fixed/off-canvas version) each add or subtract this same variable, so
+real layout space is reserved for the banner in every affected scroll
+region whenever it is shown. `pointer-events:none` on the banner alone
+was considered and rejected: it would let clicks pass through but the
+banner would still visually cover whatever was underneath it — the fix
+had to remove the obstruction itself, not merely its side effect on
+clicks. See `docs/ARCHITECTURE.md`'s "Non-obstruction" paragraph for the
+full mechanism.
+
+**3 new dependency-free tests** in `tests/dom-behavior.mjs` (145 → 148)
+cover what is meaningfully checkable without a real layout engine: that
+`document.documentElement.style.getPropertyValue('--storage-warning-h')`
+tracks shown (a non-zero `NNpx` value, read via the harness's new
+`Node.getBoundingClientRect()` stub — zero when `[hidden]`, a plausible
+non-zero height otherwise) vs. hidden (`'0px'`) state; that recovery
+clears it back to `'0px'` alongside the banner; and that repeated
+failures keep it stable rather than drifting. `tests/dom-harness.mjs`
+gained a `getBoundingClientRect()` stub on `Node`, a `style.setProperty`/
+`getPropertyValue`/`removeProperty` stub (course code sets the custom
+property via the standard `setProperty()` API, not direct assignment),
+and a `ResizeObserver` stub mirroring the existing `IntersectionObserver`
+one.
+
+**6 new real-browser Playwright tests** in
+`tests/e2e/storage-failure-warning.spec.mjs` (9 → 15, all under both
+configured projects except two narrow-width-specific ones gated with
+`test.skip` below 980px, matching this suite's established convention)
+replace the prior "document position unchanged" assertion with direct
+non-obstruction proofs:
+
+- a course control at the very end of the page sits fully outside the
+  banner's rectangle (`boundingBox()` intersection check) and — proven
+  via real `document.elementFromPoint()` hit-testing at its center, not
+  rectangle math alone — is not intercepted by the banner, and remains
+  clickable
+- the banner never overlaps the sticky header's rectangle
+- at 390×844 with the mobile sidebar open, the final nav link becomes
+  fully visible strictly above the banner's top edge, does not overlap
+  it, hit-tests correctly, and activating it still closes the sidebar
+  normally
+- repeated failures keep the reserved space (`--storage-warning-h`, read
+  via `getComputedStyle`) at a single stable value rather than
+  accumulating
+- recovery collapses the reservation cleanly: `document.documentElement.scrollHeight`
+  returns exactly to its pre-failure baseline (not merely "close to,"
+  and specifically isolated from two confounds found while writing this
+  test — a lazy-loaded figure that only fetches once scrolled near,
+  settled via a targeted `waitForFunction` before measuring baseline
+  rather than the racier `networkidle`; and marking a *different* module
+  complete for the recovery action than for the initial failure, which
+  itself changes page height independent of the reservation, fixed by
+  toggling the *same* module's control on then off instead — matching
+  this course's standing discipline of isolating exactly one variable
+  per assertion) and `window.scrollY` is unchanged
+- at 390px width the message is confirmed to actually wrap to multiple
+  lines (checked against computed `line-height`, not assumed from
+  message length) and the reservation still exactly covers the taller,
+  wrapped banner with no overlap
+- no CSS transition applies to the banner or `.content` regardless of
+  motion preference, and `.sidebar`'s own (legitimate, unrelated,
+  pre-existing) open/close slide transition is still correctly
+  suppressed under an explicit `prefers-reduced-motion: reduce`
+  emulation
+
+**Mutation-tested:**
+
+8. Removed only the `var(--storage-warning-h)` terms from `.content`'s
+   padding and both `.sidebar` height rules, leaving the fixed banner
+   and its measurement JS completely intact — failed the mobile-sidebar
+   final-link test (rectangle overlap correctly detected) and both
+   recovery/scroll-extent tests (the page no longer grows while the
+   banner is shown), across both projects where applicable. The
+   course-control-near-the-bottom, sticky-header, repeated-failure, and
+   multi-line-wrap tests did not fail under this specific mutation in
+   this content's current layout (existing incidental spacing already
+   happened to leave enough clearance in those particular cases) —
+   reverted and confirmed `index.html` byte-identical via `diff` before
+   committing regardless, since the mutation's purpose is proving the
+   guard is load-bearing somewhere, which it clearly is.
+
+Full local validation after this correction: `npm test` (148/148),
+`npx playwright test tests/e2e/storage-failure-warning.spec.mjs`
+(consistently passing across repeated runs; two pre-existing,
+already-documented `networkidle`-based flakes in tests unrelated to this
+correction — "a failed write shows the accessible warning..." and the
+sticky-`'unavailable'` real-browser test — each independently confirmed
+to pass in isolation, matching this repository's standing
+parallel-worker-contention flake pattern), and the complete
+`npx playwright test` suite.
+
+No question, answer, exercise, scoring, mastery/accuracy semantics,
+stable-ID format, migration policy, `SCHEMA_V`, stale-ID policy, import
+schema, or content-pack decision changed by this correction either.
+
 ## Gates still open
 
 ### Browser behavior

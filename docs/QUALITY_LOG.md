@@ -3069,3 +3069,128 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   that is not guaranteed to be within the initial viewport should assert
   viewport intersection (e.g. Playwright's `toBeInViewport()`), not
   merely CSS visibility.
+
+### Addendum 2 — the fix for one correction (fixed-position visibility) introduced a new, real obstruction defect
+
+- **Status:** Corrected on the same branch
+  (`claude/issue-2-storage-failure-mode`), before merge. Independent
+  review at head `e84cf6bfb27574c8117dd2781f5b84ae33301b80` confirmed
+  the three prior corrections (addendum 1) all genuinely correct, then
+  found one further real defect in the fixed-position banner itself.
+- **Finding — confirmed, the fixed banner could obstruct content and
+  navigation.** `position:fixed` removes an element from the normal
+  document flow entirely, so nothing downstream of `#storageWarning` in
+  the document reserved any room for it. While shown, it could
+  therefore sit visually on top of the page's own bottom-most course
+  content and, on narrow widths, on top of the mobile sidebar's own
+  bottom-most nav links — both still fully hit-testable underneath it,
+  since `position:fixed` does not disable default pointer events. The
+  dependency-free/real-browser tests added by addendum 1 proved the
+  banner intersects the viewport at any scroll depth (`toBeInViewport()`)
+  and proved earlier page content didn't shift position — necessary
+  proofs, but neither one checked whether anything ended up positioned
+  *underneath the banner's own rectangle*, which is the actual
+  obstruction risk a fixed overlay introduces.
+- **Impact:** None shipped — PR #20 remained draft/unmerged throughout;
+  found and fixed before merge.
+- **Cause:** Fixing one defect (viewport visibility, via
+  `position:fixed`) introduced a different one (obstruction) as a direct
+  side effect of the fix's own mechanism, and the test suite added
+  alongside that fix tested only the property the fix was aimed at, not
+  the new failure mode the fix's own mechanism newly permitted.
+- **Correct action:** When a fix's mechanism itself changes a structural
+  property of an element (here: removing it from document flow), audit
+  for what guarantees that structural property was previously providing
+  incidentally, and reproduce whether the fix silently drops any of them
+  before trusting the fix is complete — visibility and non-obstruction
+  are separate properties that do not imply each other.
+- **Correction:** Added a `--storage-warning-h` custom property
+  (declared on `:root`, default `0px`) kept in sync with the banner's
+  actual live rendered height by a new `setStorageWarningReservedHeight()`
+  — called synchronously inside `updateStorageWarning()` on every
+  show/hide (an immediate post-mutation `getBoundingClientRect()` read,
+  forcing on-demand layout rather than waiting a frame), and reactively
+  by a new `ResizeObserver` (`wireStorageWarningReservedSpace()`, wired
+  once from `init()`) for any later size change with no accompanying
+  `persistState` transition — text rewrapping at a new width, browser
+  zoom, a web font finishing load, a longer localized message.
+  `.content`'s bottom padding and `.sidebar`'s own `height` (both the
+  desktop sticky version and the mobile fixed/off-canvas version) each
+  add or subtract this same variable, so real layout space is reserved
+  for the banner in every affected scroll region whenever it is shown,
+  collapsing back to `0px` the instant it hides. `pointer-events:none`
+  on the banner alone was considered and explicitly rejected: it would
+  let clicks pass through the banner but the banner would still visually
+  cover whatever was underneath it -- the fix needed to remove the
+  obstruction itself, not merely one symptom of it.
+- **3 new dependency-free tests** in `tests/dom-behavior.mjs`
+  (145 → 148), covering what is meaningfully checkable without a real
+  layout engine (the `--storage-warning-h` custom property's shown/
+  hidden tracking, its collapse on recovery, and its stability across
+  repeated failures) using new `Node.getBoundingClientRect()`,
+  `style.setProperty()`/`getPropertyValue()`/`removeProperty()`, and
+  `ResizeObserver` stubs added to `tests/dom-harness.mjs`.
+- **6 new real-browser Playwright tests** in
+  `tests/e2e/storage-failure-warning.spec.mjs` (9 → 15) replace the
+  prior "document position unchanged" assertion (necessary but
+  insufficient, per the Finding above) with direct non-obstruction
+  proofs: rectangle-intersection AND real `document.elementFromPoint()`
+  hit-testing for a course control at the very end of the page and, at
+  390×844 with the mobile sidebar open, its final nav link (which must
+  also become fully visible strictly above the banner and remain fully
+  operable, closing the sidebar normally on activation); no overlap with
+  the sticky header; reserved-space stability across repeated failures;
+  clean reservation collapse on recovery proven via
+  `document.documentElement.scrollHeight` and `window.scrollY` (not just
+  the custom property's own value); correct behavior when the message
+  wraps to multiple lines at 390px width; and no transition applied
+  under an explicit `prefers-reduced-motion: reduce` emulation. Full
+  coverage list: `docs/VALIDATION.md`'s "Correction — the fixed warning
+  could obstruct content and navigation."
+- **Two test-isolation defects were found and fixed while writing the
+  recovery/scroll-extent test**, before it was trusted as a correct
+  measurement: (1) a lazy-loaded (`loading="lazy"`) figure only actually
+  fetches and renders once scrolled near, so `waitForLoadState('networkidle')`
+  raced it non-deterministically under parallel-worker contention,
+  fixed by waiting on a targeted `waitForFunction` checking `.complete`
+  for images near the current scroll position specifically (not every
+  `<img>` on the page, which would hang forever on a lazy image never
+  scrolled near); (2) an earlier version of the test marked two
+  *different* modules complete (one to trigger the failure, a different
+  one to trigger recovery) — marking a module complete grows the page
+  slightly on its own (a "done" state change), a content change entirely
+  unrelated to the reservation under test, which was being
+  misattributed to a reservation-cleanup defect. Fixed by toggling the
+  *same* module's control on then off, returning the page's own content
+  to its exact original state so any remaining `scrollHeight` difference
+  could only be attributable to the reservation itself.
+- **Mutation-tested:** removed only the three `var(--storage-warning-h)`
+  consumption terms (`.content`'s padding, and both the desktop and
+  mobile `.sidebar` height rules), leaving the fixed banner, the
+  `:root` variable declaration, and all of the measurement JS completely
+  intact — failed the mobile-sidebar final-link test (rectangle overlap
+  correctly detected: the final link's box and the banner's box were
+  confirmed overlapping) and both
+  recovery/scroll-extent tests (the page's `scrollHeight` no longer grew
+  while the banner was shown), across both projects where each
+  respectively applies. The course-control-at-the-bottom, sticky-header,
+  repeated-failure, and multi-line-wrap tests did not independently fail
+  under this specific mutation given this content's current incidental
+  spacing — reverted regardless and confirmed `index.html`
+  byte-identical to the pre-mutation file via `diff` before committing,
+  since the mutation's purpose (proving the reservation is load-bearing
+  somewhere) was already clearly demonstrated by the failures it did
+  produce.
+- **Full local validation:** `npm test` (148/148),
+  `npx playwright test tests/e2e/storage-failure-warning.spec.mjs`
+  (consistently passing across repeated runs, aside from the two
+  pre-existing, already-documented `networkidle` flakes noted above,
+  each confirmed passing in isolation), and the complete
+  `npx playwright test` suite.
+- **Prevention:** A fix for one accessibility/correctness property (here:
+  guaranteed viewport visibility) can silently trade away a different
+  one (non-obstruction) if the fix's own mechanism removes a guarantee
+  the element previously had for free (here: occupying flow space).
+  Whenever a fix changes an element's position/flow scheme, explicitly
+  re-derive and test every property that scheme change could plausibly
+  affect, rather than only the property the fix was originally aimed at.

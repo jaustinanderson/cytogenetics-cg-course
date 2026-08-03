@@ -257,7 +257,48 @@ test.describe("correction: sticky 'unavailable' survives a failed import", () =>
   });
 });
 
-test.describe("correction: the warning is perceivable at any scroll depth", () => {
+/** Pure geometry: do two Playwright boundingBox() rectangles overlap? */
+function rectsOverlap(a, b) {
+  if (!a || !b) return false;
+  return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+}
+
+/**
+ * True hit-testing (not just rectangle math): does the real point at the
+ * center of `locator`'s box actually resolve, via document.elementFromPoint,
+ * to that element or one of its descendants? This is what proves a fixed
+ * overlay isn't silently intercepting clicks even when rectangles appear
+ * not to overlap on paper.
+ */
+async function centerHitTestResolvesTo(page, locator) {
+  const box = await locator.boundingBox();
+  const handle = await locator.elementHandle();
+  return page.evaluate(
+    ([x, y, target]) => {
+      const hit = document.elementFromPoint(x, y);
+      return hit === target || Boolean(target && target.contains(hit));
+    },
+    [box.x + box.width / 2, box.y + box.height / 2, handle],
+  );
+}
+
+/* ============================ correction: non-obstruction (QL-026 addendum 2) ============================
+   A prior correction made #storageWarning position:fixed to guarantee
+   viewport visibility at any scroll depth (see the describe block
+   above). Independent review found that fix could itself obstruct
+   content: a fixed element occupies no space in normal flow, so nothing
+   downstream reserved room for it -- the banner could sit visually on
+   top of the page's own bottom-most content and, on narrow widths, the
+   mobile sidebar's own bottom-most nav links, both still fully
+   hit-testable underneath it (position:fixed does not disable pointer
+   events). The "document position unchanged" assertion previously used
+   here proved the banner didn't shift EARLIER content -- necessary, but
+   not sufficient, since it says nothing about whether anything ended up
+   underneath the banner's own rectangle. These tests instead prove
+   non-obstruction directly: rectangle intersection, real hit-testing via
+   elementFromPoint, and pre/post-recovery scroll-extent comparisons. */
+
+test.describe("correction: the warning never obstructs content, navigation, or the header", () => {
   test("the warning intersects the current viewport, does not steal focus, and does not duplicate when a failure occurs deep in the page", async ({
     page,
   }) => {
@@ -270,9 +311,9 @@ test.describe("correction: the warning is perceivable at any scroll depth", () =
 
     const warning = page.locator("#storageWarning");
     await expect(warning).toBeVisible();
-    // The real proof this fix targets: not merely rendered somewhere on
-    // the (very tall) page, but actually intersecting the viewport the
-    // learner is currently looking at.
+    // The real proof the viewport-visibility fix targets: not merely
+    // rendered somewhere on the (very tall) page, but actually
+    // intersecting the viewport the learner is currently looking at.
     await expect(warning).toBeInViewport();
 
     const activeElementIsWarning = await page.evaluate(
@@ -287,7 +328,89 @@ test.describe("correction: the warning is perceivable at any scroll depth", () =
     await expect(warning).toBeInViewport();
   });
 
-  test("recovery after a deep-page failure removes the warning and leaves the rest of the page layout undisturbed", async ({
+  test("a course control near the viewport bottom sits fully outside the banner's rectangle, hit-tests correctly, and remains clickable", async ({
+    page,
+  }) => {
+    await failStorageWrites(page);
+    await page.goto("/");
+    await page.locator('.mark-complete[data-mod="m1"]').click();
+
+    const warning = page.locator("#storageWarning");
+    await expect(warning).toBeVisible();
+
+    // The very last mark-complete control on the page -- exactly the
+    // control that would sit directly behind an unreserved fixed bottom
+    // banner once scrolled to the end of the page.
+    const lastControl = page.locator(".mark-complete").last();
+    await lastControl.scrollIntoViewIfNeeded();
+
+    const [warningBox, controlBox] = await Promise.all([warning.boundingBox(), lastControl.boundingBox()]);
+    expect(rectsOverlap(warningBox, controlBox), JSON.stringify({ warningBox, controlBox })).toBe(false);
+    expect(await centerHitTestResolvesTo(page, lastControl)).toBe(true);
+
+    await lastControl.click();
+    await expect(lastControl).toHaveClass(/done/);
+  });
+
+  test("the warning never overlaps the sticky header", async ({ page }) => {
+    await failStorageWrites(page);
+    await page.goto("/");
+    await page.locator('.mark-complete[data-mod="m1"]').click();
+
+    const [warningBox, headerBox] = await Promise.all([
+      page.locator("#storageWarning").boundingBox(),
+      page.locator(".topbar").boundingBox(),
+    ]);
+    expect(rectsOverlap(warningBox, headerBox), JSON.stringify({ warningBox, headerBox })).toBe(false);
+  });
+
+  test("at 390x844 with the mobile sidebar open, the final nav link is fully visible above the banner, does not overlap it, hit-tests correctly, and remains fully operable", async ({
+    page,
+  }) => {
+    test.skip((page.viewportSize()?.width ?? 0) >= 980, "the off-canvas mobile sidebar only exists below 980px");
+    await failStorageWrites(page);
+    await page.goto("/");
+    await page.locator('.mark-complete[data-mod="m1"]').click();
+    await expect(page.locator("#storageWarning")).toBeVisible();
+
+    await page.locator("#navToggle").click();
+    await expect(page.locator("#sidebar")).toHaveClass(/open/);
+
+    const finalLink = page.locator("#sidebarNav .nav-link").last();
+    await finalLink.scrollIntoViewIfNeeded();
+
+    const warningBox = await page.locator("#storageWarning").boundingBox();
+    const linkBox = await finalLink.boundingBox();
+    expect(rectsOverlap(warningBox, linkBox), JSON.stringify({ warningBox, linkBox })).toBe(false);
+    // Fully ABOVE the banner's top edge -- not merely non-overlapping on
+    // a technicality (e.g. clipped short by the sidebar's own bounds so
+    // its box never reaches the banner's rectangle in the first place).
+    expect(linkBox.y + linkBox.height).toBeLessThanOrEqual(warningBox.y + 1);
+    expect(await centerHitTestResolvesTo(page, finalLink)).toBe(true);
+
+    await finalLink.click();
+    await expect(page.locator("#sidebar")).not.toHaveClass(/open/);
+  });
+
+  test("repeated failures keep the reserved space stable, not accumulating across each additional failure", async ({ page }) => {
+    await failStorageWrites(page);
+    await page.goto("/");
+
+    const reservedHeight = () => page.evaluate(
+      () => getComputedStyle(document.documentElement).getPropertyValue("--storage-warning-h").trim(),
+    );
+
+    await page.locator('.mark-complete[data-mod="m1"]').click();
+    const reservedAfterFirst = await reservedHeight();
+    expect(reservedAfterFirst).not.toBe("0px");
+
+    await page.locator('.mark-complete[data-mod="m2"]').click();
+    await page.locator('.mark-complete[data-mod="m3"]').click();
+    expect(await reservedHeight()).toBe(reservedAfterFirst);
+    await expect(page.locator("#storageWarning")).toHaveCount(1);
+  });
+
+  test("recovery hides the warning and collapses the reserved space cleanly, with no leftover empty strip and no unexpected scroll offset", async ({
     page,
   }) => {
     await page.addInitScript(() => {
@@ -299,32 +422,117 @@ test.describe("correction: the warning is perceivable at any scroll depth", () =
       };
     });
     await page.goto("/");
-
-    const lateModuleButton = page.locator('.mark-complete[data-mod="m15"]');
+    // Web fonts finishing an async load, and -- critically -- this
+    // course's lazy-loaded (`loading="lazy"`) figures only actually
+    // fetching and rendering once scrolled near, can each change the
+    // page's total height for reasons entirely unrelated to the
+    // reservation under test. Scroll to the target module FIRST (which
+    // triggers any nearby lazy image load) and let things settle, THEN
+    // take the baseline measurement from that same scroll position --
+    // otherwise a lazy image loading in between the baseline and later
+    // measurements would masquerade as a reservation-cleanup defect.
+    await page.evaluate(() => document.fonts && document.fonts.ready);
+    const lateModuleButton = page.locator('.mark-complete[data-mod="m10"]');
     await lateModuleButton.scrollIntoViewIfNeeded();
-    // Document-relative position (not Playwright's viewport-relative
-    // boundingBox()), since clicking m16 below in this same test
-    // auto-scrolls the page -- a viewport-relative box would change with
-    // scroll position alone, unrelated to whether the layout itself
-    // shifted. position:fixed never occupies flow space, so #m15's
-    // document position must be identical before the warning appears,
-    // while it is showing, and after it clears -- proving "restores the
-    // normal layout" by proving the layout was never actually disturbed.
-    const documentTop = () => page.evaluate(() => {
-      const el = document.querySelector("#m15");
-      const rect = el.getBoundingClientRect();
-      return rect.top + window.scrollY;
-    });
-    const topBefore = await documentTop();
+    // A direct, deterministic signal that any lazy image near THIS scroll
+    // position has actually finished loading and settled its own layout --
+    // waitForLoadState('networkidle') is an indirect proxy for this and
+    // raced the lazy image under parallel-worker contention (the fetch
+    // could start late enough that the idle window closes before it, or
+    // after it, non-deterministically). Scoped to images currently near
+    // the viewport, not every `<img>` on the page -- a `loading="lazy"`
+    // image elsewhere, never scrolled near, would otherwise never trigger
+    // its fetch and this would hang forever waiting on it.
+    await page.waitForFunction(() => Array.from(document.images)
+      .filter((img) => {
+        const r = img.getBoundingClientRect();
+        return r.bottom > -500 && r.top < window.innerHeight + 500;
+      })
+      .every((img) => img.complete));
 
-    await lateModuleButton.click();
+    const scrollExtent = () => page.evaluate(() => document.documentElement.scrollHeight);
+    const reservedHeight = () => page.evaluate(
+      () => getComputedStyle(document.documentElement).getPropertyValue("--storage-warning-h").trim(),
+    );
+    const scrollExtentBaseline = await scrollExtent();
+    const scrollYBefore = await page.evaluate(() => window.scrollY);
+
+    // Deliberately not scrolled to the absolute bottom, so a shrinking
+    // max-scroll extent on recovery cannot itself force an unrelated
+    // scroll-position change -- isolating this assertion to the
+    // reservation's own behavior. Toggling the SAME module's
+    // mark-complete control on then off (rather than marking two
+    // different modules) is deliberate too: marking a module complete
+    // grows the page slightly on its own (a "done" state/checkmark), a
+    // content change unrelated to the reservation -- toggling it back
+    // off before the final measurement returns the page's own content to
+    // its exact original state, so any remaining scrollHeight difference
+    // can only be attributable to the reservation itself.
+    await lateModuleButton.click(); // mark complete -- write fails
     await expect(page.locator("#storageWarning")).toBeInViewport();
-    expect(await documentTop()).toBe(topBefore);
+    expect(await reservedHeight()).not.toBe("0px");
+    expect(await scrollExtent()).toBeGreaterThan(scrollExtentBaseline);
 
     await page.evaluate(() => { window.__failWrites = false; });
-    await page.locator('.mark-complete[data-mod="m16"]').click();
+    await lateModuleButton.click(); // unmark -- write succeeds, content reverts to baseline
 
     await expect(page.locator("#storageWarning")).toBeHidden();
-    expect(await documentTop()).toBe(topBefore);
+    expect(await reservedHeight()).toBe("0px");
+    expect(await scrollExtent()).toBe(scrollExtentBaseline);
+    expect(await page.evaluate(() => window.scrollY)).toBe(scrollYBefore);
+  });
+
+  test("the banner wraps to multiple lines at 390px width and still reserves exactly enough space, with no overlap", async ({
+    page,
+  }) => {
+    test.skip((page.viewportSize()?.width ?? 0) >= 980, "asserts the narrow-width, multi-line-wrapped case specifically");
+    await failStorageWrites(page);
+    await page.goto("/");
+    await page.locator('.mark-complete[data-mod="m1"]').click();
+
+    const warning = page.locator("#storageWarning");
+    await expect(warning).toBeVisible();
+    const [box, lineHeightPx] = await Promise.all([
+      warning.boundingBox(),
+      warning.evaluate((el) => parseFloat(getComputedStyle(el).lineHeight)),
+    ]);
+    // Confirms the message actually wraps here -- the premise this test
+    // needs to be meaningful -- rather than assuming it from message
+    // length alone.
+    expect(box.height, "the message must actually wrap to more than one line at this width").toBeGreaterThan(lineHeightPx * 1.5);
+
+    const reserved = await page.evaluate(
+      () => getComputedStyle(document.documentElement).getPropertyValue("--storage-warning-h").trim(),
+    );
+    expect(parseFloat(reserved)).toBeGreaterThanOrEqual(box.height - 1);
+
+    const lastControl = page.locator(".mark-complete").last();
+    await lastControl.scrollIntoViewIfNeeded();
+    const controlBox = await lastControl.boundingBox();
+    expect(rectsOverlap(box, controlBox), JSON.stringify({ box, controlBox })).toBe(false);
+  });
+
+  test("the banner and the elements that reserve space for it never animate that reservation, with or without a reduced-motion preference", async ({ page }) => {
+    await page.goto("/");
+    // #storageWarning and .content never transition at all -- the
+    // reservation change is instant by design, regardless of motion
+    // preference, so there is nothing here for prefers-reduced-motion to
+    // need to suppress in the first place.
+    const instantAlways = await page.evaluate(() => {
+      const selectors = ["#storageWarning", ".content"];
+      return selectors.map((sel) => getComputedStyle(document.querySelector(sel)).transitionDuration);
+    });
+    for (const d of instantAlways) { expect(d).toBe("0s"); }
+
+    // .sidebar legitimately transitions its own open/close slide (unrelated
+    // to the reservation), which is why it is checked separately: under an
+    // explicit reduced-motion preference, this course's existing global
+    // `*{transition:none!important}` rule must still suppress it.
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.reload();
+    const sidebarDurationReduced = await page.evaluate(
+      () => getComputedStyle(document.querySelector(".sidebar")).transitionDuration,
+    );
+    expect(sidebarDurationReduced).toBe("0s");
   });
 });

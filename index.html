@@ -31,6 +31,14 @@
     --sans:"IBM Plex Sans","Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
     --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,"Courier New",monospace;
     --sidebar-w:300px; --header-h:64px;
+    /* Live-measured height of the fixed #storageWarning banner, kept in
+       sync with its actual rendered box by
+       setStorageWarningReservedHeight() in the PROGRESS section of the
+       script below -- 0px whenever the banner is hidden. .content and
+       .sidebar both reserve this much extra space so the fixed banner
+       never overlaps course content or navigation; see the
+       .storage-warning CSS comment for the full rationale. */
+    --storage-warning-h:0px;
   }
   *{box-sizing:border-box}
   html{scroll-behavior:smooth}
@@ -80,7 +88,10 @@
   .sidebar{
     position:sticky; top:var(--header-h); align-self:flex-start;
     width:var(--sidebar-w); flex:0 0 var(--sidebar-w);
-    height:calc(100vh - var(--header-h)); overflow-y:auto;
+    /* Shrinks by the reserved warning height so this column's own
+       scrollable area (overflow-y:auto) never extends behind the fixed
+       #storageWarning banner -- see that rule's comment. */
+    height:calc(100vh - var(--header-h) - var(--storage-warning-h)); overflow-y:auto;
     border-right:1px solid var(--line); background:var(--surface-2);
     padding:1.1rem .8rem 3rem;
   }
@@ -102,7 +113,11 @@
   .navlist a.done .nav-check{display:inline}
   .nav-section{font-size:.68rem;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-faint);font-weight:700;margin:1rem .55rem .35rem;padding-top:.6rem;border-top:1px dashed var(--line)}
 
-  .content{flex:1 1 auto;min-width:0;padding:clamp(1rem,2.4vw,2.2rem) clamp(1rem,3vw,2.6rem) 5rem;max-width:980px}
+  /* The bottom padding grows by the reserved warning height (0px
+     whenever it's hidden) so the fixed #storageWarning banner never
+     overlaps the tail end of scrolled course content -- see that rule's
+     comment. */
+  .content{flex:1 1 auto;min-width:0;padding:clamp(1rem,2.4vw,2.2rem) clamp(1rem,3vw,2.6rem) calc(5rem + var(--storage-warning-h));max-width:980px}
 
   /* ---------- Hero / dashboard ---------- */
   .hero{background:linear-gradient(160deg,#0e2c4d 0%,#123a63 55%,#0c5566 100%);color:#eaf3fb;border-radius:18px;padding:clamp(1.4rem,3vw,2.4rem);box-shadow:var(--shadow);position:relative;overflow:hidden}
@@ -404,7 +419,34 @@
      (a clicked, now-disabled quiz option can still return focus to the
      document on its own, an existing, unrelated behavior this task does
      not change or claim to preserve). No transition/animation is used,
-     so there is nothing for prefers-reduced-motion to need to disable. */
+     so there is nothing for prefers-reduced-motion to need to disable.
+
+     Non-obstruction correction (2026-08-03, same QL-026 addendum):
+     because this element occupies no space in normal flow, nothing
+     downstream of it in the document previously reserved room for it --
+     the banner sat visually on TOP of the page's own bottom-most content
+     and, on narrow widths, on top of the mobile sidebar's own bottom-most
+     nav links, both still fully hit-testable underneath it (position:fixed
+     does not remove default pointer-events). pointer-events:none on the
+     banner alone was rejected as a fix: it would let clicks pass through
+     but the banner would still visually cover whatever is under it.
+     Instead, --storage-warning-h (declared on :root above) is kept in
+     sync with the banner's actual live rendered height by
+     setStorageWarningReservedHeight() (called synchronously whenever
+     updateStorageWarning() shows/hides it, and reactively by a
+     ResizeObserver for any later size change -- text wrapping at a new
+     width, browser zoom, a web font finishing load, or a different
+     localized message length) -- 0px whenever hidden. .content's bottom
+     padding and .sidebar's own height (both the desktop sticky version
+     and the mobile fixed/off-canvas version) each add or subtract this
+     same variable, so real layout space is reserved for the banner in
+     every affected scroll region: nothing legitimate is ever positioned
+     underneath its rectangle while it is shown, and recovery (hiding it)
+     cleanly collapses that reservation back to zero with no leftover
+     empty strip. See tests/e2e/storage-failure-warning.spec.mjs for the
+     real-browser rectangle-intersection and hit-testing proof, and
+     index.html's setStorageWarningReservedHeight()/
+     wireStorageWarningReservedSpace() for the measurement mechanics. */
   .storage-warning{position:fixed;left:0;right:0;bottom:0;z-index:100;background:var(--no-bg);border-top:1px solid var(--no-line);color:var(--no-ink);padding:.7rem 1.2rem;font-size:.88rem;font-weight:600;text-align:center;line-height:1.4;box-shadow:0 -2px 12px rgba(10,25,40,.12)}
   .storage-warning[hidden]{display:none}
 
@@ -412,7 +454,7 @@
   @media (max-width:980px){
     .two-col{grid-template-columns:1fr}
     .hamburger{display:inline-flex}
-    .sidebar{position:fixed;left:0;top:var(--header-h);height:calc(100vh - var(--header-h));z-index:85;transform:translateX(-105%);transition:transform .25s ease;box-shadow:0 10px 40px rgba(10,25,40,.18);width:min(86vw,320px)}
+    .sidebar{position:fixed;left:0;top:var(--header-h);height:calc(100vh - var(--header-h) - var(--storage-warning-h));z-index:85;transform:translateX(-105%);transition:transform .25s ease;box-shadow:0 10px 40px rgba(10,25,40,.18);width:min(86vw,320px)}
     .sidebar.open{transform:translateX(0)}
     .content{max-width:none;width:100%}
     .topbar-progress{display:none}
@@ -4010,7 +4052,46 @@
   function markPersistent(){ setPersistState(true, null); }
   function markSessionOnly(reason){ setPersistState(false, reason); }
 
-  /* Non-modal, in-flow, dedup'd against its own current content -- see
+  /* Keeps --storage-warning-h (declared on :root) equal to the fixed
+     #storageWarning banner's actual current rendered height, or 0px
+     when it is hidden -- see the .storage-warning CSS comment's
+     "Non-obstruction correction" for why .content/.sidebar reserve this
+     much space. Reads getBoundingClientRect() rather than trusting a
+     assumed/cached number specifically because the real height varies
+     with text wrapping (narrow widths, a longer localized message),
+     browser zoom, and font metrics -- none of which this function
+     should have to predict; it only has to measure what actually
+     rendered. Clamped to a non-negative integer pixel count purely as
+     defensive rounding, not because a negative height is expected. */
+  function setStorageWarningReservedHeight(px){
+    var root = document.documentElement;
+    if(!root || !root.style || typeof root.style.setProperty !== 'function'){ return; }
+    root.style.setProperty('--storage-warning-h', Math.max(0, Math.ceil(px || 0)) + 'px');
+  }
+
+  /* One-time hookup (called once from init()): a ResizeObserver keeps
+     the reservation accurate for size changes that happen WITHOUT a
+     persistState transition -- e.g. rotating/resizing the viewport
+     changes how the message wraps, or a web font finishes loading and
+     shifts text metrics, while the banner stays shown throughout. The
+     synchronous measurement in updateStorageWarning() below already
+     handles the ordinary show/hide case immediately, with no need to
+     wait for this observer's next tick; this exists purely as an
+     ongoing safety net for later, transition-less size changes.
+     ResizeObserver is assumed present (no polyfill/fallback): every
+     evergreen browser this course targets has supported it since 2020,
+     consistent with this file's existing unguarded IntersectionObserver
+     usage elsewhere. */
+  function wireStorageWarningReservedSpace(){
+    var el = $('#storageWarning');
+    if(!el || typeof ResizeObserver === 'undefined'){ return; }
+    var ro = new ResizeObserver(function(){
+      setStorageWarningReservedHeight(el.hidden ? 0 : el.getBoundingClientRect().height);
+    });
+    ro.observe(el);
+  }
+
+  /* Non-modal, fixed, dedup'd against its own current content -- see
      the .storage-warning CSS comment for the accessibility rationale.
      Fixed, plain-language wording; never includes a raw exception. */
   function updateStorageWarning(){
@@ -4018,10 +4099,16 @@
     if(!el){ return; }
     if(persistState.persistent){
       if(!el.hidden){ el.hidden = true; el.textContent = ''; }
+      setStorageWarningReservedHeight(0);
       return;
     }
     var msg = 'Your browser storage is unavailable, so your progress is being kept only for this session in this browser tab. Reloading, closing this tab, or leaving this page may lose progress that has not already been saved.';
     if(el.hidden || el.textContent !== msg){ el.hidden = false; el.textContent = msg; }
+    // Read AFTER the mutation above so this reflects the box that will
+    // actually render (a synchronous DOM write followed by a synchronous
+    // geometry read forces the browser to lay out on demand -- no need
+    // to wait for the ResizeObserver's next tick for this initial value).
+    setStorageWarningReservedHeight(el.getBoundingClientRect().height);
   }
 
   /* Renames any surviving legacy-format (position-derived) keys in
@@ -4814,6 +4901,7 @@
 
   /* ============================ INIT ============================ */
   function init(){
+    wireStorageWarningReservedSpace();
     loadProgress();
     buildNav();
     buildDashboard();

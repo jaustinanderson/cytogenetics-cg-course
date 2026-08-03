@@ -2526,6 +2526,68 @@ test("UI #resetBtn: only legacy-key removal fails -- old progress could still re
   assert.equal(env.document.getElementById("storageWarning").hidden, false);
 });
 
+/* ============================ storage-failure detection: non-obstruction correction (QL-026 addendum 2) ============================
+   Independent review found the fixed #storageWarning banner (added by
+   the prior correction to guarantee viewport visibility at any scroll
+   depth) could itself overlap ordinary course content and the mobile
+   sidebar's own nav links, since position:fixed removes the element
+   from normal flow and nothing downstream reserved room for it. Fixed
+   by keeping a --storage-warning-h custom property on
+   document.documentElement in sync with the banner's live rendered
+   height (0 when hidden), which .content's bottom padding and
+   .sidebar's own height both add/subtract -- see index.html's
+   setStorageWarningReservedHeight() and the .storage-warning CSS
+   comment's "Non-obstruction correction" for the full account. This
+   harness has no real layout engine, so the geometry/hit-testing proof
+   itself lives in tests/e2e/storage-failure-warning.spec.mjs; what IS
+   meaningfully checkable here, without layout, is the state/property
+   connection itself: does the custom property genuinely track shown vs.
+   hidden, using the harness's Node.getBoundingClientRect() stub (0 when
+   [hidden], a plausible non-zero height otherwise, per its own comment
+   in tests/dom-harness.mjs). */
+
+test("the --storage-warning-h custom property reflects the banner's shown/hidden state, read via the standard getPropertyValue() API", () => {
+  const env = boot({ failStorageWrites: true });
+  const root = env.document.documentElement;
+
+  assert.equal(root.style.getPropertyValue("--storage-warning-h"), "0px", "hidden at boot: no reservation");
+
+  env.body.querySelectorAll(".mark-complete")[0].click();
+
+  const reservedWhileShown = root.style.getPropertyValue("--storage-warning-h");
+  assert.notEqual(reservedWhileShown, "0px", "shown: a non-zero reservation is set from the banner's own rendered height");
+  assert.match(reservedWhileShown, /^\d+px$/, "expressed as a plain pixel length");
+});
+
+test("recovery clears the reserved height back to 0px alongside the banner itself", () => {
+  const env = boot();
+  const originalSetItem = env.storage.setItem;
+  env.storage.setItem = () => { throw new Error("fail"); };
+  env.body.querySelectorAll(".mark-complete")[0].click();
+
+  const root = env.document.documentElement;
+  assert.notEqual(root.style.getPropertyValue("--storage-warning-h"), "0px");
+
+  env.storage.setItem = originalSetItem;
+  env.body.querySelectorAll(".mark-complete")[1].click();
+
+  assert.equal(root.style.getPropertyValue("--storage-warning-h"), "0px", "the reservation collapses back to 0 the moment the banner itself hides");
+  assert.equal(env.document.getElementById("storageWarning").hidden, true);
+});
+
+test("repeated failures keep the reservation at a single, stable value rather than accumulating across each dedup'd no-op transition", () => {
+  const env = boot({ failStorageWrites: true });
+  const root = env.document.documentElement;
+
+  env.body.querySelectorAll(".mark-complete")[0].click();
+  const afterFirst = root.style.getPropertyValue("--storage-warning-h");
+  env.body.querySelectorAll(".mark-complete")[1].click();
+  env.body.querySelectorAll(".mark-complete")[2].click();
+  const afterThird = root.style.getPropertyValue("--storage-warning-h");
+
+  assert.equal(afterThird, afterFirst, "the same banner, same text, same rendered height -- the reservation does not drift across repeated failures");
+});
+
 /* ============================ print ============================ */
 
 test("the print control invokes printing and toggles the print class", () => {

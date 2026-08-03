@@ -31,7 +31,17 @@ export class Node {
     this.attributes = Object.create(null);
     this.childNodes = [];
     this.parentNode = null;
-    this.style = {};
+    // A plain object with the CSS custom-property methods (setProperty/
+    // getPropertyValue/removeProperty) layered on -- course code sets
+    // ordinary properties directly (`el.style.width = '50%'`) AND sets
+    // custom properties via setProperty() (see
+    // setStorageWarningReservedHeight() in index.html), and both forms
+    // need to coexist on the same stub.
+    this.style = { _custom: Object.create(null),
+      setProperty(name, value) { this._custom[name] = value; },
+      getPropertyValue(name) { return this._custom[name] || ""; },
+      removeProperty(name) { const v = this._custom[name] || ""; delete this._custom[name]; return v; },
+    };
     this.disabled = false;
     this._text = "";
     this._listeners = Object.create(null);
@@ -208,6 +218,23 @@ export class Node {
   scrollIntoView() {}
   focus() { this.ownerDocumentActiveElement = true; }
   blur() {}
+
+  /**
+   * This harness has no real layout engine, so this cannot report a true
+   * rendered size -- but it stands in for the one thing course code
+   * actually branches on: whether an element is currently rendered at
+   * all. A `[hidden]` element collapses to a zero rect, exactly like a
+   * real `display:none` element would; an unhidden element reports a
+   * plausible non-zero height (overridable per test via `_mockHeight`)
+   * so code that reserves layout space based on a measured height (see
+   * setStorageWarningReservedHeight() in index.html) has something
+   * meaningfully different to react to between the two states.
+   */
+  getBoundingClientRect() {
+    if (this.hidden) { return { top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0 }; }
+    const h = this._mockHeight != null ? this._mockHeight : 40;
+    return { top: 0, left: 0, right: 0, bottom: h, width: 0, height: h };
+  }
 }
 
 /* ============================ selector engine ============================ */
@@ -466,6 +493,28 @@ export function createEnvironment(bodyHtml, options = {}) {
     return instance;
   };
 
+  // This harness has no real layout engine, so nothing ever triggers a
+  // genuine resize -- the RO's callback is exercised only if a test
+  // manually invokes it via `trigger()`. Course code's synchronous
+  // getBoundingClientRect() read at the moment persistState changes (see
+  // updateStorageWarning() in index.html) is what this harness actually
+  // exercises; the observer is here so `new ResizeObserver(...)` doesn't
+  // throw, matching how IntersectionObserverStub is stubbed above.
+  class ResizeObserverStub {
+    constructor(callback) { this.callback = callback; this.observed = []; }
+    observe(node) { this.observed.push(node); }
+    unobserve() {}
+    disconnect() { this.observed = []; }
+    trigger(node) { this.callback([{ target: node, contentRect: node.getBoundingClientRect() }]); }
+  }
+
+  const resizeObservers = [];
+  const ResizeObserverProxy = function (callback) {
+    const instance = new ResizeObserverStub(callback);
+    resizeObservers.push(instance);
+    return instance;
+  };
+
   const sandbox = {
     window: windowStub,
     document: documentStub,
@@ -475,6 +524,7 @@ export function createEnvironment(bodyHtml, options = {}) {
     localStorage: storage,
     history: { replaceState() {}, pushState() {} },
     IntersectionObserver: ObserverProxy,
+    ResizeObserver: ResizeObserverProxy,
     console,
     Date, JSON, Math, Array, Object, String, Number, Boolean, RegExp, Error,
     setTimeout, clearTimeout, setInterval, clearInterval,
@@ -490,6 +540,7 @@ export function createEnvironment(bodyHtml, options = {}) {
     body: root,
     storage,
     observers,
+    resizeObservers,
     printCalls,
     reloads,
     /** Fire DOMContentLoaded for readyState:"loading" scenarios. */
