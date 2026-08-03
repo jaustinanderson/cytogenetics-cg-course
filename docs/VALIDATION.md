@@ -1583,6 +1583,103 @@ passed. Reverted and confirmed `index.html` byte-identical via `diff`.
 
 Full record: `docs/QUALITY_LOG.md` QL-025's addendum.
 
+## Storage-failure detection and session-only progress — added 2026-08-03
+
+`tests/dom-behavior.mjs` (Issue #2, `docs/QUALITY_LOG.md` QL-026) adds 15
+dependency-free checks (124 → 139), and a new
+`tests/e2e/storage-failure-warning.spec.mjs` adds 6 real-browser
+Playwright checks (run under both configured projects — desktop-chromium
+at 1280×900 and mobile-chromium at 390×844 — satisfying the desktop/
+narrow-width requirement without a per-test viewport override). See
+`docs/ARCHITECTURE.md` "Storage-failure detection and session-only mode"
+for the full state-machine/policy record. Covers:
+
+- **ordinary actions under a forced write failure** (quiz answer,
+  exercise answer, module-completion UI click, public `markModule()`):
+  in-memory progress and rendered UI still advance; durable storage stays
+  at its last-saved state; the `#storageWarning` banner appears; the
+  per-module "Saved — nice work." text does not; `getPersistenceStatus()`
+  reports `{persistent:false, reason:'write-failed'}`; existing
+  `answer`/`exercise`/`progress` event counts are unchanged
+- **initialization read-failure vs. corrupt JSON, kept distinct:** a
+  genuine `localStorage.getItem()` failure (new `failStorageReads`
+  harness option) initializes safely with a blank state and shows the
+  warning immediately, before any user action, reporting
+  `reason:'unavailable'`; corrupt-but-readable stored JSON still falls
+  through to a blank v2 state exactly as before this change, with no
+  warning and `persistent:true`
+- **no silent overwrite of unseen prior progress:** storage is seeded
+  with genuine prior progress the app cannot see this session (its read
+  is broken), and a later action is proven to never even call
+  `setItem()` while `reason:'unavailable'` holds — the seeded value is
+  read back byte-for-byte untouched, not merely "unobserved to change"
+- **repeated-failure deduplication:** three failed actions in a row fire
+  exactly one `persistence` event and produce exactly one warning
+  element, with progress still correctly recorded for each action (no
+  corruption or double-counting)
+- **full-state recovery after a write-only failure:** two actions fail to
+  persist; once storage becomes writable again, the next action's save
+  persists the entire accumulated state (all three changes, not just the
+  one that happened to succeed), the warning/status clears only at that
+  point, and every accumulated change survives a real reload
+  (`tests/dom-behavior.mjs`) or the Playwright equivalent
+  (`tests/e2e/storage-failure-warning.spec.mjs`)
+- **Reset failure honesty, both paths:** the public `reset()` API returns
+  `{ok:false}` (never a false `{ok:true}`) on a full or partial storage
+  failure, still applies the blank state in memory; the UI `#resetBtn`
+  path does not call `location.reload()` on a storage-removal failure
+  (proven with no navigation occurring, via a `window`-scoped sentinel in
+  both the dependency-free and Playwright suites) and instead applies and
+  renders the blank state in place, honestly flagged session-only
+- **`importJSON()`'s narrow status-only exception:** a storage-write
+  failure during import still returns `{ok:false}`, still leaves live
+  state/storage/every progress-bearing event untouched (re-confirmed via
+  the existing atomicity assertion helper), and only the separate
+  `persistence` status/event reflects the genuinely observed failure; a
+  subsequent successful import clears session-only mode
+- **the warning's accessibility contract, real-browser only:**
+  `role="status"`, correct wording, and — checked directly via
+  `document.activeElement`, not inferred — that answering a question
+  while the warning is visible never moves focus onto the banner itself
+
+**Mutation-tested** (4 reversions in `index.html`, each run against the
+full `npm test` suite, each confirmed to fail only the tests that depend
+on the guard it removed, then reverted and confirmed byte-identical via
+`diff` before committing):
+
+1. Restored the pre-fix `saveProgress()` (unconditional silent
+   `try{setItem}catch(e){}`, no `persistState` involvement) — failed
+   exactly the 8 tests that depend on write-failure detection existing at
+   all (write-failure warning/status tests, the no-silent-overwrite test,
+   the dedup test, the recovery test, and the import status-exception
+   test), and no others.
+2. Removed the `persistState.persistent` check from the `.mark-status`
+   text condition (`state.modules[id] ? 'Saved...' : ''`) — failed
+   exactly the 2 tests that directly assert no false "Saved" text appears
+   under a write failure, and no others.
+3. Moved `markPersistent()` ahead of the `localStorage.setItem()` call in
+   `saveProgress()` (clearing session-only status before the write is
+   confirmed to succeed) — failed exactly the repeated-failure dedup
+   test, which is the one assertion sensitive to a spurious
+   persistent→session-only→persistent flicker within a single failed
+   save; the recovery test's own assertions still converge to the same
+   correct final values, so it does not independently catch this
+   mutation.
+4. Changed the UI `#resetBtn` handler to call `performReset(true)` then
+   unconditionally `location.reload()`, ignoring the returned result —
+   failed exactly the one test asserting the UI Reset path does not
+   reload on a storage-removal failure, and no others.
+
+Full local validation for this task: `npm test` (139/139), targeted
+`npx playwright test tests/e2e/storage-failure-warning.spec.mjs`
+(12/12 across both projects), and the complete
+`npx playwright test` suite (all existing + new specs).
+
+No question, answer, exercise, scoring, mastery/accuracy semantics,
+stable-ID format, migration policy, `SCHEMA_V`, stale-ID policy, import
+schema, or content-pack decision changed. `markModule()`/`addQuestions()`
+return-value semantics are unchanged.
+
 ## Gates still open
 
 ### Browser behavior

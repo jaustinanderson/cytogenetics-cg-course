@@ -2095,6 +2095,299 @@ test("a runtime-injected question's answer becomes stale when its session ends, 
   assert.equal(second.api.getStats().questionsAnswered, 1, "the exact same preserved record is picked up the moment the id is known again");
 });
 
+/* ============================ storage-failure detection / session-only mode (Issue #2) ============================
+   Confirmed defects, reproduced through the real public API and rendered
+   DOM before any fix was written: saveProgress() caught
+   localStorage.setItem() failures silently and still fired `progress`,
+   so recordAnswer()/recordExercise()/markModule() and the module-complete
+   UI kept advancing in-memory state while the learner received no
+   warning -- the "Saved -- nice work." status could appear for a module
+   change the browser had just rejected. loadProgress() also treated an
+   inaccessible store identically to "no progress yet," with no warning,
+   and conflated that with merely-corrupt stored JSON. The UI Reset
+   handler reloaded unconditionally even if the storage removal itself
+   failed. No public way existed to inspect any of this.
+
+   Policy implemented (see index.html's persistState comment and
+   docs/ARCHITECTURE.md "Storage-failure detection and session-only mode"
+   for the full account): a module-level `persistState` -- deliberately
+   NOT part of `state`, never exported/imported, no SCHEMA_V involvement
+   -- tracks {persistent, reason}. `reason: 'write-failed'` (storage was
+   confirmed readable at load; a later write failed) self-heals the
+   moment any later saveProgress() call succeeds, since that call always
+   serializes the ENTIRE current state, not a diff. `reason: 'unavailable'`
+   (the READ itself failed at load) is sticky for the whole session --
+   saveProgress() skips every write attempt while it holds, specifically
+   because a read failure means real prior progress could exist unseen,
+   and letting a later write "succeed" could silently clobber it; only a
+   reload (a fresh loadProgress() read) can clear it. Reset and
+   importJSON() are the deliberate exceptions: both are explicit
+   replace-everything actions, so both always attempt their writes
+   regardless of `reason`, honestly reporting whatever the browser
+   actually allowed. */
+
+test("a quiz answer when localStorage.setItem() throws still advances in-memory progress and the rendered UI, warns, and never falsely claims a save", () => {
+  const env = boot({ failStorageWrites: true });
+  let answerEvents = 0, progressEvents = 0;
+  env.api.on("answer", () => { answerEvents += 1; });
+  env.api.on("progress", () => { progressEvents += 1; });
+
+  const questions = env.api.getQuestions("m1");
+  const item = quizMount(env, "m1").querySelectorAll(".qitem")[0];
+  item.querySelectorAll(".qopt")[questions[0].a].click();
+
+  assert.equal(env.api.getProgress().answers[questions[0].id].c, true, "in-memory progress still advances");
+  assert.ok(item.querySelectorAll(".qopt")[questions[0].a].classList.contains("correct"), "the rendered UI still reflects the answer");
+  assert.equal(env.storage.getItem(V2_KEY), null, "durable storage remains untouched -- nothing was ever successfully saved");
+
+  const warningEl = env.document.getElementById("storageWarning");
+  assert.equal(warningEl.hidden, false, "the session-only warning is shown");
+  assert.ok(warningEl.textContent.length > 0);
+
+  assert.equal(JSON.stringify(env.api.getPersistenceStatus()), JSON.stringify({ persistent: false, reason: "write-failed" }));
+  assert.equal(answerEvents, 1, "the documented answer-event count is unaffected");
+  assert.equal(progressEvents, 1, "progress still fires exactly once, matching its existing unconditional-emit semantics");
+});
+
+test("an exercise answer when localStorage.setItem() throws still advances in-memory progress and the rendered UI, warns, and never falsely claims a save", () => {
+  const env = boot({ failStorageWrites: true });
+  let exerciseEvents = 0, progressEvents = 0;
+  env.api.on("exercise", () => { exerciseEvents += 1; });
+  env.api.on("progress", () => { progressEvents += 1; });
+
+  const host = env.body.querySelectorAll(".exer")[0];
+  const items = env.api.getExercises()[host.getAttribute("data-exer")].items;
+  host.querySelectorAll(".eopt")[items[0].answer].click();
+
+  assert.equal(env.api.getProgress().exercises[items[0].id].c, true, "in-memory progress still advances");
+  assert.equal(host.querySelector(".eh-score").textContent, `1 / ${items.length}`, "the rendered UI still reflects the answer");
+  assert.equal(env.storage.getItem(V2_KEY), null, "durable storage remains untouched");
+
+  const warningEl = env.document.getElementById("storageWarning");
+  assert.equal(warningEl.hidden, false);
+  assert.equal(JSON.stringify(env.api.getPersistenceStatus()), JSON.stringify({ persistent: false, reason: "write-failed" }));
+  assert.equal(exerciseEvents, 1);
+  assert.equal(progressEvents, 1);
+});
+
+test("marking a module complete via the UI when localStorage.setItem() throws advances the button/UI but never shows a false Saved message", () => {
+  const env = boot({ failStorageWrites: true });
+  env.body.querySelectorAll(".mark-complete")[0].click();
+
+  assert.equal(env.api.getProgress().modules.m1, true, "in-memory progress still advances");
+  assert.ok(env.body.querySelectorAll(".mark-complete")[0].classList.contains("done"), "the button still reflects completion");
+  assert.equal(
+    env.body.querySelectorAll(".mark-status")[0].textContent,
+    "",
+    "no false 'Saved — nice work.' message for a change that was not durably written",
+  );
+  assert.equal(env.storage.getItem(V2_KEY), null);
+
+  const warningEl = env.document.getElementById("storageWarning");
+  assert.equal(warningEl.hidden, false);
+  assert.equal(JSON.stringify(env.api.getPersistenceStatus()), JSON.stringify({ persistent: false, reason: "write-failed" }));
+});
+
+test("the public markModule() API when localStorage.setItem() throws still validly applies the in-memory change and getPersistenceStatus() agrees with the UI", () => {
+  const env = boot({ failStorageWrites: true });
+  const result = env.api.markModule("m1", true);
+
+  // markModule()'s `ok` has always meant "the requested id was recognized
+  // and the in-memory change was applied" -- unrelated to durability, and
+  // unchanged by this task, matching recordAnswer()/recordExercise()
+  // (which have never reported persistence either). Durability is
+  // exclusively getPersistenceStatus()'s job, checked separately below.
+  assert.equal(result.ok, true);
+  assert.equal(env.api.getProgress().modules.m1, true);
+  assert.equal(env.body.querySelectorAll(".mark-status")[0].textContent, "");
+  assert.equal(JSON.stringify(env.api.getPersistenceStatus()), JSON.stringify({ persistent: false, reason: "write-failed" }));
+});
+
+test("a localStorage read failure at initialization is distinguished from corrupt JSON: the course initializes safely, the warning shows immediately, and status reports reason:'unavailable'", () => {
+  const env = boot({ failStorageReads: true });
+
+  assert.equal(env.api.getProgress().v, 2, "the course still initializes safely, with a blank state");
+  assert.equal(JSON.stringify(env.api.getProgress().modules), JSON.stringify({}));
+
+  const warningEl = env.document.getElementById("storageWarning");
+  assert.equal(warningEl.hidden, false, "the warning is present immediately, before any user action");
+  assert.equal(JSON.stringify(env.api.getPersistenceStatus()), JSON.stringify({ persistent: false, reason: "unavailable" }));
+});
+
+test("corrupt JSON in localStorage at initialization is NOT treated as a storage-availability failure", () => {
+  const env = boot({ storage: { [V2_KEY]: "{not valid json" } });
+
+  assert.equal(env.api.getProgress().v, 2, "falls through to a blank v2 state, exactly as it always did for unparseable stored data");
+  const warningEl = env.document.getElementById("storageWarning");
+  assert.equal(warningEl.hidden, true, "no session-only warning -- storage access itself is confirmed working");
+  assert.equal(JSON.stringify(env.api.getPersistenceStatus()), JSON.stringify({ persistent: true, reason: null }));
+});
+
+test("a read failure at initialization never lets a later action silently overwrite whatever might already be in storage", () => {
+  // Seed storage with real, genuine prior progress the app can never see
+  // this session (its read is broken) -- then confirm that a later
+  // action neither claims success nor actually calls setItem, so the
+  // seeded value is provably untouched, not merely "not observed to
+  // change" by accident.
+  const genuinePriorProgress = JSON.stringify({ v: 2, modules: { m5: true }, answers: {}, exercises: {}, started: 1 });
+  const env = boot({ storage: { [V2_KEY]: genuinePriorProgress }, failStorageReads: true });
+
+  assert.equal(env.api.getProgress().modules.m5, undefined, "sanity: the app genuinely could not see the seeded prior progress");
+
+  let setItemCalled = false;
+  const originalSetItem = env.storage.setItem;
+  env.storage.setItem = (...args) => { setItemCalled = true; return originalSetItem.apply(env.storage, args); };
+
+  env.body.querySelectorAll(".mark-complete")[0].click();
+
+  assert.equal(setItemCalled, false, "no write is even attempted while the sticky 'unavailable' reason holds");
+  // getItem() itself is mocked to throw for this test (that's the failure being
+  // simulated), so read the underlying store directly via `_raw` -- a plain
+  // accessor closing over the real backing store, unaffected by the getItem
+  // override -- to confirm the seeded value was never touched.
+  assert.equal(env.storage._raw[V2_KEY], genuinePriorProgress, "the genuine prior progress in storage is byte-for-byte untouched");
+  assert.equal(
+    JSON.stringify(env.api.getPersistenceStatus()),
+    JSON.stringify({ persistent: false, reason: "unavailable" }),
+    "status stays 'unavailable', not silently cleared by the attempted action",
+  );
+});
+
+test("repeated storage-write failures across several actions create only one warning, fire the persistence event exactly once, and do not corrupt or double-count progress", () => {
+  const env = boot({ failStorageWrites: true });
+  let persistenceEvents = 0;
+  env.api.on("persistence", () => { persistenceEvents += 1; });
+
+  env.body.querySelectorAll(".mark-complete")[0].click();
+  env.body.querySelectorAll(".mark-complete")[1].click();
+  const questions = env.api.getQuestions("m1");
+  quizMount(env, "m1").querySelectorAll(".qitem")[0].querySelectorAll(".qopt")[questions[0].a].click();
+
+  assert.equal(persistenceEvents, 1, "the transition to session-only fires exactly once, not once per failed action");
+  assert.equal(env.document.querySelectorAll("#storageWarning").length, 1, "exactly one warning element, never duplicated");
+  assert.equal(env.api.getProgress().modules.m1, true);
+  assert.equal(env.api.getProgress().modules.m2, true);
+  assert.equal(Object.keys(env.api.getProgress().answers).length, 1, "no double-counted or duplicated records across the repeated failures");
+});
+
+test("recovery after a write-only failure persists the entire accumulated in-memory state on the next successful write, clears the warning only then, and survives a reload", () => {
+  const env = boot();
+  const originalSetItem = env.storage.setItem;
+  env.storage.setItem = () => { throw new Error("fail"); };
+
+  env.body.querySelectorAll(".mark-complete")[0].click(); // m1 -- fails to persist
+  env.body.querySelectorAll(".mark-complete")[1].click(); // m2 -- fails to persist
+  assert.equal(JSON.stringify(env.api.getPersistenceStatus()), JSON.stringify({ persistent: false, reason: "write-failed" }));
+  assert.equal(env.storage.getItem(V2_KEY), null, "sanity: nothing persisted yet");
+
+  env.storage.setItem = originalSetItem; // storage becomes writable again
+  env.body.querySelectorAll(".mark-complete")[2].click(); // m3 -- this write should succeed
+
+  const stored = JSON.parse(env.storage.getItem(V2_KEY));
+  assert.equal(
+    JSON.stringify(stored.modules),
+    JSON.stringify({ m1: true, m2: true, m3: true }),
+    "the successful write persists the ENTIRE accumulated state -- not only the m3 action that happened to succeed",
+  );
+  assert.equal(
+    JSON.stringify(env.api.getPersistenceStatus()),
+    JSON.stringify({ persistent: true, reason: null }),
+    "the warning/status clears only now, once the full state is actually durable",
+  );
+  assert.equal(env.document.getElementById("storageWarning").hidden, true);
+
+  const reloaded = boot({ storage: { ...env.storage._raw } });
+  assert.equal(
+    JSON.stringify(reloaded.api.getProgress().modules),
+    JSON.stringify({ m1: true, m2: true, m3: true }),
+    "every accumulated change survives a reload",
+  );
+});
+
+test("the public reset() API honestly reports failure (never {ok:true}) when a required storage operation fails, and applies the blank state in memory regardless", () => {
+  const env = boot();
+  env.body.querySelectorAll(".mark-complete")[0].click();
+  env.storage.setItem = () => { throw new Error("fail"); }; // the API path writes a blank state via setItem
+
+  const result = env.api.reset();
+
+  assert.equal(result.ok, false, "reset() must never falsely imply durable success");
+  assert.equal(JSON.stringify(env.api.getProgress().modules), JSON.stringify({}), "the blank state is still applied in memory, matching ordinary-action behavior");
+  assert.equal(JSON.stringify(env.api.getPersistenceStatus()), JSON.stringify({ persistent: false, reason: "write-failed" }));
+});
+
+test("the public reset() API honestly reports partial failure when only the legacy-key removal fails", () => {
+  const env = boot();
+  env.storage.removeItem = () => { throw new Error("fail"); };
+
+  const result = env.api.reset();
+
+  assert.equal(result.ok, false, "a partial failure is still a failure -- reset() does not claim transactional behavior the browser cannot guarantee");
+});
+
+test("a fully successful reset() (both storage operations succeed) still reports {ok:true}, a regression guard", () => {
+  const env = boot();
+  env.body.querySelectorAll(".mark-complete")[0].click();
+  const result = env.api.reset();
+  assert.equal(result.ok, true);
+  assert.equal(JSON.stringify(env.api.getPersistenceStatus()), JSON.stringify({ persistent: true, reason: null }));
+});
+
+test("the UI #resetBtn path does not reload when a required storage-removal operation fails, and instead applies the blank state honestly in place", () => {
+  const env = boot({ confirmResponses: [true] });
+  env.body.querySelectorAll(".mark-complete")[0].click();
+  env.storage.removeItem = () => { throw new Error("removal blocked"); };
+
+  env.document.getElementById("resetBtn").click();
+
+  assert.equal(env.reloads.length, 0, "no reload -- reloading here would risk silently restoring progress that did not actually get cleared");
+  assert.equal(JSON.stringify(env.api.getProgress().modules), JSON.stringify({}), "the blank state is still applied and rendered in place");
+  assert.equal(env.body.querySelectorAll(".mark-complete")[0].classList.contains("done"), false);
+  assert.equal(JSON.stringify(env.api.getPersistenceStatus()), JSON.stringify({ persistent: false, reason: "write-failed" }));
+  const warningEl = env.document.getElementById("storageWarning");
+  assert.equal(warningEl.hidden, false);
+});
+
+test("a storage-write failure during import updates the persistence status without weakening the existing atomic all-or-nothing guarantee", () => {
+  const env = boot();
+  const beforeProgress = JSON.stringify(env.api.getProgress());
+  const beforeStorage = env.storage.getItem(V2_KEY);
+  let progressEvents = 0, answerEvents = 0, exerciseEvents = 0, persistenceEvents = 0;
+  env.api.on("progress", () => { progressEvents += 1; });
+  env.api.on("answer", () => { answerEvents += 1; });
+  env.api.on("exercise", () => { exerciseEvents += 1; });
+  env.api.on("persistence", () => { persistenceEvents += 1; });
+
+  env.storage.setItem = () => { throw new Error("fail"); };
+  const result = env.api.importJSON({ v: 2, modules: { m1: true }, answers: {}, exercises: {}, started: 0 });
+
+  assert.equal(result.ok, false, "the atomic guarantee is unchanged: a failed import still reports failure");
+  assert.equal(JSON.stringify(env.api.getProgress()), beforeProgress, "live state is untouched");
+  assert.equal(env.storage.getItem(V2_KEY), beforeStorage, "storage is untouched");
+  assert.equal(progressEvents, 0, "still no progress event on a failed import, exactly as before this task");
+  assert.equal(answerEvents, 0);
+  assert.equal(exerciseEvents, 0);
+
+  // The one narrow, deliberate exception: the shared persistence status
+  // DOES reflect the genuinely-observed write failure.
+  assert.equal(persistenceEvents, 1);
+  assert.equal(JSON.stringify(env.api.getPersistenceStatus()), JSON.stringify({ persistent: false, reason: "write-failed" }));
+});
+
+test("a successful import clears session-only mode", () => {
+  const env = boot();
+  const originalSetItem = env.storage.setItem;
+  env.storage.setItem = () => { throw new Error("fail"); };
+  env.body.querySelectorAll(".mark-complete")[0].click();
+  assert.equal(JSON.stringify(env.api.getPersistenceStatus()), JSON.stringify({ persistent: false, reason: "write-failed" }));
+
+  env.storage.setItem = originalSetItem; // storage becomes writable again
+
+  const result = env.api.importJSON({ v: 2, modules: { m9: true }, answers: {}, exercises: {}, started: 0 });
+  assert.equal(result.ok, true);
+  assert.equal(JSON.stringify(env.api.getPersistenceStatus()), JSON.stringify({ persistent: true, reason: null }));
+});
+
 /* ============================ print ============================ */
 
 test("the print control invokes printing and toggles the print class", () => {
@@ -2315,7 +2608,7 @@ if (failures.length) {
   for (const gap of [
     "rendering, layout, and colour contrast",
     "true focus order, focus trapping, and Escape/inert behaviour for the mobile sidebar",
-    "live status announcements (no aria-live regions exist yet)",
+    "actual assistive-tech announcement of the role=\"status\" storage warning (this harness checks its DOM state/text only)",
     "aria-current / aria-pressed state semantics (not implemented)",
     "accessible names for instructional SVGs",
     "flashcard front/back screen-reader state",

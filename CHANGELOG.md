@@ -6,6 +6,36 @@ All notable repository changes are recorded here.
 
 ### Added
 
+- Storage-failure detection and an honest session-only warning
+  (`index.html`, Issue #2, draft PR — not yet merged): `saveProgress()`
+  previously caught every `localStorage` write error silently and still
+  advanced/reported progress as if it had been saved, `loadProgress()`
+  treated a genuine read failure identically to "no progress yet" with
+  no warning, and the UI Reset handler reloaded unconditionally even
+  when the storage removal it depended on had failed — all three
+  confirmed as real, pre-fix defects by direct execution. A new
+  `persistState` state machine now distinguishes a write-only failure
+  (self-heals the moment any later save succeeds, since every save
+  serializes the complete current state) from a read failure at
+  initialization (sticky for the session, since the app cannot rule out
+  unseen prior progress); a non-modal, `role="status"` warning banner
+  (`#storageWarning`) communicates session-only mode without stealing
+  focus mid-answer, deduplicated so repeated failures produce exactly
+  one warning; `CytoCourse.getPersistenceStatus()` and a new
+  `persistence` event expose the status publicly, with no raw browser
+  exception text ever surfaced; `reset()` now returns `{ok:false}`
+  honestly on a storage failure instead of an unconditional
+  `{ok:true}`; `importJSON()`'s existing all-or-nothing atomicity
+  guarantee is unweakened, with only the shared persistence status
+  reflecting a genuinely observed write failure. Does not change
+  `SCHEMA_V`, stable-ID formats, migration policy, the stale-ID policy,
+  scoring, or existing `progress`/`answer`/`exercise` event semantics.
+  15 new dependency-free regression tests in `tests/dom-behavior.mjs`
+  (124 → 139) and 6 new real-browser Playwright tests in
+  `tests/e2e/storage-failure-warning.spec.mjs`, mutation-tested across
+  4 reversions. See `docs/QUALITY_LOG.md` QL-026 and
+  `docs/ARCHITECTURE.md` "Storage-failure detection and session-only
+  mode" for the full record.
 - Exercise widgets now correctly re-render after `CytoCourse.importJSON()`
   and `CytoCourse.reset()` (`index.html`, Issue #2): both previously
   rebuilt only `.quiz-mount` widgets, never `.exer` (exercise) ones, so a

@@ -389,7 +389,7 @@ function createStorage(seed = {}) {
  * suitable for running the inline script.
  *
  * @param {string} bodyHtml static markup extracted from index.html
- * @param {object} options  { storage, readyState, failStorageWrites }
+ * @param {object} options  { storage, readyState, failStorageWrites, failStorageReads }
  */
 export function createEnvironment(bodyHtml, options = {}) {
   const root = new Node("body");
@@ -398,6 +398,14 @@ export function createEnvironment(bodyHtml, options = {}) {
   const storage = createStorage(options.storage || {});
   if (options.failStorageWrites) {
     storage.setItem = () => { throw new Error("QuotaExceededError"); };
+  }
+  // Applied before the inline script ever runs, so loadProgress()'s very
+  // first localStorage.getItem() call already throws -- the only way to
+  // exercise the Issue #2 "genuine storage-read failure at
+  // initialization" path (distinct from failStorageWrites, and distinct
+  // from merely-corrupt stored JSON, which does not set this).
+  if (options.failStorageReads) {
+    storage.getItem = () => { throw new Error("SecurityError: storage access denied"); };
   }
 
   const documentListeners = Object.create(null);

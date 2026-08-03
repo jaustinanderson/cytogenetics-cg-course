@@ -305,7 +305,28 @@ review status stable before adding 46 questions.
   provenance fields, image-manifest normalization, broader API contract
   tests) is explicitly out of scope for that PR and stays open
 - [ ] Validate and communicate `localStorage` availability instead of silently
-  claiming progress was saved
+  claiming progress was saved — branch `claude/issue-2-storage-failure-mode`
+  (Issue #2, **draft PR open, not yet merged**): `saveProgress()` previously
+  caught every storage-write error silently and still advanced/reported
+  progress as if it had been saved; `loadProgress()` treated a genuine
+  read failure identically to "no progress yet," with no warning; the UI
+  Reset handler reloaded even when the storage removal it depended on had
+  failed. All three confirmed as real, pre-fix defects by direct
+  execution. A new `persistState` state machine now distinguishes a
+  write-only failure (self-heals on the next successful full-state save)
+  from a read failure at initialization (sticky for the session, since
+  the app cannot rule out unseen prior progress), surfaces a non-modal
+  `role="status"` warning, adds `CytoCourse.getPersistenceStatus()` and a
+  `persistence` event, and makes `reset()` report `{ok:false}` honestly
+  on a storage failure instead of an unconditional `{ok:true}`. Does not
+  change `SCHEMA_V`, stable-ID formats, migration policy, the stale-ID
+  policy, scoring, or existing `progress`/`answer`/`exercise` event
+  semantics. See `docs/QUALITY_LOG.md` QL-026 for the full decision
+  record and `docs/VALIDATION.md` for test coverage. Left unchecked
+  pending independent review and merge; the remaining Milestone 1 work
+  below (analytics semantics, content-pack decision, provenance fields,
+  image-manifest normalization, broader API contract tests) is out of
+  scope for that PR and stays open regardless
 - [ ] Define analytics semantics:
   - current behavior: last-attempt mastery
   - candidate addition: total-attempt accuracy

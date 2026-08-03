@@ -2829,3 +2829,108 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   method. Any claim about a specific public API method's own effect
   needs a test that calls that method directly and checks state before
   anything else (a reload, a navigation) could have contributed.
+
+## QL-026 — Storage failures were caught and swallowed silently, so learners could lose progress with no warning and no honest failure report
+
+- **Status:** Corrected on branch `claude/issue-2-storage-failure-mode`
+  (Issue #2), draft PR open for independent review, not yet merged.
+- **Finding — confirmed, multiple related defects.** Reproduced through
+  the real public API and rendered DOM before any fix was written: (1)
+  `saveProgress()` caught every `localStorage.setItem()` error silently
+  and still called `emit('progress', null)`, so `recordAnswer()`,
+  `recordExercise()`, `markModule()`, and the module-completion UI all
+  kept advancing in-memory state with no indication the write had
+  failed; (2) a module's `.mark-status` text could read "Saved — nice
+  work." for a change the browser had just rejected; (3) `markModule()`
+  and the API `reset()` method both returned `{ok:true}` regardless of
+  whether the underlying storage operation actually succeeded; (4) no
+  public method existed to inspect persistence status at all; (5)
+  `loadProgress()` treated a genuine `localStorage.getItem()` failure
+  identically to "no progress yet" (a blank state, no warning) — the
+  same code path corrupt-but-readable stored JSON already used, so a
+  learner with real prior progress in an inaccessible store had no way
+  to know their existing progress might not even have been read; (6) the
+  UI `#resetBtn` handler called `location.reload()` unconditionally,
+  even when the storage-removal calls it depended on had thrown,
+  presenting a Reset that had not actually cleared storage as if it had.
+- **Impact:** None shipped — found and fixed within this same branch
+  before merge; the branch is a draft PR awaiting independent review,
+  not yet on `main`.
+- **Cause:** Every storage-touching call site had its own local
+  try/catch (or none), each independently deciding what "failure" meant
+  and whether to tell the learner — with no shared state to know that
+  storage was currently unavailable, no shared decision about when it
+  was safe to write, and no shared place to surface a warning.
+- **Correct action:** Centralize persistence status in one place, gate
+  every storage-touching call site through it, and make an explicit
+  policy decision about which situations are stale-safe to keep trying
+  (a write failure, since a full serialize of `state` always
+  self-heals) versus not (a read failure, since the app may not have
+  seen everything already in storage) — rather than trusting every call
+  site to independently reimplement that judgment.
+- **Correction:** Added a module-level `persistState` variable
+  (`{persistent, reason}`, `reason` one of `null | 'unavailable' |
+  'write-failed'`) — deliberately kept outside the persisted `state`
+  object, never exported/imported, no `SCHEMA_V` involvement.
+  `setPersistState()` is the single place that updates it, updates the
+  new `#storageWarning` DOM banner (`role="status"`, chosen over
+  `role="alert"` specifically so it never steals focus mid-answer), and
+  fires a new `persistence` event — and only does any of that when the
+  status genuinely changes, so repeated failures produce one warning,
+  not one per failed action. `loadProgress()` now separates the
+  `getItem()` call (its own try/catch, setting `reason:'unavailable'` on
+  failure, before any `JSON.parse()` is attempted) from parsing the
+  result (unchanged corrupt-JSON fallback, no warning). `saveProgress()`
+  skips the write attempt entirely while `reason === 'unavailable'`
+  (`'unavailable'` is sticky for the session — only a reload, a fresh
+  read, can clear it) but otherwise always attempts the full-state write
+  and reports the genuine outcome (`reason:'write-failed'` self-heals
+  the moment any later write succeeds, since it is always a full
+  serialize). `performReset()`, a new function shared by both the UI
+  `#resetBtn` handler and the API `reset()` method, tracks each storage
+  operation's own success independently and reports `{ok: v1Removed &&
+  v2Cleared}` — `reset()` no longer unconditionally claims `{ok:true}`,
+  and the UI handler now only reloads when both operations actually
+  succeeded. `importJSON()` gained one narrow, deliberate exception: a
+  storage-write failure during import now also calls
+  `markSessionOnly('write-failed')` — a status-only side effect that
+  changes no progress data and fires no progress-bearing event, so the
+  existing all-or-nothing atomicity guarantee (still `{ok:false}`, still
+  no live-state/storage/event change on failure) is unweakened. Added
+  `CytoCourse.getPersistenceStatus()` returning `{persistent, reason}`;
+  no raw browser exception text is ever exposed through it or the
+  warning text. `markModule()`/`addQuestions()` were deliberately left
+  unchanged — their `{ok:true}` has always meant "the in-memory action
+  was valid," a narrower, already-accurate claim distinct from
+  `reset()`'s previous unconditional `{ok:true}`, which was a direct,
+  provable false-durability claim.
+- **15 new tests** in `tests/dom-behavior.mjs` (124 → 139) plus 6 new
+  real-browser Playwright tests in
+  `tests/e2e/storage-failure-warning.spec.mjs` (run under both the
+  desktop and narrow/mobile configured projects). Full coverage list:
+  `docs/VALIDATION.md` "Storage-failure detection and session-only
+  progress."
+- **Mutation-tested**, each reverted and confirmed `index.html`
+  byte-identical via `diff` before committing: (1) restored the original
+  unconditional silent-catch `saveProgress()` — failed exactly the 8
+  tests that depend on write-failure detection existing; (2) removed the
+  `persistState.persistent` guard from the `.mark-status` text condition
+  — failed exactly the 2 tests asserting no false "Saved" text under a
+  write failure; (3) moved `markPersistent()` ahead of the
+  `localStorage.setItem()` call, clearing session-only status before the
+  write was confirmed to succeed — failed the repeated-failure dedup
+  test (the assertion sensitive to a spurious flicker within one failed
+  save; the recovery test's own final-state assertions still converged
+  to the same correct values, so it did not independently catch this);
+  (4) changed the UI `#resetBtn` handler to reload unconditionally,
+  ignoring `performReset()`'s result — failed exactly the one test
+  asserting the UI Reset path does not reload on a storage-removal
+  failure. Full local validation: `npm test` (139/139),
+  `tests/e2e/storage-failure-warning.spec.mjs` (12/12 across both
+  projects), and the complete `npx playwright test` suite.
+- **Prevention:** A silent `catch(e){}` around a storage write is a
+  policy decision disguised as error handling — it decides, by omission,
+  that the user never needs to know their action was not saved. Any
+  catch block around a persistence operation should be treated as a
+  point requiring an explicit, documented decision about what the user
+  is told, not a place to make failure invisible.

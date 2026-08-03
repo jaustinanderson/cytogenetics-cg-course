@@ -449,6 +449,126 @@ loop (leaving `init()` and the helper itself untouched) failed exactly
 the five tests that depend on either call site rebuilding an exercise
 widget. Full record: `docs/QUALITY_LOG.md` QL-025.
 
+### Storage-failure detection and session-only mode
+
+As of 2026-08-03 (Issue #2, `docs/QUALITY_LOG.md` QL-026), the course
+distinguishes a browser storage failure from ordinary "no progress yet"
+and communicates it honestly, rather than silently swallowing it.
+Previously `saveProgress()` caught every `localStorage.setItem()` error
+and still fired `progress` as if nothing had happened — quiz/exercise
+answers, module completion, and the "Saved — nice work." status text all
+kept behaving as if durably saved even when the browser had just
+rejected the write; `loadProgress()` treated an inaccessible store
+identically to "empty," with no warning; and the UI Reset handler
+reloaded unconditionally, which could make a Reset that did not actually
+clear storage look successful. All three were reproduced against the
+pre-fix code before any fix was written.
+
+**State model.** A module-level `persistState` variable —
+`{persistent: boolean, reason: null | 'unavailable' | 'write-failed'}` —
+tracks live persistence status. It is deliberately **not** part of the
+persisted `state` object: never exported, never imported, no `SCHEMA_V`
+involvement, and not itself written to storage.
+
+- `reason: 'write-failed'` — storage was confirmed readable at load; a
+  later write failed. **Self-heals**: `saveProgress()` always serializes
+  the entire current `state`, never a diff, so the very next successful
+  write persists every change accumulated during the failure and clears
+  the warning in the same step. It never clears merely because a
+  lightweight probe succeeds — only because a real full-state write did.
+- `reason: 'unavailable'` — the *read* itself failed during
+  `loadProgress()`. **Sticky for the session**: `saveProgress()` skips
+  every write attempt while this reason holds (`localStorage.setItem()`
+  is never even called), because a read failure means real prior
+  progress could exist unseen, and letting an incremental write
+  "succeed" anyway risks silently clobbering it the moment storage
+  becomes writable again. Only a reload (a fresh `loadProgress()` read)
+  can clear it.
+- Corrupt-but-readable stored JSON is explicitly **not** an availability
+  failure — `loadProgress()` splits the `getItem()` call (wrapped in its
+  own try/catch, setting `'unavailable'` on failure) from `JSON.parse()`
+  of the result (a separate try/catch that falls through to a blank
+  state on failure, exactly as before this change, with no warning).
+
+**Explicit-action exception.** `performReset()` (shared by the UI
+`#resetBtn` handler and the API `reset()` method) and `importJSON()`
+always attempt their storage operations regardless of the sticky
+`'unavailable'` reason. Both are deliberate, explicit "replace
+everything" actions — Reset requires `window.confirm()`, import takes an
+explicit caller-supplied payload — fundamentally different in risk
+profile from incremental, easy-to-overlook accumulation from ordinary
+learning actions.
+
+**User-visible warning.** `#storageWarning`, a non-modal, in-flow
+`role="status"` region (implicit `aria-live="polite"`/`aria-atomic="true"`)
+between the header and the main layout. `role="status"` was chosen over
+`role="alert"` specifically so it never steals focus while a learner is
+mid-answer. `setPersistState()` only touches the DOM and fires the
+`'persistence'` event when the status *genuinely changes* — repeated
+failures update it once, not once per failed action. Per-module
+`.mark-status` text ("Saved — nice work.") now also requires
+`persistState.persistent`, so it never appears for a module change that
+was not actually durably written; it goes blank (not an alternate
+message) when session-only, to avoid 17 redundant messages competing
+with the one global banner.
+
+**Public API.** `CytoCourse.getPersistenceStatus()` returns
+`{persistent, reason}` (a plain object, not a DOM-scraping requirement).
+No raw browser exception text is ever exposed. A new `'persistence'`
+event fires `{persistent, reason}` only on genuine transitions; the
+existing `progress`/`answer`/`exercise`/`content` events and their
+counts/meaning are unchanged. `reset()` now returns `{ok: false}` (never
+unconditionally `{ok: true}`) when a required storage operation fails —
+a direct correction, since its previous unconditional `{ok:true}` was a
+provable false-durability claim. `markModule()`/`addQuestions()` keep
+their existing `{ok:true}` semantics unchanged: that value has always
+meant "the requested id was recognized and the in-memory change was
+applied," a narrower claim that remains accurate regardless of
+persistence.
+
+**Reset failure honesty.** `performReset(usePkeyRemoval)` tracks each
+storage operation's own success independently (`v1Removed`, `v2Cleared`)
+and reports `{ok: v1Removed && v2Cleared}` — a partial failure (one key
+cleared, the other not) is still a failure, since the browser gives no
+transactional guarantee across two separate calls. The blank state is
+still applied in memory and every widget still rebuilt either way. The
+UI `#resetBtn` handler calls `location.reload()` only when both
+operations actually succeeded; on a partial or full failure it leaves
+the already-applied blank state and the session-only warning in place
+instead of reloading into a state that might silently restore whatever
+did not actually clear.
+
+**Import boundary — narrow status-only exception.** `importJSON()`'s
+existing all-or-nothing guarantee is unchanged: a storage-write failure
+during import still returns `{ok:false}`, still leaves live state and
+every rendered widget untouched, and still fires no `progress`/`answer`/
+`exercise` event. The one deliberate, narrow exception is that the
+shared `'persistence'` status **does** reflect a genuinely observed
+write failure during that attempt (and clears on a later genuine
+success) — this is a status-only side effect, not a weakening of the
+atomic guarantee, since it changes no progress data and fires no
+progress-bearing event.
+
+15 new tests in `tests/dom-behavior.mjs` (124 → 139) and 6 new
+real-browser Playwright tests in
+`tests/e2e/storage-failure-warning.spec.mjs` cover: ordinary actions
+(quiz answer, exercise answer, module-completion UI, `markModule()`)
+under a forced write failure; the read-failure/corrupt-JSON distinction
+at initialization, including proof that a read failure never lets a
+later action silently overwrite unseen prior storage content; repeated-
+failure deduplication; full-state recovery after a write-only failure,
+including survival across a real reload; UI and API Reset honesty under
+full and partial failure; and `importJSON()`'s narrow status-only
+exception without weakening atomicity. **Mutation-tested** (4 targeted
+reversions, each confirmed to fail exactly the tests that depend on the
+guard it removed, then reverted and confirmed byte-identical via
+`diff`): restoring the old silent catch in `saveProgress()`; allowing
+"Saved — nice work." without checking `persistState.persistent`;
+clearing session-only status before a write is confirmed to succeed
+(`markPersistent()` moved ahead of the `setItem()` call); and letting
+the UI Reset handler reload unconditionally. Full record:
+`docs/QUALITY_LOG.md` QL-026.
+
 ## Public API
 
 `window.CytoCourse` provides read, analysis, write, and event methods. Read

@@ -1572,11 +1572,24 @@ key* an outcome is stored under, not *whether* the exercise DOM re-renders
 after `importJSON()`/`reset()` — those still only call
 `$all('.quiz-mount').forEach(buildQuiz)`, unchanged.)
 
-### Storage failure
+### Storage failure — draft PR open 2026-08-03, not yet merged
 
-The application silently tolerates `localStorage` write failure while the UI may
-still imply that progress was saved. Detect storage availability and clearly
-indicate session-only mode.
+~~The application silently tolerates `localStorage` write failure while the
+UI may still imply that progress was saved.~~ Addressed on branch
+`claude/issue-2-storage-failure-mode` (Issue #2): a `persistState` state
+machine now distinguishes a write-only failure (self-heals on the next
+successful full-state save) from a read failure at initialization
+(sticky for the session), a non-modal `role="status"` warning
+(`#storageWarning`) communicates session-only mode without stealing
+focus, `CytoCourse.getPersistenceStatus()` and a `persistence` event
+expose it publicly, and `reset()`/the UI Reset handler now report/act on
+genuine storage-operation outcomes instead of assuming success. See
+`docs/QUALITY_LOG.md` QL-026, `docs/ARCHITECTURE.md` "Storage-failure
+detection and session-only mode," and `docs/VALIDATION.md` for the full
+record. **Draft PR titled "Communicate session-only progress when
+storage fails (Issue 2)" is open against `main`, CI green, awaiting
+independent review — not yet merged.** Treat this risk as still open
+until that PR lands.
 
 ### Analytics semantics
 
