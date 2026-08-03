@@ -766,6 +766,74 @@ test("API Reset clears progress and rebuilds quiz widgets", () => {
   assert.ok(options.every((option) => !option.disabled), "the rebuilt quiz is answerable again");
 });
 
+/* --- the stale-ID policy's one deliberate exception (Issue #2 / QL-024
+   addendum): "preserve, filter at read" governs loading, migration,
+   import, export, and every ordinary read -- but an explicit,
+   user-confirmed Reset is not a read. It intentionally deletes
+   EVERYTHING, current or stale, module or answer or exercise, in either
+   storage key, precisely because that is what a learner who clicks Reset
+   and confirms the "this cannot be undone" prompt is asking for. This is
+   proven through the real #resetBtn click path (window.confirm simulated
+   via the harness's confirmResponses queue, exactly like the existing
+   Reset tests above), not by directly clearing internal state, and with
+   BOTH current and stale records seeded at every level -- module,
+   answer, and exercise -- across BOTH the v2 and legacy v1 storage keys
+   at once, which none of the existing per-scenario Reset tests above
+   combine in one seed. */
+test("an explicit, confirmed Reset removes current AND stale records everywhere, in both storage keys, and stays cleared after reload", () => {
+  const seedEnv = boot();
+  const currentQId = seedEnv.api.getQuestions("m1")[0].id;
+  const currentExId = seedEnv.api.getExercises().ex7.items[0].id;
+  const currentModId = seedEnv.api.getModules()[0].id;
+
+  const v2Seed = {
+    v: 2,
+    modules: { [currentModId]: true, "stale-module-xyz": true },
+    answers: { [currentQId]: { c: true, n: 1, ts: 1 }, "stale-question-xyz": { c: true, n: 5, ts: 2 } },
+    exercises: { [currentExId]: { c: true, n: 1, ts: 1 }, "stale-exercise-xyz": { c: false, n: 3, ts: 3 } },
+    started: 0,
+  };
+  const v1Seed = { m1: true, "stale-v1-module": true };
+
+  const env = boot({
+    storage: { [V2_KEY]: JSON.stringify(v2Seed), [V1_KEY]: JSON.stringify(v1Seed) },
+    confirmResponses: [true],
+  });
+  // Sanity: the seed really does carry both current and stale progress
+  // before Reset runs, so a passing test below is proof of clearing, not
+  // an accident of an already-empty state.
+  assert.equal(env.api.getStats().modulesComplete, 1);
+  assert.equal(env.api.getStats().questionsAnswered, 1);
+
+  env.document.getElementById("resetBtn").click();
+
+  assert.equal(env.storage.getItem(V2_KEY), null, "v2 storage key is fully removed, stale records included");
+  assert.equal(env.storage.getItem(V1_KEY), null, "legacy v1 storage key is fully removed, stale records included");
+  assert.equal(env.reloads.length, 1, "the page reloads after a confirmed reset");
+
+  // A real Reset ends in location.reload() -- a full re-fetch and
+  // re-execution of the page. A fresh boot() against whatever now
+  // remains in storage is the same simulated-reload technique the
+  // existing "progress survives a reload" test uses.
+  const afterReload = boot({ storage: { ...env.storage._raw } });
+  const progress = afterReload.api.getProgress();
+  assert.deepEqual(Object.keys(progress.modules), [], "no module record, current or stale, survives -- getProgress() is blank");
+  assert.deepEqual(Object.keys(progress.answers), [], "no answer record, current or stale, survives");
+  assert.deepEqual(Object.keys(progress.exercises), [], "no exercise record, current or stale, survives");
+
+  const stats = afterReload.api.getStats();
+  assert.equal(stats.modulesComplete, 0);
+  assert.equal(stats.questionsAnswered, 0);
+  assert.equal(stats.questionsCorrect, 0);
+  assert.equal(stats.overallPct, null);
+
+  assert.equal(afterReload.document.getElementById("tpLabel").textContent, "0 of 17 modules complete");
+  assert.ok(
+    !afterReload.body.querySelectorAll(".mark-complete")[0].classList.contains("done"),
+    "the rendered module-complete state is cleared, not just the underlying data",
+  );
+});
+
 /* ============================ import / export ============================ */
 
 test("export and import round-trip preserves progress", () => {
@@ -1389,6 +1457,406 @@ test("null-prototype objects are accepted as valid records at every level (state
   const result = env.api.importJSON(state);
   assert.equal(result.ok, true, `expected success, got ${JSON.stringify(result)}`);
   assert.equal(env.api.getProgress().answers["m1-q1"].c, true);
+});
+
+/* ============================ stale-ID policy (Issue #2 / QL-024) ============================
+   A modules/answers/exercises key can outlive the content it once
+   described: a question renumbered or removed, an exercise item dropped,
+   a module deleted, or a runtime-injected question whose session ended.
+   Policy (see index.html's PROGRESS file-level comment for the full
+   record): PRESERVE the record under its original id -- never delete,
+   move, or quarantine it on load/migration/import -- and let every
+   current-facing consumer decide "does this id count" by checking
+   membership in the live MODULES/QUIZZES/EXERCISES data at READ time, not
+   by trusting a stored map's own keys. A real bug this closes: getStats()
+   used to count every key in state.answers regardless of whether the
+   course still recognized it, so a state holding only a stale answer
+   record reported a fabricated 100% overall accuracy -- confirmed by
+   direct execution against the pre-fix code before it was corrected. */
+
+test("known and stale question records in the same state contribute independently to getStats()", () => {
+  const env = boot();
+  const currentId = env.api.getQuestions("m1")[0].id;
+  const result = env.api.importJSON({
+    v: 2, modules: {}, exercises: {},
+    answers: {
+      [currentId]: { c: true, n: 1, ts: 1 },
+      "totally-fake-question-id": { c: true, n: 5, ts: 2 },
+    },
+    started: 0,
+  });
+  assert.equal(result.ok, true, `expected success, got ${JSON.stringify(result)}`);
+
+  const stats = env.api.getStats();
+  assert.equal(stats.questionsAnswered, 1, "only the current-content id counts toward questionsAnswered");
+  assert.equal(stats.questionsCorrect, 1);
+  assert.equal(stats.overallPct, 100, "a fabricated stale record must not dilute or inflate overallPct");
+
+  // Preserved, not deleted -- exact value-for-value intact.
+  const stale = env.api.getProgress().answers["totally-fake-question-id"];
+  assert.deepEqual(stale, { c: true, n: 5, ts: 2 }, "the stale record itself is untouched, only excluded from current stats");
+});
+
+test("known and stale exercise records in the same state: only the current record reaches rendered score", () => {
+  const seedEnv = boot();
+  const currentId = seedEnv.api.getExercises().ex7.items[0].id;
+  const seeded = {
+    v: 2, modules: {},
+    answers: {},
+    exercises: {
+      [currentId]: { c: true, n: 1, ts: 1 },
+      "stale-exercise-xyz": { c: true, n: 3, ts: 2 },
+    },
+    started: 0,
+  };
+  // Seeded directly into storage and booted fresh, rather than routed
+  // through importJSON(), because importJSON() only rebuilds quiz mounts
+  // on success (re-rendering exercise widgets after import/Reset is a
+  // separate, still-open Milestone 1 item this PR deliberately does not
+  // implement) -- a fresh boot is the documented, already-covered path by
+  // which a persisted exercise state actually reaches the rendered DOM.
+  const env = boot({ storage: { [V2_KEY]: JSON.stringify(seeded) } });
+
+  const host = env.body.querySelectorAll('.exer[data-exer="ex7"]')[0];
+  assert.equal(host.querySelector(".eh-score").textContent, "1 / 4", "the stale record must not inflate the rendered score");
+  assert.equal(host.querySelector(".eh-state").textContent, "In progress");
+
+  assert.deepEqual(
+    env.api.getProgress().exercises["stale-exercise-xyz"],
+    { c: true, n: 3, ts: 2 },
+    "the stale exercise record is preserved untouched",
+  );
+});
+
+test("a state containing only stale module/answer/exercise records produces zero current-facing figures", () => {
+  const env = boot();
+  const result = env.api.importJSON({
+    v: 2,
+    modules: { "stale-module-xyz": true },
+    answers: { "stale-question-xyz": { c: true, n: 1, ts: 1 } },
+    exercises: { "stale-exercise-xyz": { c: true, n: 1, ts: 1 } },
+    started: 0,
+  });
+  assert.equal(result.ok, true, `expected success, got ${JSON.stringify(result)}`);
+
+  const stats = env.api.getStats();
+  assert.equal(stats.modulesComplete, 0);
+  assert.equal(stats.questionsAnswered, 0);
+  assert.equal(stats.questionsCorrect, 0);
+  assert.equal(stats.overallPct, null);
+  // JSON.stringify comparison, not assert.deepEqual, against these three:
+  // tally() builds them via raw object-literal syntax inside the vm
+  // sandbox, so their prototype is that realm's own intrinsic
+  // Object.prototype, not this test file's -- assert.deepEqual (strict)
+  // checks prototype identity and fails on that alone even when every
+  // enumerable property matches, confirmed directly against Node's assert
+  // before relying on JSON.stringify here instead.
+  assert.equal(JSON.stringify(stats.byDomain), "{}");
+  assert.equal(JSON.stringify(stats.byTopic), "{}");
+  assert.equal(JSON.stringify(stats.byDifficulty), "{}");
+
+  // Every current question is reported unmastered (zero attempts), never
+  // thrown off by the presence of records for ids it doesn't recognize.
+  const unmastered = env.api.getUnmastered();
+  const totalQuestions = Object.values(env.api.getQuestions()).reduce((n, arr) => n + arr.length, 0);
+  assert.equal(unmastered.length, totalQuestions);
+  assert.ok(unmastered.every((u) => u.attempts === 0));
+
+  // Preserved, not silently dropped.
+  const progress = env.api.getProgress();
+  assert.equal(progress.modules["stale-module-xyz"], true);
+  assert.deepEqual(progress.answers["stale-question-xyz"], { c: true, n: 1, ts: 1 });
+  assert.deepEqual(progress.exercises["stale-exercise-xyz"], { c: true, n: 1, ts: 1 });
+});
+
+test("an orphaned (non-migratable) legacy exercise key survives migration inert, alongside a real migration", () => {
+  const seedEnv = boot();
+  const item0 = seedEnv.api.getExercises().ex7.items[0]; // legacyId "ex7-1"
+  const seeded = {
+    v: 2, modules: {}, answers: {},
+    exercises: {
+      "ex7-1": { c: true, n: 1, ts: 5 }, // matches item0.legacyId -- must migrate
+      "ex7-77": { c: false, n: 2, ts: 9 }, // matches no current item's legacyId -- stale, orphaned
+    },
+    started: 0,
+  };
+  const env = boot({ storage: { [V2_KEY]: JSON.stringify(seeded) } });
+
+  const progress = env.api.getProgress();
+  assert.deepEqual(progress.exercises[item0.id], { c: true, n: 1, ts: 5 }, "the real legacy key migrated to its item's stable id");
+  assert.equal(progress.exercises["ex7-1"], undefined, "the migrated legacy key is gone");
+  assert.deepEqual(
+    progress.exercises["ex7-77"],
+    { c: false, n: 2, ts: 9 },
+    "the orphaned legacy-shaped key is preserved untouched -- never deleted, never merged into item0's record",
+  );
+
+  // The orphaned key never reaches any current item's rendered score.
+  const host = env.body.querySelectorAll('.exer[data-exer="ex7"]')[0];
+  assert.equal(host.querySelector(".eh-score").textContent, "1 / 4");
+
+  // Migration actually ran (a real key changed), so it must have persisted
+  // -- and the orphaned key must still be present in the persisted form.
+  const stored = JSON.parse(env.storage.getItem(V2_KEY));
+  assert.deepEqual(stored.exercises["ex7-77"], { c: false, n: 2, ts: 9 });
+  assert.equal(stored.exercises["ex7-1"], undefined);
+});
+
+test("reordering the live QUIZZES array cannot attach a stale answer record to a different current question", () => {
+  const first = boot();
+  const qs = first.api.getQuestions("m1");
+  const result = first.api.importJSON({
+    v: 2, modules: {}, exercises: {},
+    answers: { "totally-fake-question-id": { c: true, n: 9, ts: 1 } },
+    started: 0,
+  });
+  assert.equal(result.ok, true);
+
+  const anchor = "/* ============================ FLASHCARDS ============================ */";
+  assert.ok(inlineScript.includes(anchor), "injection anchor must exist in the real script");
+  const mutatedScript = inlineScript.replace(anchor, `QUIZZES.m1.reverse();\n\n  ${anchor}`);
+  assert.notEqual(mutatedScript, inlineScript);
+
+  const mutatedEnv = createEnvironment(staticBody, { storage: first.storage._raw });
+  vm.createContext(mutatedEnv.sandbox);
+  vm.runInContext(mutatedScript, mutatedEnv.sandbox, { filename: "index.inline.quiz-reordered.js", timeout: 15_000 });
+  mutatedEnv.api = mutatedEnv.sandbox.window.CytoCourse;
+
+  const reorderedQs = mutatedEnv.api.getQuestions("m1");
+  assert.equal(reorderedQs[reorderedQs.length - 1].id, qs[0].id, "sanity: reversal really moved the former-first question");
+
+  // Whatever question now occupies m1's former array position 0 must not
+  // suddenly read as answered because of the stale (fabricated) record.
+  assert.equal(mutatedEnv.api.getProgress().answers[reorderedQs[0].id], undefined);
+  assert.equal(mutatedEnv.api.getStats().questionsAnswered, 0, "the stale record still doesn't count after reordering");
+  assert.deepEqual(
+    mutatedEnv.api.getProgress().answers["totally-fake-question-id"],
+    { c: true, n: 9, ts: 1 },
+    "the stale record itself survived the reorder untouched, still under its own id",
+  );
+});
+
+test("reordering EXERCISES.ex7.items cannot attach a stale exercise record to a different current item", () => {
+  const seedEnv = boot();
+  const items = seedEnv.api.getExercises().ex7.items;
+  const seeded = {
+    v: 2, modules: {}, answers: {},
+    exercises: { "totally-fake-exercise-id": { c: true, n: 9, ts: 1 } },
+    started: 0,
+  };
+
+  const anchor = "/* ============================ FLASHCARDS ============================ */";
+  const mutatedScript = inlineScript.replace(anchor, `EXERCISES.ex7.items.reverse();\n\n  ${anchor}`);
+  assert.notEqual(mutatedScript, inlineScript);
+
+  const env = createEnvironment(staticBody, { storage: { [V2_KEY]: JSON.stringify(seeded) } });
+  vm.createContext(env.sandbox);
+  vm.runInContext(mutatedScript, env.sandbox, { filename: "index.inline.ex-reordered.js", timeout: 15_000 });
+  env.api = env.sandbox.window.CytoCourse;
+
+  const reorderedItems = env.api.getExercises().ex7.items;
+  assert.equal(reorderedItems[reorderedItems.length - 1].id, items[0].id, "sanity: reversal really moved the former-first item");
+
+  const host = env.body.querySelectorAll('.exer[data-exer="ex7"]')[0];
+  assert.equal(host.querySelector(".eh-score").textContent, "0 / 4", "no current item reads as answered because of the stale record");
+  assert.deepEqual(
+    env.api.getProgress().exercises["totally-fake-exercise-id"],
+    { c: true, n: 9, ts: 1 },
+    "the stale record survived the reorder untouched",
+  );
+});
+
+test("reload after stale-state normalization is idempotent and getStats() stays consistent across reloads", () => {
+  const seedEnv = boot();
+  const item0 = seedEnv.api.getExercises().ex7.items[0];
+  const seeded = {
+    v: 2, modules: { "stale-module-xyz": true }, answers: {},
+    exercises: { "ex7-1": { c: true, n: 1, ts: 5 }, "ex7-77": { c: false, n: 2, ts: 9 } },
+    started: 0,
+  };
+  const first = boot({ storage: { [V2_KEY]: JSON.stringify(seeded) } });
+  const afterFirstLoad = first.storage.getItem(V2_KEY);
+  const statsAfterFirstLoad = first.api.getStats();
+
+  const second = boot({ storage: { [V2_KEY]: afterFirstLoad } });
+  const afterSecondLoad = second.storage.getItem(V2_KEY);
+
+  assert.equal(afterSecondLoad, afterFirstLoad, "a second load against already-normalized state performs zero further writes");
+  // JSON.stringify, not assert.deepEqual: getStats() nests objects built
+  // via raw object-literal syntax inside each boot()'s own vm realm, and
+  // `first`/`second` are two SEPARATE realms (each boot() call creates a
+  // fresh vm context) -- their respective intrinsic Object.prototypes
+  // differ from each other, not just from this test file's.
+  assert.equal(JSON.stringify(second.api.getStats()), JSON.stringify(statsAfterFirstLoad), "getStats() agrees across reloads");
+  assert.deepEqual(
+    second.api.getProgress().exercises["ex7-77"],
+    { c: false, n: 2, ts: 9 },
+    "the orphaned stale key survives a second reload untouched",
+  );
+  assert.deepEqual(second.api.getProgress().exercises[item0.id], { c: true, n: 1, ts: 5 });
+  assert.equal(second.api.getProgress().modules["stale-module-xyz"], true);
+});
+
+test("export/import round-trip preserves stale records byte-for-byte while excluding them from stats, on both sides", () => {
+  const env = boot();
+  const currentQId = env.api.getQuestions("m1")[0].id;
+  const currentExId = env.api.getExercises().ex7.items[0].id;
+  const result = env.api.importJSON({
+    v: 2,
+    modules: {},
+    answers: { [currentQId]: { c: true, n: 1, ts: 1 }, "stale-q": { c: false, n: 9, ts: 2 } },
+    exercises: { [currentExId]: { c: true, n: 1, ts: 1 }, "stale-ex": { c: true, n: 3, ts: 3 } },
+    started: 0,
+  });
+  assert.equal(result.ok, true);
+
+  const exported = env.api.exportJSON();
+  const parsed = JSON.parse(exported);
+  assert.deepEqual(parsed.state.answers["stale-q"], { c: false, n: 9, ts: 2 }, "raw exported state includes the stale record exactly");
+  assert.deepEqual(parsed.state.exercises["stale-ex"], { c: true, n: 3, ts: 3 });
+  assert.equal(parsed.stats.questionsAnswered, 1, "the exported stats block excludes the stale record");
+
+  const fresh = boot();
+  const reimport = fresh.api.importJSON(exported);
+  assert.equal(reimport.ok, true, `expected success, got ${JSON.stringify(reimport)}`);
+  assert.deepEqual(fresh.api.getProgress().answers["stale-q"], { c: false, n: 9, ts: 2 }, "round-trip preserves the stale record value-for-value");
+  assert.deepEqual(fresh.api.getProgress().answers[currentQId], { c: true, n: 1, ts: 1 }, "the current record round-trips value-for-value too");
+  assert.equal(fresh.api.getStats().questionsAnswered, 1, "stats still exclude the stale record after the round trip");
+});
+
+test("loading or importing a stale-only state fires no misleading answer/exercise events, only progress", () => {
+  const env = boot();
+  let answerEvents = 0, exerciseEvents = 0, progressEvents = 0;
+  env.api.on("answer", () => { answerEvents += 1; });
+  env.api.on("exercise", () => { exerciseEvents += 1; });
+  env.api.on("progress", () => { progressEvents += 1; });
+
+  const result = env.api.importJSON({
+    v: 2,
+    modules: { "stale-module-xyz": true },
+    answers: { "stale-q": { c: true, n: 1, ts: 1 } },
+    exercises: { "stale-ex": { c: true, n: 1, ts: 1 } },
+    started: 0,
+  });
+  assert.equal(result.ok, true);
+  assert.equal(answerEvents, 0, "normalizing/accepting a stale record must never look like the learner answering a question");
+  assert.equal(exerciseEvents, 0, "normalizing/accepting a stale record must never look like the learner completing an exercise");
+  assert.equal(progressEvents, 1, "a genuinely persisted import still fires exactly one progress event, as documented");
+});
+
+test("import atomicity and storage-failure behavior remain intact when stale ids are present alongside malformed data", () => {
+  const env = boot();
+  const beforeProgress = JSON.stringify(env.api.getProgress());
+
+  // A stale id (answers-a-question-that-doesn't-exist) sitting right next
+  // to a genuinely malformed record (n:0 is invalid) -- the malformed
+  // record must still cause a full atomic rejection; the presence of a
+  // stale-but-structurally-valid sibling must not change that.
+  const mixed = {
+    v: 2, modules: {},
+    answers: { "stale-q": { c: true, n: 1, ts: 1 }, "m1-bad": { c: true, n: 0, ts: 1 } },
+    exercises: {},
+    started: 0,
+  };
+  const result = env.api.importJSON(mixed);
+  assert.equal(result.ok, false, `expected rejection, got ${JSON.stringify(result)}`);
+  assert.equal(JSON.stringify(env.api.getProgress()), beforeProgress, "rejection must leave existing progress fully untouched");
+});
+
+test("a persistence failure during a stale-record-containing import leaves state, storage, and events unchanged", () => {
+  const env = boot();
+  const beforeProgress = JSON.stringify(env.api.getProgress());
+  const beforeStorage = env.storage.getItem(V2_KEY);
+  let progressEvents = 0;
+  env.api.on("progress", () => { progressEvents += 1; });
+
+  const originalSetItem = env.storage.setItem;
+  env.storage.setItem = () => { throw new Error("QuotaExceededError"); };
+  let result;
+  try {
+    result = env.api.importJSON({
+      v: 2, modules: {}, exercises: {},
+      answers: { "stale-q": { c: true, n: 1, ts: 1 } },
+      started: 0,
+    });
+  } finally {
+    env.storage.setItem = originalSetItem;
+  }
+
+  assert.equal(result.ok, false, `expected rejection, got ${JSON.stringify(result)}`);
+  assert.equal(JSON.stringify(env.api.getProgress()), beforeProgress);
+  assert.equal(env.storage.getItem(V2_KEY), beforeStorage);
+  assert.equal(progressEvents, 0, "a failed persistence attempt must fire no progress event, stale ids or not");
+});
+
+test("public API behavior agrees with the documented stale-ID policy: getProgress()/exportJSON() preserve, getStats() excludes, markModule() still guards new writes", () => {
+  const env = boot();
+  const result = env.api.importJSON({
+    v: 2,
+    modules: { "stale-module-xyz": true },
+    answers: {}, exercises: {},
+    started: 0,
+  });
+  assert.equal(result.ok, true);
+
+  // Reads: preserved raw, excluded from figures.
+  assert.equal(env.api.getProgress().modules["stale-module-xyz"], true);
+  assert.equal(JSON.parse(env.api.exportJSON()).state.modules["stale-module-xyz"], true);
+  assert.equal(env.api.getStats().modulesComplete, 0);
+
+  // markModule() is a WRITE-time guard against ever CREATING a new record
+  // for an id that was never valid -- a different concern from this
+  // policy, which governs an EXISTING record for an id that used to be
+  // valid. The two must not be conflated: markModule() still rejects
+  // outright, while the pre-existing stale record above is preserved.
+  const writeResult = env.api.markModule("totally-unknown-module-id", true);
+  assert.equal(writeResult.ok, false);
+  assert.equal(env.api.getProgress().modules["totally-unknown-module-id"], undefined, "markModule() must never create a new stale record");
+});
+
+test("a runtime-injected question's answer becomes stale when its session ends, and revives if the id is reintroduced -- without deciding the content-pack format", () => {
+  const first = boot();
+  const addResult = first.api.addQuestions("m2", [{
+    id: "injected-boundary-1", d: "operations", t: "lab-ops", x: 1,
+    q: "Injected boundary question?", o: ["Yes", "No"], a: 0, why: "Injected.",
+  }]);
+  assert.equal(addResult.ok, true);
+  const mount = quizMount(first, "m2");
+  const items = mount.querySelectorAll(".qitem");
+  items[items.length - 1].querySelectorAll(".qopt")[0].click(); // answer correctly
+  assert.equal(first.api.getProgress().answers["injected-boundary-1"].c, true, "sanity: recorded within the injecting session");
+  assert.equal(first.api.getStats().questionsAnswered >= 1, true, "sanity: counted while the injected question is still known this session");
+
+  // A new session boots from the same storage WITHOUT re-injecting the
+  // question -- runtime-injected content is documented as session-only,
+  // and whether/how it should persist is the separate, still-open
+  // content-pack roadmap item. This test does not touch that decision; it
+  // only proves what happens to the ALREADY-RECORDED progress once the id
+  // is no longer known.
+  const persisted = first.storage._raw;
+  const second = boot({ storage: persisted });
+  assert.equal(
+    second.api.getStats().questionsAnswered,
+    0,
+    "the injected question's id is unknown this session, so its record no longer counts",
+  );
+  assert.deepEqual(
+    second.api.getProgress().answers["injected-boundary-1"],
+    { c: true, n: 1, ts: first.api.getProgress().answers["injected-boundary-1"].ts },
+    "the record is preserved, not deleted, purely because the id is currently unrecognized",
+  );
+
+  // Reintroducing the SAME id (here, via addQuestions() again -- standing
+  // in for whatever future content-pack mechanism might reintroduce it)
+  // revives the preserved history automatically, with no special-case
+  // code: this is the general reintroduction policy, not a content-pack
+  // feature.
+  const revive = second.api.addQuestions("m2", [{
+    id: "injected-boundary-1", d: "operations", t: "lab-ops", x: 1,
+    q: "Injected boundary question?", o: ["Yes", "No"], a: 0, why: "Injected.",
+  }]);
+  assert.equal(revive.ok, true);
+  assert.equal(second.api.getStats().questionsAnswered, 1, "the exact same preserved record is picked up the moment the id is known again");
 });
 
 /* ============================ print ============================ */

@@ -1265,6 +1265,104 @@ addendum to QL-006:
   redesign, content-pack format, image-manifest normalization) were
   touched.
 
+A third isolated Milestone 1 task (branch
+`claude/issue-2-stale-id-policy`, "Part of Issue 2", draft PR): defines
+and implements the stale question/exercise/module ID policy, and
+`docs/QUALITY_LOG.md` QL-024:
+
+- **Policy: preserve the record, filter at read.** A `modules`/`answers`/
+  `exercises` key that no longer corresponds to current `MODULES`/
+  `QUIZZES`/`EXERCISES` data is never deleted, moved, or quarantined by
+  `loadProgress()`, `migrateExerciseIds()`, or `importJSON()` — it stays
+  under its original id. Every current-facing consumer (`doneCount()`,
+  `tally()`, `getStats()`, `getUnmastered()`, `getWeakAreas()`, every
+  quiz/exercise render) decides "does this id count" by checking
+  membership in the live content at read time, never by trusting a stored
+  map's own keys.
+- **A real, pre-existing bug found and fixed while defining the
+  policy:** `getStats()`'s top-level `questionsAnswered`/
+  `questionsCorrect`/`overallPct` counted every key in `state.answers`
+  with no current-content check — unlike `tally()` a few lines away,
+  which already filtered correctly. A state holding only a fabricated
+  question id reported a fabricated 100% overall accuracy, confirmed by
+  direct execution before the fix. Fixed to mirror `tally()`'s exact
+  filtering pattern via the same `questionIndex()` lookup.
+- **Reintroduction revives history automatically**, with zero migration
+  code: staleness is a computed property of an id, never a stored flag,
+  and a record is never moved anywhere, so the moment an id becomes
+  current again its preserved record is picked up by every consumer
+  above. This mirrors the id-stability convention this course's content
+  already depends on.
+- **Alternatives rejected:** reject-the-entire-state (destroys every
+  learner's progress on ordinary content maintenance); strip-on-load
+  (loses history permanently for no safety benefit over preserving it);
+  quarantine-in-a-separate-field (needs new move-in/move-out migration
+  code and a `SCHEMA_V`-relevant shape addition for no isolation benefit
+  read-time filtering doesn't already provide).
+- **Runtime-injected-question boundary defined, content-pack decision
+  left open:** an `addQuestions()`-injected question's recorded answer
+  becomes stale the moment its session ends without re-injection (already
+  session-only, pre-existing behavior) — this policy only defines what
+  happens to the already-recorded progress (preserved, excluded from
+  stats, revived on reintroduction by any mechanism); it does not decide
+  whether or how injected content should persist.
+- **`markModule()`'s existing unknown-id rejection (Milestone 0) is kept
+  explicitly distinct:** a write-time guard against creating a new record
+  for an id that was never valid, not the same thing as this read-time
+  policy for an existing record whose id used to be valid.
+- **`SCHEMA_V` stays `2`:** no stored field's shape or meaning changes,
+  only which records count toward current-facing figures does.
+- **Reset remains the one deliberate exception**, confirmed by
+  independent review (correction, same branch, before merge): an
+  explicit, user-confirmed Reset deletes *everything*, current or stale,
+  in both storage keys — `#resetBtn`'s click handler and the `reset()`
+  API method were already implemented this way (wholesale storage-key
+  removal / blank-state replacement, never a selective per-record strip),
+  confirmed by direct execution against the real UI click path (seeding
+  both current and stale records at every level across both the v2 and
+  legacy v1 keys at once) before concluding no product code change was
+  needed. Only a regression test and a concise policy-comment addition
+  were added.
+- **14 new tests** (`tests/dom-behavior.mjs`, 101 → 115 checks): mixed
+  current/stale question and exercise records in one state; a state
+  containing only stale records; an orphaned (non-migratable) legacy
+  exercise key surviving migration inert alongside a real migration;
+  reordering `QUIZZES`/`EXERCISES` with a stale record present (same
+  script-injection technique as QL-005); reload idempotency after
+  stale-state normalization; a full export/import round trip preserving a
+  stale record while excluding it from stats; no misleading
+  `answer`/`exercise` events on a stale-only load; import atomicity and
+  storage-failure behavior unaffected by stale ids; the
+  `getProgress()`/`exportJSON()`-preserves vs. `getStats()`-excludes vs.
+  `markModule()`-still-guards distinction; the runtime-injected-
+  question boundary including its reintroduction half; and an explicit
+  confirmed Reset removing current and stale records from both storage
+  keys, through the real `#resetBtn` click path, staying cleared after a
+  simulated reload. **Mutation-tested:** reverting `getStats()`'s fix
+  failed exactly the five dependent tests; introducing an accidental
+  "strip unrecognized exercise keys" pass into `migrateExerciseIds()`
+  (the rejected quarantine/strip alternative, reintroduced by mistake)
+  failed exactly the six preservation-dependent tests; removing either
+  storage-key deletion from the `#resetBtn` handler each failed the new
+  Reset test plus whichever pre-existing per-scenario Reset test already
+  covered that key — each reverted and confirmed byte-identical via
+  `diff`.
+- **A test-authoring pitfall self-caught while writing this suite:**
+  `assert.deepEqual` checks prototype identity; `getStats()`'s nested
+  `byDomain`/`byTopic`/`byDifficulty` objects are built via raw
+  object-literal syntax inside the app's own `vm` sandbox realm, a
+  genuinely different intrinsic `Object.prototype` from the test file's
+  (and from a second, separate `boot()`'s realm) — confirmed with a
+  minimal `vm` reproduction before concluding this was a test-authoring
+  issue, not a product defect, and fixed via `JSON.stringify(...)`
+  comparison, this codebase's established pattern for exactly this case.
+- Full record: `docs/QUALITY_LOG.md` QL-024 and its addendum.
+- Strictly scoped: no question, answer, rationale, scoring, image,
+  styling, layout, or accessibility presentation changed, and none of the
+  other Issue #2 items (Reset/import exercise re-render, storage-failure
+  UI, analytics redesign, content-pack format, image-manifest
+  normalization) were touched.
+
 ## Read these files first
 
 1. `README.md`

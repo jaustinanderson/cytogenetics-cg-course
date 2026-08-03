@@ -233,6 +233,136 @@ checked by access rather than ownership) is now checked. Full record, test
 coverage, and the schema-version reasoning: `docs/QUALITY_LOG.md` QL-006
 and its addendum, and `docs/VALIDATION.md`.
 
+### Stale question/exercise/module ID policy
+
+As of 2026-08-02 (Issue #2, `docs/QUALITY_LOG.md` QL-024), this defines
+what happens when a `modules`/`answers`/`exercises` key no longer
+corresponds to anything in the current `MODULES`/`QUIZZES`/`EXERCISES`
+data — a question renumbered or removed in a later release, an exercise
+item dropped, a module deleted, or a runtime-injected question
+(`addQuestions()`) whose session ended before it was answered again.
+
+**Policy: preserve the record, filter at read.** A stale key is never
+deleted, moved, quarantined, or rejected by `loadProgress()`,
+`migrateExerciseIds()`, or `importJSON()` — it continues to sit in the
+ordinary `modules`/`answers`/`exercises` map under its original id,
+structurally indistinguishable from a current record. Instead, "is this id
+current" is decided fresh, every time, at *read* time, by every
+current-facing consumer checking membership in the live `MODULES`/
+`QUIZZES`/`EXERCISES` data before counting, displaying, or otherwise
+acting on a record — never by iterating a stored map's own keys and
+trusting all of them. `doneCount()`, `tally()` (`byDomain`/`byTopic`/
+`byDifficulty`), `getUnmastered()`, `getWeakAreas()`, and every quiz/
+exercise render already worked this way; `getStats()`'s top-level
+`questionsAnswered`/`questionsCorrect`/`overallPct` did not — they counted
+every key in `state.answers` regardless of whether the course still
+recognized it, so a state holding only a stale answer record reported a
+fabricated 100% overall accuracy. Confirmed as a real, working bug by
+direct execution before the fix (`Object.keys(state.answers).forEach` now
+skips any `qid` absent from `questionIndex()`, mirroring `tally()`'s
+existing `if(!q){ return; }` check exactly).
+
+A stale record therefore cannot: count toward completion, mastery,
+accuracy, or attempt figures; render as a current question or exercise
+(rendering only ever looks up a *currently rendered* item's own id, never
+iterates a stored map's keys); attach itself to a different item after
+reordering (identity is always the id string an item itself carries, never
+its array position — true for questions from the start, true for
+exercises since QL-005); or fire a misleading `answer`/`exercise` event
+(loading or importing a stale record never calls `recordAnswer()`/
+`recordExercise()`, only possibly `saveProgress()`'s ordinary `progress`
+event when something genuinely persisted).
+
+**Reset is the one deliberate exception.** "Preserve, filter at read"
+governs loading, migration, import, export, and every ordinary read — it
+does not apply to an explicit, user-confirmed Reset (the `#resetBtn` UI
+handler and the `reset()` API method). Reset's job is to delete
+*everything*, current or stale, in both `PKEY` and `PKEY_V1`, because
+that is exactly what confirming "this cannot be undone" means. Reset was
+already implemented this way — a wholesale storage-key removal /
+blank-state replacement, never a selective per-record strip — before this
+policy existed; a dedicated regression test (`tests/dom-behavior.mjs`)
+now proves it holds for stale records at every level (module, answer,
+exercise) across both storage keys, not only for current ones.
+
+**Reintroduction revives history.** Because staleness is a computed
+property of an id, not a stored flag, and a record is never moved
+anywhere, an id that becomes current again (the exact same string
+reappears in `MODULES`/`QUIZZES`/`EXERCISES`) has its preserved record
+picked up automatically by every consumer above, with zero migration
+code. This mirrors the id-stability convention this course's content
+already depends on: a stable id is a permanent identifier for one specific
+item, and reusing an id for a materially different item is an authoring
+error this policy does not defend against — exactly as already true for
+`EXERCISES.*.items[].id` and `QUIZZES[key][].id` before this policy
+existed.
+
+**Runtime-injected-question boundary.** This policy also governs what
+happens to a runtime-injected question's recorded answer once its
+session ends without re-injection (`addQuestions()` content is
+session-only; whether/how it should persist is the separate, still-open
+"content-pack" roadmap item — this policy does not decide that). The
+injected id simply becomes unknown to the next session's
+`questionIndex()`, so its already-recorded answer is preserved but
+excluded from `getStats()`, and is picked back up automatically if the
+same id is ever reintroduced (by a future content pack, or by calling
+`addQuestions()` again with the same id) — the general reintroduction
+behavior above, not a special case for injected content.
+
+**Alternatives considered and rejected:**
+
+- *Reject the entire imported/loaded state on any stale id* — would make
+  ordinary content maintenance (renumbering or removing one question)
+  destroy every existing learner's entire progress on their very next
+  load. Rejected outright as the opposite of protecting valid progress.
+- *Strip stale records on load/import* — loses history permanently even
+  when an id is later restored, with no compensating safety benefit over
+  preserving it; preserve-and-filter-at-read achieves the identical
+  "cannot contaminate current progress" guarantee at zero extra loss.
+  Rejected in favor of the loss-minimizing option.
+- *Quarantine stale records in a separate state field* — would require new
+  migration code to move a record out when it goes stale and back in when
+  it revives (an id can flip between known and unknown across releases), a
+  `SCHEMA_V`-relevant shape addition, and corresponding
+  `validateImportedState()` changes, for no isolation benefit beyond what
+  read-time filtering already provides once every consumer is proven to
+  filter correctly. Rejected as unnecessary complexity.
+
+`markModule()` rejecting an unknown module id outright (Milestone 0) is a
+*different*, unrelated guarantee: a write-time guard against ever
+*creating* a new record for an id that was never valid. This policy
+governs an *existing* record for an id that *used to be* valid — the two
+are not in tension, and the completion report/tests keep them distinct.
+
+**`SCHEMA_V` is not bumped.** No stored field's shape or meaning changes,
+no new top-level state field is introduced, and nothing previously
+accepted becomes rejected — only which records *count* toward
+current-facing figures changes, and that was already silently wrong
+(the `getStats()` bug above) rather than newly restricted. 14 new tests
+in `tests/dom-behavior.mjs` (101 → 115) cover mixed current/stale states
+for questions and exercises, a state containing only stale records, an
+orphaned (non-migratable) legacy exercise key surviving migration inert
+alongside a real migration, reordering `QUIZZES`/`EXERCISES` with a stale
+record present, reload idempotency after stale-state normalization, the
+export/import round trip, event-firing correctness, import atomicity and
+storage-failure behavior with stale ids present, the public-API/
+`markModule()` distinction above, the runtime-injected-question boundary,
+and — through the real `#resetBtn` UI click path, not by directly
+mutating internal state — an explicit confirmed Reset removing current
+*and* stale records at every level from both storage keys, confirmed to
+stay cleared after a simulated reload. **Mutation-tested:** (1) reverting
+`getStats()` to the original `Object.keys(state.answers).length`-based
+computation failed exactly the five tests that depend on the fix; (2)
+introducing an accidental "strip unrecognized exercise keys" pass into
+`migrateExerciseIds()` (the rejected "strip stale records" alternative,
+reintroduced by mistake) failed exactly the six tests that depend on
+preservation; (3) removing either storage-key deletion from the
+`#resetBtn` handler (first `PKEY`, then separately `PKEY_V1`) each failed
+the new Reset-exception test, plus the pre-existing per-scenario Reset
+tests that already covered that specific key — each mutation reverted and
+confirmed byte-identical via `diff`. Full record: `docs/QUALITY_LOG.md`
+QL-024 and its addendum.
+
 Known design debt:
 
 - runtime-injected questions are session-only
