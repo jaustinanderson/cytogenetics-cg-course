@@ -231,6 +231,97 @@ test.describe("exercise widget re-render after import and reset", () => {
     expect(consoleIssues, JSON.stringify(consoleIssues, null, 2)).toEqual([]);
   });
 
+  /* --- independent review found a coverage gap: the UI Reset test above
+     goes through #resetBtn, which ends in a real location.reload() -- a
+     full re-execution of the page that would rebuild every widget from
+     scratch (via init()) even if the PUBLIC API reset() method itself
+     never rebuilt exercise widgets at all. That path therefore cannot
+     prove reset() itself is fixed; it can only prove the page looks
+     right AFTER a reload masks whatever reset() actually did. This test
+     calls window.CytoCourse.reset() directly -- no #resetBtn click, no
+     location.reload(), no navigation -- and checks the rendered DOM
+     immediately, which is the only way to prove reset() itself, not a
+     subsequent reload, is what rebuilds the exercise widget. */
+  test("window.CytoCourse.reset() called directly (no reload, no navigation) immediately rebuilds the exercise widget", async ({
+    page,
+    consoleIssues,
+  }) => {
+    await page.goto("/");
+    const host = page.locator(".exer").first();
+    const key = await host.getAttribute("data-exer");
+    const items = await page.evaluate((k) => window.CytoCourse.getExercises()[k].items, key);
+    await openDisclosure(host);
+
+    await host.locator(".eopt").nth(items[0].answer).click();
+    await expect(host.locator(".eh-score")).toHaveText(`1 / ${items.length}`);
+    await expect(host.locator(".eh-state")).toHaveText("In progress");
+    for (const opt of await host.locator(".eopt").all()) {
+      await expect(opt).toBeDisabled();
+    }
+    await expect(host.locator(".exer-fb")).toHaveClass(/show/);
+
+    // A sentinel that only survives if window itself was never replaced
+    // -- i.e. no navigation/reload happened. Installed, then counters for
+    // exactly the three documented progress-related events, both BEFORE
+    // reset() runs so the answer click above cannot be miscounted as
+    // reset()'s own activity.
+    await page.evaluate(() => {
+      window.__noReloadSentinel = "still-here";
+      window.__events = { progress: 0, answer: 0, exercise: 0 };
+      window.CytoCourse.on("progress", () => { window.__events.progress += 1; });
+      window.CytoCourse.on("answer", () => { window.__events.answer += 1; });
+      window.CytoCourse.on("exercise", () => { window.__events.exercise += 1; });
+    });
+
+    const result = await page.evaluate(() => window.CytoCourse.reset());
+    expect(result).toEqual({ ok: true });
+
+    // Proof this ran without a reload/navigation: a real reload replaces
+    // `window` entirely, which would wipe this property. Checked
+    // immediately, with no page.reload()/page.goto() call anywhere in
+    // this test.
+    const sentinelSurvived = await page.evaluate(() => window.__noReloadSentinel);
+    expect(sentinelSurvived).toBe("still-here");
+
+    const events = await page.evaluate(() => window.__events);
+    expect(events).toEqual({ progress: 1, answer: 0, exercise: 0 });
+
+    // Rendered exercise widget, checked immediately -- no reload in
+    // between reset() and these assertions.
+    await expect(host.locator(".eh-score")).toHaveText(`0 / ${items.length}`);
+    await expect(host.locator(".eh-state")).toHaveText("Not started");
+    await expect(host.locator(".exer-prompt")).toHaveText(items[0].prompt);
+    for (const opt of await host.locator(".eopt").all()) {
+      await expect(opt).toBeEnabled();
+    }
+    await expect(host.locator(".exer-fb")).not.toHaveClass(/show/);
+    await expect(host.locator(".exer-next")).toBeDisabled();
+
+    const progress = await page.evaluate(() => window.CytoCourse.getProgress());
+    expect(progress.modules).toEqual({});
+    expect(progress.answers).toEqual({});
+    expect(progress.exercises).toEqual({});
+
+    const stats = await page.evaluate(() => window.CytoCourse.getStats());
+    expect(stats.modulesComplete).toBe(0);
+    expect(stats.questionsAnswered).toBe(0);
+    expect(stats.questionsCorrect).toBe(0);
+    expect(stats.overallPct).toBeNull();
+
+    const [v1After, v2After] = await page.evaluate(
+      ([k1, k2]) => [localStorage.getItem(k1), localStorage.getItem(k2)],
+      [V1_KEY, V2_KEY],
+    );
+    expect(v1After).toBeNull(); // legacy key: fully removed
+    const v2Parsed = JSON.parse(v2After); // current key: present, but blank
+    expect(v2Parsed.modules).toEqual({});
+    expect(v2Parsed.answers).toEqual({});
+    expect(v2Parsed.exercises).toEqual({});
+
+    await page.waitForLoadState("networkidle");
+    expect(consoleIssues, JSON.stringify(consoleIssues, null, 2)).toEqual([]);
+  });
+
   test("reattempting an already-recorded exercise item after an import-driven rebuild replaces its outcome without double-counting", async ({
     page,
     consoleIssues,

@@ -22,10 +22,13 @@ All notable repository changes are recorded here.
   and reverted before committing after it broke a pre-existing, shipped
   Playwright test depending on that exact reattempt behavior; see
   `docs/QUALITY_LOG.md` QL-025 for the full account. 9 new dependency-free
-  regression tests in `tests/dom-behavior.mjs` (115 → 124) and 5 new
+  regression tests in `tests/dom-behavior.mjs` (115 → 124) and 6 new
   real-browser Playwright tests in
-  `tests/e2e/progress-and-reset.spec.mjs`, mutation-tested. Does not
-  change stable-ID formats, migration policy, `SCHEMA_V`, or the
+  `tests/e2e/progress-and-reset.spec.mjs` — including one that calls
+  `window.CytoCourse.reset()` directly, with no page reload or
+  navigation, specifically to prove the public API method itself (not a
+  subsequent reload) rebuilds the exercise widget — mutation-tested. Does
+  not change stable-ID formats, migration policy, `SCHEMA_V`, or the
   stale-ID policy (Issue #2)
 - Stale question/exercise/module ID policy (`index.html`, Issue #2): a
   `modules`/`answers`/`exercises` key that no longer corresponds to

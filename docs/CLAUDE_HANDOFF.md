@@ -1415,25 +1415,38 @@ Reset, and `docs/QUALITY_LOG.md` QL-025:
   itself (confirmed against the static markup), and `buildExercise()`
   only ever replaces `host.innerHTML`, never `host`'s own `open`
   attribute, so open/closed state survives a rebuild with no extra code.
-- **14 new tests** total: 9 in `tests/dom-behavior.mjs` (115 → 124) and 5
+- **15 new tests** total: 9 in `tests/dom-behavior.mjs` (115 → 124) and 6
   real-browser Playwright tests in
   `tests/e2e/progress-and-reset.spec.mjs` — partial-import restores exact
   score/status with item 0 available for reattempt, completed-import
   shows the summary accurately while item 0 stays reattemptable,
   blank-import stale-state removal, the public `reset()` API clearing
-  exercise progress/both storage keys/rendered UI, no duplicate
-  controls/listeners/scoring across repeated import/reset, reattempting
-  an already-recorded item without double-counting (the dependency-free
-  counterpart to the pre-existing Playwright test that caught the
-  reverted regression above), stable-ID migration/stale-ID handling
-  remaining intact, the measured event contract, and disclosure-state
-  preservation. **Mutation-tested:** reverting `importJSON()`/`reset()`'s
-  calls back to the original quiz-only selector loop (leaving `init()`
-  and the helper untouched) failed exactly the five tests that depend on
-  either call site rebuilding an exercise widget — reverted and confirmed
-  byte-identical via `diff`.
-- Full record, including the reverted positioning attempt:
-  `docs/QUALITY_LOG.md` QL-025.
+  exercise progress/both storage keys/rendered UI via the `#resetBtn`
+  UI path, no duplicate controls/listeners/scoring across repeated
+  import/reset, reattempting an already-recorded item without
+  double-counting (the dependency-free counterpart to the pre-existing
+  Playwright test that caught the reverted regression above), stable-ID
+  migration/stale-ID handling remaining intact, the measured event
+  contract, and disclosure-state preservation. **Mutation-tested:**
+  reverting `importJSON()`/`reset()`'s calls back to the original
+  quiz-only selector loop (leaving `init()` and the helper untouched)
+  failed exactly the five tests that depend on either call site
+  rebuilding an exercise widget — reverted and confirmed byte-identical
+  via `diff`.
+- **Correction (same branch, before merge):** independent review found
+  the `#resetBtn`-driven UI Reset test above ends in `location.reload()`,
+  which would rebuild every widget via `init()` regardless of whether the
+  public `reset()` method itself was fixed — that test alone could not
+  prove `reset()`'s own effect. Added a 6th Playwright test that calls
+  `window.CytoCourse.reset()` directly, with no `#resetBtn` click, no
+  `location.reload()`, and no navigation, proven via a `window`-scoped
+  sentinel that a real navigation would silently wipe. Mutation-tested by
+  reverting only `reset()`'s call to `rebuildContentWidgets()` (leaving
+  `importJSON()`/`init()` untouched): the new direct-call test failed for
+  the expected reason, while the reload-based UI test and the
+  `importJSON()` tests kept passing under the identical mutation —
+  directly confirming the reload-based test could not have caught this.
+  Full record: `docs/QUALITY_LOG.md` QL-025's addendum.
 - Strictly scoped: no question, answer, rationale, scoring,
   mastery/accuracy semantics, stable-ID format, migration policy,
   `SCHEMA_V`, image, styling, layout, accessibility presentation,

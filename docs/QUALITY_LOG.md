@@ -2774,3 +2774,58 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   the reattempt-preservation rationale, including the reverted attempt;
   `docs/VALIDATION.md` records the corrected test-coverage list;
   `docs/ROADMAP.md` checks off the corresponding Milestone 1 item.
+
+### Addendum — independent review found the UI Reset test could not prove the public API path was fixed
+
+- **Status:** Corrected on the same branch (`claude/issue-2-exercise-rerender`),
+  before merge.
+- **Finding:** The real-browser "confirmed Reset path" test added by this
+  entry drives Reset through `#resetBtn`, whose handler ends in
+  `location.reload()` — a full page re-execution that calls `init()`,
+  which has always correctly rebuilt both quiz and exercise widgets. That
+  test therefore could pass even if the public `CytoCourse.reset()`
+  method itself never rebuilt exercise widgets at all: the subsequent
+  reload would mask the defect by rebuilding everything from scratch
+  regardless of what `reset()` itself did. The defect this branch fixes
+  is specifically that `reset()` (and `importJSON()`) did not rebuild
+  exercise widgets — a reload-based test cannot isolate that claim.
+- **Impact:** None shipped — a coverage gap, not a product defect; found
+  before merge.
+- **Correction:** Added a dedicated real-browser test that calls
+  `window.CytoCourse.reset()` directly via `page.evaluate()` — no
+  `#resetBtn` click, no `location.reload()`, no navigation of any kind —
+  and asserts the rendered exercise widget, `getProgress()`, `getStats()`,
+  and both storage keys immediately afterward. Proves no navigation
+  occurred via a `window`-scoped sentinel property set before calling
+  `reset()`: a real navigation replaces `window` entirely, which would
+  silently wipe the sentinel, so its survival is direct evidence no
+  reload happened (checked instead of merely assumed from the absence of
+  a `page.reload()` call in the test source). Also installs
+  `progress`/`answer`/`exercise` event counters immediately before
+  calling `reset()` (after the setup answer above, so that answer's own
+  events are not miscounted as `reset()`'s) and asserts exactly one
+  `progress` event and zero `answer`/`exercise` events — measured, not
+  assumed, matching this course's standing event-contract discipline.
+- **Mutation-tested:** reverted `reset()`'s call to
+  `rebuildContentWidgets()` back to the original quiz-only
+  `$all('.quiz-mount').forEach(buildQuiz)` line — deliberately leaving
+  `importJSON()` and `init()` untouched, isolating exactly the one
+  connection this correction targets — and the new direct-call test
+  failed for the expected reason (`.eh-score` still read the stale
+  `"1 / 4"` instead of `"0 / 4"`, since the exercise widget was never
+  rebuilt). The pre-existing UI-Reset (`#resetBtn`) test and the
+  `importJSON()` tests continued to pass under this same mutation,
+  confirming the reload-based test genuinely cannot detect this specific
+  defect — exactly the gap this correction closes. One other test
+  (`importJSON()` with a fully completed exercise) failed intermittently
+  during the same run; confirmed as the pre-existing, unrelated
+  cross-file flake already documented in this branch's Playwright runs
+  by rerunning it in isolation with the mutation still applied, where it
+  passed. Reverted the mutation and confirmed `index.html` byte-identical
+  to the pre-mutation file via `diff`.
+- **Prevention:** When a UI action ends in a page reload/navigation, a
+  test driving that UI path cannot, by itself, prove a claim about the
+  underlying method's own behavior — the reload can mask an unfixed
+  method. Any claim about a specific public API method's own effect
+  needs a test that calls that method directly and checks state before
+  anything else (a reload, a navigation) could have contributed.

@@ -1541,6 +1541,48 @@ No question, answer, rationale, scoring, mastery/accuracy semantics,
 stable-ID format, migration policy, `SCHEMA_V`, image, provenance, or
 content-pack decision changed.
 
+### Correction — direct public API coverage for `reset()`, added 2026-08-03
+
+Independent review found that the "confirmed Reset path" real-browser
+test above drives Reset through `#resetBtn`, whose handler ends in
+`location.reload()` — a full page re-execution that would rebuild every
+widget from scratch via `init()` regardless of whether the public
+`CytoCourse.reset()` method itself ever rebuilt exercise widgets. That
+test therefore could not, by itself, prove `reset()`'s own effect — only
+that the page looks right after a reload masks it.
+
+Added one new test to `tests/e2e/progress-and-reset.spec.mjs`: answers an
+exercise item live (score, status, disabled controls, and feedback all
+visibly non-default), installs `progress`/`answer`/`exercise` event
+counters, then calls `window.CytoCourse.reset()` **directly** via
+`page.evaluate()` — no `#resetBtn` click, no `location.reload()`, no
+navigation — and checks the rendered exercise widget, `getProgress()`,
+`getStats()`, and both storage keys immediately afterward. Proves no
+navigation occurred via a `window`-scoped sentinel property set
+immediately before calling `reset()`: a real navigation replaces `window`
+entirely, silently wiping the sentinel, so its survival is direct,
+checked evidence, not an assumption from the absence of a `page.reload()`
+call in the test source. Confirms exactly one `progress` event and zero
+`answer`/`exercise` events, matching this course's standing
+measured-not-assumed event-contract discipline.
+
+**Mutation-tested:** reverted `reset()`'s call to
+`rebuildContentWidgets()` back to the original quiz-only
+`$all('.quiz-mount').forEach(buildQuiz)` line — deliberately leaving
+`importJSON()` and `init()` untouched, isolating exactly the one
+connection this correction targets. The new direct-call test failed for
+the expected reason (the exercise widget's score still read the stale
+`"1 / 4"`); the pre-existing `#resetBtn`-driven UI-Reset test and the
+`importJSON()` tests both continued to pass under the same mutation,
+directly confirming the reload-based test cannot detect this specific
+defect. One unrelated test (`importJSON()` with a fully completed
+exercise) failed intermittently in the same run; confirmed as the
+pre-existing cross-file flake already documented for this branch by
+rerunning it in isolation with the mutation still applied, where it
+passed. Reverted and confirmed `index.html` byte-identical via `diff`.
+
+Full record: `docs/QUALITY_LOG.md` QL-025's addendum.
+
 ## Gates still open
 
 ### Browser behavior
