@@ -6,6 +6,71 @@ All notable repository changes are recorded here.
 
 ### Added
 
+- Storage-failure detection and an honest session-only warning
+  (`index.html`, Issue #2, draft PR — not yet merged): `saveProgress()`
+  previously caught every `localStorage` write error silently and still
+  advanced/reported progress as if it had been saved, `loadProgress()`
+  treated a genuine read failure identically to "no progress yet" with
+  no warning, and the UI Reset handler reloaded unconditionally even
+  when the storage removal it depended on had failed — all three
+  confirmed as real, pre-fix defects by direct execution. A new
+  `persistState` state machine now distinguishes a write-only failure
+  (self-heals the moment any later save succeeds, since every save
+  serializes the complete current state) from a read failure at
+  initialization (sticky for the session, since the app cannot rule out
+  unseen prior progress); a non-modal, `role="status"` warning banner
+  (`#storageWarning`) communicates session-only mode without stealing
+  focus mid-answer, deduplicated so repeated failures produce exactly
+  one warning; `CytoCourse.getPersistenceStatus()` and a new
+  `persistence` event expose the status publicly, with no raw browser
+  exception text ever surfaced; `reset()` now returns `{ok:false}`
+  honestly on a storage failure instead of an unconditional
+  `{ok:true}`; `importJSON()`'s existing all-or-nothing atomicity
+  guarantee is unweakened, with only the shared persistence status
+  reflecting a genuinely observed write failure. Does not change
+  `SCHEMA_V`, stable-ID formats, migration policy, the stale-ID policy,
+  scoring, or existing `progress`/`answer`/`exercise` event semantics.
+  15 new dependency-free regression tests in `tests/dom-behavior.mjs`
+  (124 → 139) and 6 new real-browser Playwright tests in
+  `tests/e2e/storage-failure-warning.spec.mjs`, mutation-tested across
+  4 reversions. See `docs/QUALITY_LOG.md` QL-026 and
+  `docs/ARCHITECTURE.md` "Storage-failure detection and session-only
+  mode" for the full record. **Corrected** after independent review of
+  the draft PR found three blocking defects, all fixed before merge
+  (`docs/QUALITY_LOG.md` QL-026's addendum): (1) a failed `importJSON()`
+  attempt could downgrade the sticky `'unavailable'` read-failure status
+  to the non-sticky `'write-failed'`, letting a later ordinary action
+  silently write over genuine prior progress a read failure at init had
+  never actually seen — fixed by never letting a *failed* import weaken
+  `'unavailable'` (a *successful* one may still clear it); (2)
+  `#storageWarning` was an ordinary in-flow element that could scroll far
+  outside the viewport in a long page — changed to `position:fixed` at
+  the viewport's bottom edge, verified with Playwright's
+  `toBeInViewport()` rather than `toBeVisible()`; (3) the API `reset()`
+  path's persistence status falsely reported session-only when only the
+  already-inert legacy `PKEY_V1` key failed to remove while the
+  canonical v2 state was genuinely durable — status logic is now
+  path-dependent between the API and UI Reset paths, while `reset()`'s
+  `{ok:...}` return value is unchanged. 6 additional dependency-free
+  tests (139 → 145) and 3 additional real-browser Playwright tests
+  (6 → 9, both configured projects), mutation-tested across 3 further
+  reversions (7 total). **Corrected again** after a second round of
+  independent review found the fixed-position banner itself could
+  obstruct content (`docs/QUALITY_LOG.md` QL-026's second addendum):
+  `position:fixed` removes the banner from document flow, so nothing
+  reserved room for it — it could sit on top of the page's own
+  bottom-most content and, at narrow widths, on top of the mobile
+  sidebar's own bottom-most nav links, both still clickable underneath
+  it. Fixed with a `--storage-warning-h` custom property kept in sync
+  with the banner's live rendered height, which `.content`'s bottom
+  padding and `.sidebar`'s own height (desktop and mobile) both reserve
+  space for whenever it is shown; `pointer-events:none` alone was
+  considered and rejected, since it would let clicks through without
+  removing the visual obstruction. Verified with real
+  `document.elementFromPoint()` hit-testing and rectangle-intersection
+  checks. 3 additional dependency-free tests (145 → 148) and 6
+  additional real-browser Playwright tests (9 → 15), mutation-tested
+  across 1 further reversion (8 total for this feature).
 - Exercise widgets now correctly re-render after `CytoCourse.importJSON()`
   and `CytoCourse.reset()` (`index.html`, Issue #2): both previously
   rebuilt only `.quiz-mount` widgets, never `.exer` (exercise) ones, so a

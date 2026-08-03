@@ -2829,3 +2829,368 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   method. Any claim about a specific public API method's own effect
   needs a test that calls that method directly and checks state before
   anything else (a reload, a navigation) could have contributed.
+
+## QL-026 — Storage failures were caught and swallowed silently, so learners could lose progress with no warning and no honest failure report
+
+- **Status:** Corrected on branch `claude/issue-2-storage-failure-mode`
+  (Issue #2), draft PR open for independent review, not yet merged.
+- **Finding — confirmed, multiple related defects.** Reproduced through
+  the real public API and rendered DOM before any fix was written: (1)
+  `saveProgress()` caught every `localStorage.setItem()` error silently
+  and still called `emit('progress', null)`, so `recordAnswer()`,
+  `recordExercise()`, `markModule()`, and the module-completion UI all
+  kept advancing in-memory state with no indication the write had
+  failed; (2) a module's `.mark-status` text could read "Saved — nice
+  work." for a change the browser had just rejected; (3) `markModule()`
+  and the API `reset()` method both returned `{ok:true}` regardless of
+  whether the underlying storage operation actually succeeded; (4) no
+  public method existed to inspect persistence status at all; (5)
+  `loadProgress()` treated a genuine `localStorage.getItem()` failure
+  identically to "no progress yet" (a blank state, no warning) — the
+  same code path corrupt-but-readable stored JSON already used, so a
+  learner with real prior progress in an inaccessible store had no way
+  to know their existing progress might not even have been read; (6) the
+  UI `#resetBtn` handler called `location.reload()` unconditionally,
+  even when the storage-removal calls it depended on had thrown,
+  presenting a Reset that had not actually cleared storage as if it had.
+- **Impact:** None shipped — found and fixed within this same branch
+  before merge; the branch is a draft PR awaiting independent review,
+  not yet on `main`.
+- **Cause:** Every storage-touching call site had its own local
+  try/catch (or none), each independently deciding what "failure" meant
+  and whether to tell the learner — with no shared state to know that
+  storage was currently unavailable, no shared decision about when it
+  was safe to write, and no shared place to surface a warning.
+- **Correct action:** Centralize persistence status in one place, gate
+  every storage-touching call site through it, and make an explicit
+  policy decision about which situations are stale-safe to keep trying
+  (a write failure, since a full serialize of `state` always
+  self-heals) versus not (a read failure, since the app may not have
+  seen everything already in storage) — rather than trusting every call
+  site to independently reimplement that judgment.
+- **Correction:** Added a module-level `persistState` variable
+  (`{persistent, reason}`, `reason` one of `null | 'unavailable' |
+  'write-failed'`) — deliberately kept outside the persisted `state`
+  object, never exported/imported, no `SCHEMA_V` involvement.
+  `setPersistState()` is the single place that updates it, updates the
+  new `#storageWarning` DOM banner (`role="status"`, chosen over
+  `role="alert"` specifically so it never steals focus mid-answer), and
+  fires a new `persistence` event — and only does any of that when the
+  status genuinely changes, so repeated failures produce one warning,
+  not one per failed action. `loadProgress()` now separates the
+  `getItem()` call (its own try/catch, setting `reason:'unavailable'` on
+  failure, before any `JSON.parse()` is attempted) from parsing the
+  result (unchanged corrupt-JSON fallback, no warning). `saveProgress()`
+  skips the write attempt entirely while `reason === 'unavailable'`
+  (`'unavailable'` is sticky for the session — only a reload, a fresh
+  read, can clear it) but otherwise always attempts the full-state write
+  and reports the genuine outcome (`reason:'write-failed'` self-heals
+  the moment any later write succeeds, since it is always a full
+  serialize). `performReset()`, a new function shared by both the UI
+  `#resetBtn` handler and the API `reset()` method, tracks each storage
+  operation's own success independently and reports `{ok: v1Removed &&
+  v2Cleared}` — `reset()` no longer unconditionally claims `{ok:true}`,
+  and the UI handler now only reloads when both operations actually
+  succeeded. `importJSON()` gained one narrow, deliberate exception: a
+  storage-write failure during import now also calls
+  `markSessionOnly('write-failed')` — a status-only side effect that
+  changes no progress data and fires no progress-bearing event, so the
+  existing all-or-nothing atomicity guarantee (still `{ok:false}`, still
+  no live-state/storage/event change on failure) is unweakened. Added
+  `CytoCourse.getPersistenceStatus()` returning `{persistent, reason}`;
+  no raw browser exception text is ever exposed through it or the
+  warning text. `markModule()`/`addQuestions()` were deliberately left
+  unchanged — their `{ok:true}` has always meant "the in-memory action
+  was valid," a narrower, already-accurate claim distinct from
+  `reset()`'s previous unconditional `{ok:true}`, which was a direct,
+  provable false-durability claim.
+- **15 new tests** in `tests/dom-behavior.mjs` (124 → 139) plus 6 new
+  real-browser Playwright tests in
+  `tests/e2e/storage-failure-warning.spec.mjs` (run under both the
+  desktop and narrow/mobile configured projects). Full coverage list:
+  `docs/VALIDATION.md` "Storage-failure detection and session-only
+  progress."
+- **Mutation-tested**, each reverted and confirmed `index.html`
+  byte-identical via `diff` before committing: (1) restored the original
+  unconditional silent-catch `saveProgress()` — failed exactly the 8
+  tests that depend on write-failure detection existing; (2) removed the
+  `persistState.persistent` guard from the `.mark-status` text condition
+  — failed exactly the 2 tests asserting no false "Saved" text under a
+  write failure; (3) moved `markPersistent()` ahead of the
+  `localStorage.setItem()` call, clearing session-only status before the
+  write was confirmed to succeed — failed the repeated-failure dedup
+  test (the assertion sensitive to a spurious flicker within one failed
+  save; the recovery test's own final-state assertions still converged
+  to the same correct values, so it did not independently catch this);
+  (4) changed the UI `#resetBtn` handler to reload unconditionally,
+  ignoring `performReset()`'s result — failed exactly the one test
+  asserting the UI Reset path does not reload on a storage-removal
+  failure. Full local validation: `npm test` (139/139),
+  `tests/e2e/storage-failure-warning.spec.mjs` (12/12 across both
+  projects), and the complete `npx playwright test` suite.
+- **Prevention:** A silent `catch(e){}` around a storage write is a
+  policy decision disguised as error handling — it decides, by omission,
+  that the user never needs to know their action was not saved. Any
+  catch block around a persistence operation should be treated as a
+  point requiring an explicit, documented decision about what the user
+  is told, not a place to make failure invisible.
+
+### Addendum — independent review of draft PR #20 found three blocking corrections, all fixed before merge
+
+- **Status:** Corrected on the same branch
+  (`claude/issue-2-storage-failure-mode`), before merge. Independent
+  review at head `cf0a815b90e408f6a5dde41844f9ac26ee85525b` confirmed CI
+  green, `npm test` passing 139/139, no unresolved review comments, and
+  the general read-failure/write-failure model coherent — but reproduced
+  three real defects in the implementation itself.
+- **Finding 1 — confirmed, a failed import could clobber unseen prior
+  progress.** Reproduced exactly: seed genuine prior v2 progress in the
+  backing store → make `localStorage.getItem()` throw during
+  initialization (status correctly becomes `{persistent:false,
+  reason:'unavailable'}`, having never actually read the seeded record)
+  → attempt an otherwise-valid `importJSON()` call while
+  `localStorage.setItem()` also throws → `importJSON()` correctly
+  returned `{ok:false}`, but its catch block unconditionally called
+  `markSessionOnly('write-failed')`, downgrading the reason from the
+  sticky `'unavailable'` to the non-sticky `'write-failed'` → restore
+  write access while read access remains unavailable → an ordinary
+  action (`markModule()`) then successfully wrote the session's
+  blank/partial in-memory state over the genuine prior progress that
+  initialization never actually read — the exact clobber `'unavailable'`
+  exists to prevent, and the primary safety guarantee the original
+  QL-026 entry claimed to provide.
+- **Finding 2 — confirmed, the warning could be off-screen while
+  reporting as "visible."** `#storageWarning` was an ordinary in-flow
+  element placed immediately below `<header>`, at the top of a page that
+  can run tens of thousands of pixels tall. A sighted learner working in
+  a later module when a write failed would have the element become
+  CSS-visible (non-zero size, not `hidden`) while remaining tens of
+  thousands of pixels outside the current viewport. The existing
+  Playwright `toBeVisible()` assertions proved only that the element
+  renders — not that a learner could actually see it — and could not
+  detect this class of defect by construction.
+- **Finding 3 — confirmed, API `reset()`'s partial-failure status was
+  inaccurate.** Reproduced: seed a legacy v1 key → make only
+  `removeItem(PKEY_V1)` throw → the API Reset's canonical v2 blank-state
+  write (`localStorage.setItem(PKEY, ...)`) succeeds → `reset()`
+  correctly returned `{ok:false}` (both requested cleanup operations did
+  not succeed) — but `persistState` was also downgraded to
+  `{persistent:false, reason:'write-failed'}` and `#storageWarning`
+  displayed, even though the current v2 state was genuinely, durably
+  written, and `loadProgress()` always prefers a valid v2 record over
+  ever reading `PKEY_V1` at all, making the surviving legacy key provably
+  inert. The status and warning falsely implied the learner's current
+  progress might be lost, when only dormant legacy-key cleanup had
+  failed.
+- **Impact:** None shipped — PR #20 remained draft/unmerged throughout;
+  all three found and fixed before merge.
+- **Cause:** (1) `importJSON()`'s failure branch treated every prior
+  `persistState.reason` identically, not accounting for `'unavailable'`
+  being a strictly more conservative state that must never be weakened
+  by a failed (as opposed to successful) explicit action. (3) similarly
+  treated the API and UI Reset paths identically
+  (`v1Removed && v2Cleared`), not accounting for the fact that the two
+  paths clear `PKEY` by fundamentally different mechanisms (removal vs.
+  durable overwrite) with different actual risk profiles for the
+  already-inert legacy key. (2) was a placement decision (in-flow,
+  top-of-page) made without testing perceivability at realistic scroll
+  depth — the original test suite's own `toBeVisible()` checks could not
+  have caught it even in principle.
+- **Correct action:** A persistence-status transition must be reasoned
+  about per *prior state*, not just per *action outcome* — "did this
+  write fail" is not sufficient; "was the prior state already more
+  conservative than what a failure would produce" must also be checked
+  before transitioning. Similarly, two code paths that superficially
+  return the same shape (`{v1Removed, v2Cleared}`) can still warrant
+  different status logic if their underlying storage operations carry
+  different real risk. A "the element is visible" test is not evidence
+  of "the element is visible to the user right now" for anything that
+  is not always within the initial viewport.
+- **Correction 1:** `importJSON()`'s catch block now only calls
+  `markSessionOnly('write-failed')` when `persistState.reason !==
+  'unavailable'`; when it is already `'unavailable'`, the status is left
+  untouched (no transition, no duplicate `'persistence'` event,
+  `saveProgress()` keeps skipping every write). A successful import is
+  unaffected and still clears `'unavailable'` as before. See
+  `docs/ARCHITECTURE.md`'s corrected transition table for the complete
+  policy.
+- **Correction 2:** `.storage-warning` changed from in-flow to
+  `position:fixed; left:0; right:0; bottom:0`, anchored to the viewport's
+  bottom edge specifically to avoid competing for screen position with
+  the sticky header (`top:0`) and sticky/fixed sidebar (both anchored at
+  `top:var(--header-h)`). Remains non-modal, non-auto-dismissing,
+  `role="status"`, and never focus-stealing. Added to the `@media print`
+  hide list to avoid a repeating fixed element across printed pages.
+- **Correction 3:** `performReset()`'s status logic is now path-dependent:
+  the API path (`usePkeyRemoval:false`) durability now depends on
+  `v2Cleared` alone (a leftover, unremoved `PKEY_V1` is provably inert
+  once a valid v2 record exists); the UI path (`usePkeyRemoval:true`,
+  which clears `PKEY` by removal, so a genuinely absent `PKEY` plus a
+  surviving `PKEY_V1` risks real v1-migration resurrection on reload)
+  still correctly depends on both `v1Removed` and `v2Cleared`. `reset()`'s
+  returned `{ok: v1Removed && v2Cleared}` is unchanged in both paths —
+  the smallest accurate representation, per the review's own guidance:
+  no new `persistState.reason` value was added, and `ok` still honestly
+  reports the legacy-key cleanup failure; only the *separate* persistence
+  status stopped conflating that cleanup failure with current-state
+  durability on the API path specifically.
+- **6 new dependency-free tests** in `tests/dom-behavior.mjs` (139 → 145)
+  and **3 new real-browser Playwright tests** in
+  `tests/e2e/storage-failure-warning.spec.mjs` (6 → 9, both configured
+  projects) — full coverage list in `docs/VALIDATION.md`'s "Correction —
+  sticky `'unavailable'` clobber and warning viewport visibility."
+- **Mutation-tested**, each reverted and confirmed `index.html`
+  byte-identical via `diff` before committing:
+  1. Restored the unconditional `markSessionOnly('write-failed')` in
+     `importJSON()`'s catch — failed exactly the new dependency-free
+     clobber-sequence test and the new real-browser clobber-sequence
+     test, and no others.
+  2. Restored the API Reset path's status gate to
+     `v1Removed && v2Cleared` — failed exactly the new "only legacy-key
+     removal fails" dependency-free test, and no others.
+  3. Restored the original in-flow, non-`position:fixed`
+     `.storage-warning` CSS — failed both new deep-scroll Playwright
+     tests, under both configured projects (4 failures total), and no
+     others.
+- **Full local validation:** `npm test` (145/145),
+  `npx playwright test tests/e2e/storage-failure-warning.spec.mjs`
+  (18/18 across both projects), and the complete `npx playwright test`
+  suite (196 passed, 4 pre-existing viewport-conditional skips, 0
+  failed).
+- **Prevention:** When implementing a state machine with a
+  "more conservative wins" invariant (here: `'unavailable'` must never
+  be weakened by a failed action), explicitly test the case where the
+  action fails *while starting from the most conservative state* — not
+  only from the default/optimistic state, which is what the original
+  test suite exercised. When two code paths share a return shape but
+  clear storage by different underlying mechanisms, test each path's
+  partial-failure behavior separately rather than assuming shared logic
+  is safe to share. Any "is this UI element visible" test for content
+  that is not guaranteed to be within the initial viewport should assert
+  viewport intersection (e.g. Playwright's `toBeInViewport()`), not
+  merely CSS visibility.
+
+### Addendum 2 — the fix for one correction (fixed-position visibility) introduced a new, real obstruction defect
+
+- **Status:** Corrected on the same branch
+  (`claude/issue-2-storage-failure-mode`), before merge. Independent
+  review at head `e84cf6bfb27574c8117dd2781f5b84ae33301b80` confirmed
+  the three prior corrections (addendum 1) all genuinely correct, then
+  found one further real defect in the fixed-position banner itself.
+- **Finding — confirmed, the fixed banner could obstruct content and
+  navigation.** `position:fixed` removes an element from the normal
+  document flow entirely, so nothing downstream of `#storageWarning` in
+  the document reserved any room for it. While shown, it could
+  therefore sit visually on top of the page's own bottom-most course
+  content and, on narrow widths, on top of the mobile sidebar's own
+  bottom-most nav links — both still fully hit-testable underneath it,
+  since `position:fixed` does not disable default pointer events. The
+  dependency-free/real-browser tests added by addendum 1 proved the
+  banner intersects the viewport at any scroll depth (`toBeInViewport()`)
+  and proved earlier page content didn't shift position — necessary
+  proofs, but neither one checked whether anything ended up positioned
+  *underneath the banner's own rectangle*, which is the actual
+  obstruction risk a fixed overlay introduces.
+- **Impact:** None shipped — PR #20 remained draft/unmerged throughout;
+  found and fixed before merge.
+- **Cause:** Fixing one defect (viewport visibility, via
+  `position:fixed`) introduced a different one (obstruction) as a direct
+  side effect of the fix's own mechanism, and the test suite added
+  alongside that fix tested only the property the fix was aimed at, not
+  the new failure mode the fix's own mechanism newly permitted.
+- **Correct action:** When a fix's mechanism itself changes a structural
+  property of an element (here: removing it from document flow), audit
+  for what guarantees that structural property was previously providing
+  incidentally, and reproduce whether the fix silently drops any of them
+  before trusting the fix is complete — visibility and non-obstruction
+  are separate properties that do not imply each other.
+- **Correction:** Added a `--storage-warning-h` custom property
+  (declared on `:root`, default `0px`) kept in sync with the banner's
+  actual live rendered height by a new `setStorageWarningReservedHeight()`
+  — called synchronously inside `updateStorageWarning()` on every
+  show/hide (an immediate post-mutation `getBoundingClientRect()` read,
+  forcing on-demand layout rather than waiting a frame), and reactively
+  by a new `ResizeObserver` (`wireStorageWarningReservedSpace()`, wired
+  once from `init()`) for any later size change with no accompanying
+  `persistState` transition — text rewrapping at a new width, browser
+  zoom, a web font finishing load, a longer localized message.
+  `.content`'s bottom padding and `.sidebar`'s own `height` (both the
+  desktop sticky version and the mobile fixed/off-canvas version) each
+  add or subtract this same variable, so real layout space is reserved
+  for the banner in every affected scroll region whenever it is shown,
+  collapsing back to `0px` the instant it hides. `pointer-events:none`
+  on the banner alone was considered and explicitly rejected: it would
+  let clicks pass through the banner but the banner would still visually
+  cover whatever was underneath it -- the fix needed to remove the
+  obstruction itself, not merely one symptom of it.
+- **3 new dependency-free tests** in `tests/dom-behavior.mjs`
+  (145 → 148), covering what is meaningfully checkable without a real
+  layout engine (the `--storage-warning-h` custom property's shown/
+  hidden tracking, its collapse on recovery, and its stability across
+  repeated failures) using new `Node.getBoundingClientRect()`,
+  `style.setProperty()`/`getPropertyValue()`/`removeProperty()`, and
+  `ResizeObserver` stubs added to `tests/dom-harness.mjs`.
+- **6 new real-browser Playwright tests** in
+  `tests/e2e/storage-failure-warning.spec.mjs` (9 → 15) replace the
+  prior "document position unchanged" assertion (necessary but
+  insufficient, per the Finding above) with direct non-obstruction
+  proofs: rectangle-intersection AND real `document.elementFromPoint()`
+  hit-testing for a course control at the very end of the page and, at
+  390×844 with the mobile sidebar open, its final nav link (which must
+  also become fully visible strictly above the banner and remain fully
+  operable, closing the sidebar normally on activation); no overlap with
+  the sticky header; reserved-space stability across repeated failures;
+  clean reservation collapse on recovery proven via
+  `document.documentElement.scrollHeight` and `window.scrollY` (not just
+  the custom property's own value); correct behavior when the message
+  wraps to multiple lines at 390px width; and no transition applied
+  under an explicit `prefers-reduced-motion: reduce` emulation. Full
+  coverage list: `docs/VALIDATION.md`'s "Correction — the fixed warning
+  could obstruct content and navigation."
+- **Two test-isolation defects were found and fixed while writing the
+  recovery/scroll-extent test**, before it was trusted as a correct
+  measurement: (1) a lazy-loaded (`loading="lazy"`) figure only actually
+  fetches and renders once scrolled near, so `waitForLoadState('networkidle')`
+  raced it non-deterministically under parallel-worker contention,
+  fixed by waiting on a targeted `waitForFunction` checking `.complete`
+  for images near the current scroll position specifically (not every
+  `<img>` on the page, which would hang forever on a lazy image never
+  scrolled near); (2) an earlier version of the test marked two
+  *different* modules complete (one to trigger the failure, a different
+  one to trigger recovery) — marking a module complete grows the page
+  slightly on its own (a "done" state change), a content change entirely
+  unrelated to the reservation under test, which was being
+  misattributed to a reservation-cleanup defect. Fixed by toggling the
+  *same* module's control on then off, returning the page's own content
+  to its exact original state so any remaining `scrollHeight` difference
+  could only be attributable to the reservation itself.
+- **Mutation-tested:** removed only the three `var(--storage-warning-h)`
+  consumption terms (`.content`'s padding, and both the desktop and
+  mobile `.sidebar` height rules), leaving the fixed banner, the
+  `:root` variable declaration, and all of the measurement JS completely
+  intact — failed the mobile-sidebar final-link test (rectangle overlap
+  correctly detected: the final link's box and the banner's box were
+  confirmed overlapping) and both
+  recovery/scroll-extent tests (the page's `scrollHeight` no longer grew
+  while the banner was shown), across both projects where each
+  respectively applies. The course-control-at-the-bottom, sticky-header,
+  repeated-failure, and multi-line-wrap tests did not independently fail
+  under this specific mutation given this content's current incidental
+  spacing — reverted regardless and confirmed `index.html`
+  byte-identical to the pre-mutation file via `diff` before committing,
+  since the mutation's purpose (proving the reservation is load-bearing
+  somewhere) was already clearly demonstrated by the failures it did
+  produce.
+- **Full local validation:** `npm test` (148/148),
+  `npx playwright test tests/e2e/storage-failure-warning.spec.mjs`
+  (consistently passing across repeated runs, aside from the two
+  pre-existing, already-documented `networkidle` flakes noted above,
+  each confirmed passing in isolation), and the complete
+  `npx playwright test` suite.
+- **Prevention:** A fix for one accessibility/correctness property (here:
+  guaranteed viewport visibility) can silently trade away a different
+  one (non-obstruction) if the fix's own mechanism removes a guarantee
+  the element previously had for free (here: occupying flow space).
+  Whenever a fix changes an element's position/flow scheme, explicitly
+  re-derive and test every property that scheme change could plausibly
+  affect, rather than only the property the fix was originally aimed at.

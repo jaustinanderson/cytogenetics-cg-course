@@ -1572,11 +1572,60 @@ key* an outcome is stored under, not *whether* the exercise DOM re-renders
 after `importJSON()`/`reset()` — those still only call
 `$all('.quiz-mount').forEach(buildQuiz)`, unchanged.)
 
-### Storage failure
+### Storage failure — draft PR open 2026-08-03, corrected 2026-08-03 (twice), not yet merged
 
-The application silently tolerates `localStorage` write failure while the UI may
-still imply that progress was saved. Detect storage availability and clearly
-indicate session-only mode.
+~~The application silently tolerates `localStorage` write failure while the
+UI may still imply that progress was saved.~~ Addressed on branch
+`claude/issue-2-storage-failure-mode` (Issue #2): a `persistState` state
+machine now distinguishes a write-only failure (self-heals on the next
+successful full-state save) from a read failure at initialization
+(sticky against ordinary writes for the session — but see the
+correction below for exactly how it clears), a `role="status"` warning
+(`#storageWarning`) communicates session-only mode without stealing
+focus, `CytoCourse.getPersistenceStatus()` and a `persistence` event
+expose it publicly, and `reset()`/the UI Reset handler now report/act on
+genuine storage-operation outcomes instead of assuming success. See
+`docs/QUALITY_LOG.md` QL-026, `docs/ARCHITECTURE.md` "Storage-failure
+detection and session-only mode," and `docs/VALIDATION.md` for the full
+record.
+
+**Independent review found and this branch corrected three real defects
+before merge** (`docs/QUALITY_LOG.md` QL-026's addendum): (1) a failed
+`importJSON()` attempt could downgrade the sticky `'unavailable'` reason
+to the non-sticky `'write-failed'`, letting a later ordinary action
+silently write over genuine prior progress that a read failure at init
+had never actually seen — the exact clobber the state machine exists to
+prevent, now fixed by never letting a *failed* import weaken
+`'unavailable'` (a *successful* one may still clear it, since it is a
+deliberate, complete replacement); (2) `#storageWarning` was an ordinary
+in-flow element under `<header>`, invisible in practice to a learner
+scrolled deep into a later module despite passing `toBeVisible()` — now
+`position:fixed` to the viewport's bottom edge, verified with
+`toBeInViewport()`; (3) the API `reset()` path's persistence status
+falsely reported session-only when only the already-inert legacy `PKEY_V1`
+key failed to remove while the canonical v2 state was genuinely durable
+— now path-dependent (API path depends only on the v2 write; the UI
+path, which removes rather than overwrites `PKEY`, still correctly
+depends on both operations).
+
+**A second round of independent review then found the fixed-position
+warning banner itself could obstruct content** (`docs/QUALITY_LOG.md`
+QL-026's second addendum): `position:fixed` (added to fix viewport
+visibility) removes the banner from document flow, so nothing
+downstream reserved room for it — it could sit on top of the page's own
+bottom-most content and, at narrow widths, on top of the mobile
+sidebar's own bottom-most nav links, both still clickable underneath it.
+Fixed by keeping a `--storage-warning-h` custom property in sync with
+the banner's live rendered height and having `.content`/`.sidebar`
+reserve that much space whenever it is shown — `pointer-events:none` on
+the banner alone was considered and rejected, since it would let clicks
+through without removing the visual obstruction. Verified with real
+`document.elementFromPoint()` hit-testing and rectangle-intersection
+checks, not rectangle math alone.
+
+**Draft PR titled "Communicate session-only progress when storage fails
+(Issue 2)" is open against `main`, CI green, awaiting independent review
+— not yet merged.** Treat this risk as still open until that PR lands.
 
 ### Analytics semantics
 

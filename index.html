@@ -31,6 +31,14 @@
     --sans:"IBM Plex Sans","Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
     --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,"Courier New",monospace;
     --sidebar-w:300px; --header-h:64px;
+    /* Live-measured height of the fixed #storageWarning banner, kept in
+       sync with its actual rendered box by
+       setStorageWarningReservedHeight() in the PROGRESS section of the
+       script below -- 0px whenever the banner is hidden. .content and
+       .sidebar both reserve this much extra space so the fixed banner
+       never overlaps course content or navigation; see the
+       .storage-warning CSS comment for the full rationale. */
+    --storage-warning-h:0px;
   }
   *{box-sizing:border-box}
   html{scroll-behavior:smooth}
@@ -80,7 +88,10 @@
   .sidebar{
     position:sticky; top:var(--header-h); align-self:flex-start;
     width:var(--sidebar-w); flex:0 0 var(--sidebar-w);
-    height:calc(100vh - var(--header-h)); overflow-y:auto;
+    /* Shrinks by the reserved warning height so this column's own
+       scrollable area (overflow-y:auto) never extends behind the fixed
+       #storageWarning banner -- see that rule's comment. */
+    height:calc(100vh - var(--header-h) - var(--storage-warning-h)); overflow-y:auto;
     border-right:1px solid var(--line); background:var(--surface-2);
     padding:1.1rem .8rem 3rem;
   }
@@ -102,7 +113,11 @@
   .navlist a.done .nav-check{display:inline}
   .nav-section{font-size:.68rem;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-faint);font-weight:700;margin:1rem .55rem .35rem;padding-top:.6rem;border-top:1px dashed var(--line)}
 
-  .content{flex:1 1 auto;min-width:0;padding:clamp(1rem,2.4vw,2.2rem) clamp(1rem,3vw,2.6rem) 5rem;max-width:980px}
+  /* The bottom padding grows by the reserved warning height (0px
+     whenever it's hidden) so the fixed #storageWarning banner never
+     overlaps the tail end of scrolled course content -- see that rule's
+     comment. */
+  .content{flex:1 1 auto;min-width:0;padding:clamp(1rem,2.4vw,2.2rem) clamp(1rem,3vw,2.6rem) calc(5rem + var(--storage-warning-h));max-width:980px}
 
   /* ---------- Hero / dashboard ---------- */
   .hero{background:linear-gradient(160deg,#0e2c4d 0%,#123a63 55%,#0c5566 100%);color:#eaf3fb;border-radius:18px;padding:clamp(1.4rem,3vw,2.4rem);box-shadow:var(--shadow);position:relative;overflow:hidden}
@@ -378,11 +393,68 @@
   .backdrop{display:none;position:fixed;inset:0;background:rgba(10,25,40,.5);z-index:80}
   .backdrop.show{display:block}
 
+  /* Fixed to the viewport's bottom edge -- corrected 2026-08-03 (Issue #2,
+     docs/QUALITY_LOG.md QL-026 addendum) after independent review found
+     the original in-flow placement (directly under <header>, at the very
+     top of a page that can run tens of thousands of pixels tall) meant a
+     learner scrolled into a later module would never see it: it was
+     CSS-visible but far outside the current viewport, and the existing
+     Playwright toBeVisible() assertion could not catch this because it
+     proves only that the element renders, not that it intersects the
+     viewport. position:fixed guarantees it is always within the current
+     viewport at any scroll depth, without requiring any scroll-tracking
+     JS. Anchored to the BOTTOM edge specifically so it never competes
+     for the same screen position as the sticky header (position:sticky;
+     top:0) or the sticky/fixed sidebar (both anchored at top:var(--header-h))
+     -- see tests/e2e/storage-failure-warning.spec.mjs's deep-scroll test
+     for the real-browser proof this does not overlap either.
+     Still non-modal (no backdrop, page fully usable underneath) and
+     never auto-dismissable -- it reflects live persistence status, so it
+     can only change when that status genuinely changes (see
+     updateStorageWarning() in the PROGRESS section). role="status"
+     (implicit aria-live="polite"/aria-atomic="true") announces it to
+     assistive tech without moving focus, so answering a question while
+     it is visible is never interrupted -- proven only for the warning
+     itself, not as a claim about quiz-answer focus behavior generally
+     (a clicked, now-disabled quiz option can still return focus to the
+     document on its own, an existing, unrelated behavior this task does
+     not change or claim to preserve). No transition/animation is used,
+     so there is nothing for prefers-reduced-motion to need to disable.
+
+     Non-obstruction correction (2026-08-03, same QL-026 addendum):
+     because this element occupies no space in normal flow, nothing
+     downstream of it in the document previously reserved room for it --
+     the banner sat visually on TOP of the page's own bottom-most content
+     and, on narrow widths, on top of the mobile sidebar's own bottom-most
+     nav links, both still fully hit-testable underneath it (position:fixed
+     does not remove default pointer-events). pointer-events:none on the
+     banner alone was rejected as a fix: it would let clicks pass through
+     but the banner would still visually cover whatever is under it.
+     Instead, --storage-warning-h (declared on :root above) is kept in
+     sync with the banner's actual live rendered height by
+     setStorageWarningReservedHeight() (called synchronously whenever
+     updateStorageWarning() shows/hides it, and reactively by a
+     ResizeObserver for any later size change -- text wrapping at a new
+     width, browser zoom, a web font finishing load, or a different
+     localized message length) -- 0px whenever hidden. .content's bottom
+     padding and .sidebar's own height (both the desktop sticky version
+     and the mobile fixed/off-canvas version) each add or subtract this
+     same variable, so real layout space is reserved for the banner in
+     every affected scroll region: nothing legitimate is ever positioned
+     underneath its rectangle while it is shown, and recovery (hiding it)
+     cleanly collapses that reservation back to zero with no leftover
+     empty strip. See tests/e2e/storage-failure-warning.spec.mjs for the
+     real-browser rectangle-intersection and hit-testing proof, and
+     index.html's setStorageWarningReservedHeight()/
+     wireStorageWarningReservedSpace() for the measurement mechanics. */
+  .storage-warning{position:fixed;left:0;right:0;bottom:0;z-index:100;background:var(--no-bg);border-top:1px solid var(--no-line);color:var(--no-ink);padding:.7rem 1.2rem;font-size:.88rem;font-weight:600;text-align:center;line-height:1.4;box-shadow:0 -2px 12px rgba(10,25,40,.12)}
+  .storage-warning[hidden]{display:none}
+
   /* ---------- Responsive ---------- */
   @media (max-width:980px){
     .two-col{grid-template-columns:1fr}
     .hamburger{display:inline-flex}
-    .sidebar{position:fixed;left:0;top:var(--header-h);height:calc(100vh - var(--header-h));z-index:85;transform:translateX(-105%);transition:transform .25s ease;box-shadow:0 10px 40px rgba(10,25,40,.18);width:min(86vw,320px)}
+    .sidebar{position:fixed;left:0;top:var(--header-h);height:calc(100vh - var(--header-h) - var(--storage-warning-h));z-index:85;transform:translateX(-105%);transition:transform .25s ease;box-shadow:0 10px 40px rgba(10,25,40,.18);width:min(86vw,320px)}
     .sidebar.open{transform:translateX(0)}
     .content{max-width:none;width:100%}
     .topbar-progress{display:none}
@@ -395,6 +467,7 @@
     .topbar-actions{gap:.3rem}
     .topbar-actions .btn{padding:.5rem;gap:0}
     .topbar-actions .btn span{display:none}
+    .storage-warning{padding:.55rem .8rem;font-size:.8rem}
   }
 
   @media (prefers-reduced-motion:reduce){
@@ -404,7 +477,7 @@
 
   /* ---------- Print ---------- */
   @media print{
-    .topbar,.sidebar,.backdrop,.topbar-actions,.hamburger,.exer-nav,.flash-nav,.flash-cats{display:none !important}
+    .topbar,.sidebar,.backdrop,.topbar-actions,.hamburger,.exer-nav,.flash-nav,.flash-cats,.storage-warning{display:none !important}
     body{background:#fff;font-size:11.5pt}
     .layout{display:block;max-width:none}
     .content{max-width:none;padding:0}
@@ -447,6 +520,8 @@
     <button type="button" class="btn" id="resetBtn" aria-label="Reset" title="Reset saved progress"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg><span>Reset</span></button>
   </div>
 </header>
+
+<div id="storageWarning" class="storage-warning" role="status" hidden></div>
 
 <div class="backdrop" id="backdrop"></div>
 
@@ -3900,6 +3975,142 @@
 
   function blankState(){ return {v:SCHEMA_V, modules:{}, answers:{}, exercises:{}, started:Date.now()}; }
 
+  /* ============================ PERSISTENCE STATUS (Issue #2) ============================
+     Deliberately NOT part of `state`: this describes the RUNTIME
+     relationship between in-memory progress and localStorage for the
+     current tab/session -- never something exported/imported/migrated as
+     learner progress, and never counted toward SCHEMA_V. See
+     docs/ARCHITECTURE.md "Storage-failure detection and session-only
+     mode" for the full policy this implements; this comment summarizes
+     only the mechanics.
+
+     Distinguishes exactly two states:
+       persistent:true,  reason:null            -- the last full-state
+         write attempt (or, before any write has been needed, storage
+         READ access at load) succeeded. The default/optimistic starting
+         state.
+       persistent:false, reason:'unavailable'    -- localStorage READ
+         access itself failed during loadProgress() (not merely corrupt
+         JSON -- see loadProgress()'s own comment for how those are told
+         apart). Sticky against ORDINARY, incremental writes for the rest
+         of this session: saveProgress() below (used by recordAnswer(),
+         recordExercise(), markModule(), and the mark-complete click
+         handler) deliberately stops attempting writes entirely once this
+         reason is set, specifically because a read failure means we
+         never learned what (if anything) is already sitting in
+         localStorage -- letting an ordinary, incremental write "succeed"
+         could silently overwrite real prior progress we never saw. A
+         reload (a fresh loadProgress() call, which will succeed if
+         storage has since become readable) always clears this reason.
+         So does a SUCCESSFUL explicit Reset or importJSON() call, in the
+         same session, with no reload -- corrected 2026-08-03 (Issue #2,
+         QL-026 addendum): both are deliberate, explicit, complete-
+         replacement actions the learner asked for, not incremental
+         accumulation, so a genuinely successful write from either is
+         trusted as real recovery, same as it already was from
+         persistent:true or reason:'write-failed'. What must NEVER
+         happen -- the exact clobber independent review found and this
+         correction fixes -- is a FAILED importJSON() write silently
+         downgrading this reason to the non-sticky 'write-failed', which
+         would then let the next ordinary action's write through; see
+         importJSON()'s own comment for the corrected guard.
+       persistent:false, reason:'write-failed'   -- storage was
+         confirmed readable (loadProgress() saw it), but a later
+         localStorage.setItem() call threw. NOT sticky: because the read
+         succeeded, in-memory `state` is a faithful continuation of
+         whatever was already stored, so the very next successful
+         saveProgress() call -- which always serializes the ENTIRE
+         current state, never a partial diff -- is safe to trust as
+         genuine recovery, and clears this automatically.
+     An explicit Reset (UI or API) is the one action that always attempts
+     its storage operations regardless of either reason above -- see
+     performReset()'s own comment for why overwriting is safe there but
+     not for ordinary actions, and for why the API path's persistence
+     status depends only on its canonical v2 write succeeding, not on
+     whether the separate, inert legacy key was also removed. importJSON()
+     also always attempts its write regardless (see its own comment) --
+     both are explicit, deliberate replace-everything actions, not
+     incremental accumulation that could compound an unnoticed clobber.
+
+     No raw browser exception (message, name, stack) is ever stored here
+     or exposed through getPersistenceStatus() -- only these two fixed,
+     stable string reasons -- so the public API and the DOM warning never
+     leak unstable, implementation-specific detail. */
+  var persistState = {persistent:true, reason:null};
+
+  /* True only when persistState actually changes -- both the DOM warning
+     update and the 'persistence' event below are gated on this, so
+     repeated failures (or repeated successes) never re-announce or
+     re-fire for an already-current status. */
+  function setPersistState(persistent, reason){
+    if(persistState.persistent === persistent && persistState.reason === reason){ return false; }
+    persistState = {persistent:persistent, reason:reason};
+    updateStorageWarning();
+    emit('persistence', {persistent:persistState.persistent, reason:persistState.reason});
+    return true;
+  }
+  function markPersistent(){ setPersistState(true, null); }
+  function markSessionOnly(reason){ setPersistState(false, reason); }
+
+  /* Keeps --storage-warning-h (declared on :root) equal to the fixed
+     #storageWarning banner's actual current rendered height, or 0px
+     when it is hidden -- see the .storage-warning CSS comment's
+     "Non-obstruction correction" for why .content/.sidebar reserve this
+     much space. Reads getBoundingClientRect() rather than trusting a
+     assumed/cached number specifically because the real height varies
+     with text wrapping (narrow widths, a longer localized message),
+     browser zoom, and font metrics -- none of which this function
+     should have to predict; it only has to measure what actually
+     rendered. Clamped to a non-negative integer pixel count purely as
+     defensive rounding, not because a negative height is expected. */
+  function setStorageWarningReservedHeight(px){
+    var root = document.documentElement;
+    if(!root || !root.style || typeof root.style.setProperty !== 'function'){ return; }
+    root.style.setProperty('--storage-warning-h', Math.max(0, Math.ceil(px || 0)) + 'px');
+  }
+
+  /* One-time hookup (called once from init()): a ResizeObserver keeps
+     the reservation accurate for size changes that happen WITHOUT a
+     persistState transition -- e.g. rotating/resizing the viewport
+     changes how the message wraps, or a web font finishes loading and
+     shifts text metrics, while the banner stays shown throughout. The
+     synchronous measurement in updateStorageWarning() below already
+     handles the ordinary show/hide case immediately, with no need to
+     wait for this observer's next tick; this exists purely as an
+     ongoing safety net for later, transition-less size changes.
+     ResizeObserver is assumed present (no polyfill/fallback): every
+     evergreen browser this course targets has supported it since 2020,
+     consistent with this file's existing unguarded IntersectionObserver
+     usage elsewhere. */
+  function wireStorageWarningReservedSpace(){
+    var el = $('#storageWarning');
+    if(!el || typeof ResizeObserver === 'undefined'){ return; }
+    var ro = new ResizeObserver(function(){
+      setStorageWarningReservedHeight(el.hidden ? 0 : el.getBoundingClientRect().height);
+    });
+    ro.observe(el);
+  }
+
+  /* Non-modal, fixed, dedup'd against its own current content -- see
+     the .storage-warning CSS comment for the accessibility rationale.
+     Fixed, plain-language wording; never includes a raw exception. */
+  function updateStorageWarning(){
+    var el = $('#storageWarning');
+    if(!el){ return; }
+    if(persistState.persistent){
+      if(!el.hidden){ el.hidden = true; el.textContent = ''; }
+      setStorageWarningReservedHeight(0);
+      return;
+    }
+    var msg = 'Your browser storage is unavailable, so your progress is being kept only for this session in this browser tab. Reloading, closing this tab, or leaving this page may lose progress that has not already been saved.';
+    if(el.hidden || el.textContent !== msg){ el.hidden = false; el.textContent = msg; }
+    // Read AFTER the mutation above so this reflects the box that will
+    // actually render (a synchronous DOM write followed by a synchronous
+    // geometry read forces the browser to lay out on demand -- no need
+    // to wait for the ResizeObserver's next tick for this initial value).
+    setStorageWarningReservedHeight(el.getBoundingClientRect().height);
+  }
+
   /* Renames any surviving legacy-format (position-derived) keys in
      state.exercises to their item's real, explicit `id`. Deterministic and
      idempotent: driven entirely by each item's own literal `legacyId` field
@@ -4298,9 +4509,39 @@
     return validateImportedState(o.state);
   }
 
+  /* Two genuinely different failure modes were previously handled by one
+     shared try/catch around `JSON.parse(localStorage.getItem(PKEY))`,
+     which could not tell them apart:
+       (a) localStorage.getItem() itself throwing -- storage is not
+           ACCESSIBLE at all (blocked, unsupported, a SecurityError in a
+           sandboxed context, etc.) -- detected by checking `typeof
+           window.localStorage !== 'undefined'` alone is NOT sufficient
+           (the task's own requirement): only an actual operation,
+           wrapped in try/catch, proves access really works.
+       (b) getItem() succeeding (storage IS accessible) but returning a
+           string JSON.parse() cannot parse -- ordinary corrupt/foreign
+           data in an otherwise-working store, not a persistence
+           capability problem.
+     (a) sets persistState to the sticky 'unavailable' reason (see its
+     own comment) and returns immediately with a blank state -- we do not
+     know what, if anything, is really stored, so no read of PKEY_V1 is
+     attempted either (same underlying access problem). (b) is NOT a
+     persistence-status event at all: it simply falls through exactly as
+     it always did, treated as "no valid v2 progress found," and normal
+     v1-migration/blank-state handling continues -- persistState is left
+     at its default persistent:true, since storage access itself is
+     working fine. */
   function loadProgress(){
+    var rawText, storageReadable = true;
+    try{ rawText = localStorage.getItem(PKEY); }
+    catch(e){ storageReadable = false; }
+    if(!storageReadable){
+      markSessionOnly('unavailable');
+      state = blankState();
+      return;
+    }
     var raw = null;
-    try{ raw = JSON.parse(localStorage.getItem(PKEY)); }catch(e){ raw = null; }
+    try{ raw = JSON.parse(rawText); }catch(e){ raw = null; }
     if(raw && raw.v === SCHEMA_V){
       state = raw;
       state.modules   = state.modules   || {};
@@ -4322,8 +4563,25 @@
       }
     }catch(e){}
   }
+  /* Ordinary (non-Reset, non-import) save path used by recordAnswer(),
+     recordExercise(), markModule(), and the mark-complete click handler.
+     Always serializes the FULL current `state` (never a partial diff),
+     which is what makes "the next successful call clears session-only
+     mode" a safe, complete recovery rather than a partial one -- see
+     persistState's own comment. When persistState.reason is the sticky
+     'unavailable' value, the write is skipped entirely (not merely
+     ignored on failure): a genuine READ failure at load means we never
+     saw what might already be in storage, so even a technically-
+     successful write here could silently clobber real prior progress --
+     see loadProgress()'s and persistState's comments for the full
+     reasoning. `progress` still fires unconditionally either way, exactly
+     as before this task -- only the write attempt itself, and the
+     persistence-status tracking around it, are new. */
   function saveProgress(){
-    try{ localStorage.setItem(PKEY, JSON.stringify(state)); }catch(e){}
+    if(persistState.reason !== 'unavailable'){
+      try{ localStorage.setItem(PKEY, JSON.stringify(state)); markPersistent(); }
+      catch(e){ markSessionOnly('write-failed'); }
+    }
     emit('progress', null);
   }
   function doneCount(){ var n=0; MODULES.forEach(function(m){ if(state.modules[m.id]){ n++; } }); return n; }
@@ -4446,10 +4704,18 @@
       if(state.modules[id]){ btn.classList.add('done'); if(txt){ txt.textContent = 'Module complete'; } }
       else { btn.classList.remove('done'); if(txt){ txt.textContent = 'Mark module complete'; } }
     });
+    // "Saved -- nice work." must never appear for a change that was not
+    // actually written durably (Issue #2): gated on persistState.persistent,
+    // not merely on the in-memory state.modules[id] flag. When session-only
+    // (persistState.persistent is false), this stays blank rather than
+    // showing a different per-module message -- the one shared
+    // #storageWarning banner already communicates the situation once;
+    // repeating it 17 times would be redundant, not more informative.
     $all('.mark-status').forEach(function(s){
       var id = s.getAttribute('data-status');
-      s.textContent = state.modules[id] ? 'Saved \u2014 nice work.' : '';
+      s.textContent = (state.modules[id] && persistState.persistent) ? 'Saved \u2014 nice work.' : '';
     });
+    updateStorageWarning();
   }
   function wireMarkComplete(){
     $all('.mark-complete').forEach(function(btn){
@@ -4516,11 +4782,21 @@
     // The stale-ID policy's one deliberate exception (see the PROGRESS
     // section's file-level comment, "RESET IS THE ONE DELIBERATE
     // EXCEPTION"): removes BOTH keys wholesale, current or stale
-    // records included -- never a selective per-record strip.
+    // records included -- never a selective per-record strip. Honest
+    // failure handling (Issue #2): see performReset()'s own comment --
+    // reloading only happens once both storage operations are confirmed
+    // to have actually succeeded.
     var r=$('#resetBtn'); if(r){ r.addEventListener('click', function(){
       if(window.confirm('Reset your saved progress and reload the course? This cannot be undone.')){
-        try{ localStorage.removeItem(PKEY); localStorage.removeItem(PKEY_V1); }catch(e){}
-        location.reload();
+        var result = performReset(true);
+        if(result.v1Removed && result.v2Cleared){
+          location.reload();
+        }
+        // else: performReset() already applied the blank state in
+        // memory, rebuilt every widget, and flagged session-only -- the
+        // persistent #storageWarning banner communicates the rest.
+        // Reloading here would risk silently restoring whatever storage
+        // did NOT actually clear, presenting a falsely "clean" Reset.
       }
     }); }
   }
@@ -4555,8 +4831,77 @@
     $all('.exer').forEach(buildExercise);
   }
 
+  /* Shared by the #resetBtn UI handler and the public reset() API method
+     (Issue #2): both durably clear all current AND stale progress from
+     both storage keys (the stale-ID policy's one deliberate exception --
+     see the PROGRESS section's file-level comment) and both must report
+     HONESTLY whether that storage clearing actually succeeded, rather
+     than assuming it did ("do not claim transactional behavior the
+     browser cannot guarantee"). Reset is an explicit, deliberate
+     "replace everything" action -- unlike ordinary accumulating actions
+     (see saveProgress()'s comment), it always attempts its storage
+     operations even when persistState.reason is the normally-sticky
+     'unavailable' value: there is no silent-background-accumulation risk
+     to protect against here, since the learner explicitly asked for this
+     one specific, complete outcome, confirmed via window.confirm().
+
+     `usePkeyRemoval` selects which of the two historically different
+     mechanisms clears PKEY -- the UI path has always used
+     localStorage.removeItem(PKEY); the API path has always overwritten
+     it via a blankState() write. Preserved exactly as before (not
+     unified into one mechanism), since changing either is outside this
+     task's scope; only the honesty of what each reports is new.
+
+     Applies the blank state in memory and refreshes rendering regardless
+     of what storage allowed -- the same "keep the valid in-memory
+     change, render it honestly" policy ordinary actions follow -- but
+     returns exactly which of the two storage operations actually
+     succeeded, so neither caller has to guess, or claim more than the
+     browser actually did. */
+  function performReset(usePkeyRemoval){
+    var v1Removed = true, v2Cleared = true;
+    try{ localStorage.removeItem(PKEY_V1); }catch(e){ v1Removed = false; }
+    state = blankState();
+    if(usePkeyRemoval){
+      try{ localStorage.removeItem(PKEY); }catch(e){ v2Cleared = false; }
+    } else {
+      try{ localStorage.setItem(PKEY, JSON.stringify(state)); }catch(e){ v2Cleared = false; }
+    }
+    /* Whether the CURRENT live state is durably persisted differs by
+       path -- corrected 2026-08-03 (QL-026 addendum) after independent
+       review found the previous `v1Removed && v2Cleared` gate here
+       falsely reported session-only (and showed #storageWarning) for a
+       real, durable Reset whose only failure was legacy-key cleanup:
+         - usePkeyRemoval (UI path): clears PKEY by REMOVING it. On
+           reload, loadProgress() falls through to a blank state, and
+           only THEN -- when PKEY is genuinely absent -- checks PKEY_V1
+           and migrates it back in. A failed v1Removed here means the
+           legacy key survives; if v2Cleared also succeeded (PKEY
+           genuinely gone), a reload really would resurrect that old v1
+           data. Either operation failing therefore risks old progress
+           returning, so durability here honestly depends on BOTH.
+         - !usePkeyRemoval (API path): clears PKEY by durably
+           OVERWRITING it with the current blank state. loadProgress()
+           always prefers a valid v2 record over ever reading PKEY_V1 at
+           all (see loadProgress()'s own comment) -- so once v2Cleared
+           succeeds, a leftover, unremoved PKEY_V1 is provably inert; it
+           can never be read back. Whether the CURRENT live state is
+           durable therefore depends only on v2Cleared here; v1Removed
+           failing is a real but separate cleanup failure -- still
+           reflected honestly in the returned {v1Removed, v2Cleared} and
+           therefore in reset()'s {ok:...} -- not a persistence-status
+           regression. */
+    var currentStateDurable = usePkeyRemoval ? (v1Removed && v2Cleared) : v2Cleared;
+    if(currentStateDurable){ markPersistent(); } else { markSessionOnly('write-failed'); }
+    emit('progress', null);
+    refreshProgressUI();
+    rebuildContentWidgets();
+    return {v1Removed:v1Removed, v2Cleared:v2Cleared};
+  }
+
   /* ============================ INIT ============================ */
   function init(){
+    wireStorageWarningReservedSpace();
     loadProgress();
     buildNav();
     buildDashboard();
@@ -4619,6 +4964,22 @@
     getWeakAreas: getWeakAreas,
     getUnmastered: getUnmastered,
     exportJSON:  function(){ return JSON.stringify({exported:new Date().toISOString(), state:state, stats:getStats()}, null, 2); },
+    /* --- persistence status (Issue #2) --- */
+    /* A fresh, detached plain object every call -- never a live
+       reference to the internal persistState, so a caller mutating the
+       returned object cannot affect course behavior (same principle as
+       every other read method here, via clone(), though a plain literal
+       is enough since this shape is only ever two primitives).
+       {persistent:true, reason:null} is the default/optimistic starting
+       status and means the last full-state write attempt succeeded (or
+       none has been needed yet and storage read access at load worked).
+       {persistent:false, reason:'unavailable'|'write-failed'} means
+       session-only mode -- see persistState's own comment in the
+       PROGRESS section for exactly what each reason means and how/when
+       each one clears. Deliberately exposes only these two fixed, stable
+       strings, never a raw browser exception (message/name/stack), so
+       this contract stays stable across browsers and versions. */
+    getPersistenceStatus: function(){ return {persistent:persistState.persistent, reason:persistState.reason}; },
 
     /* --- write --- */
     /* Validates the ENTIRE import before anything observable changes -- see
@@ -4642,7 +5003,37 @@
          intentionally does NOT call saveProgress() (which swallows storage
          errors, by design, for its own callers like recordAnswer() --
          changing that is separate, out-of-scope work), since import needs
-         to observe and react to a storage failure rather than ignore it. */
+         to observe and react to a storage failure rather than ignore it.
+
+         Issue #2 narrow exception: like Reset, this write is always
+         attempted regardless of persistState.reason (including the
+         normally-sticky 'unavailable' value) -- import is an explicit,
+         deliberate replace-everything action, not incremental
+         accumulation, so the same clobber concern saveProgress() guards
+         against does not apply TO ATTEMPTING the write. The shared
+         persistState IS updated by this write's own genuinely-observed
+         outcome -- markPersistent() unconditionally on success (a
+         successful import is a deliberate, complete, caller-supplied
+         replacement, trusted as genuine recovery even from 'unavailable'
+         -- see persistState's own comment) -- but on FAILURE, corrected
+         2026-08-03 (QL-026 addendum) after independent review found a
+         real data-loss sequence: a failed import must never WEAKEN an
+         already more-conservative 'unavailable' status to 'write-failed',
+         because 'write-failed' is not sticky -- doing so would let the
+         very next ordinary action (e.g. markModule()) successfully write
+         this session's blank/partial in-memory state over genuine prior
+         progress that the initial read failure meant we never actually
+         saw, the exact clobber 'unavailable' exists to prevent. So a
+         failed import only calls markSessionOnly('write-failed') when
+         the reason was NOT already 'unavailable'; when it was, status is
+         left untouched (no new transition, no duplicate 'persistence'
+         event, saveProgress() keeps skipping every write). Either way
+         this remains a narrow, deliberate status-only side effect that
+         does NOT weaken the atomic guarantee above: a failed import
+         still returns {ok:false}, still touches neither live state nor
+         the rendered UI, and still fires no progress/answer/exercise
+         event -- only the separate 'persistence' event (if the status
+         genuinely changed) and the #storageWarning banner are affected. */
     importJSON: function(json){
       try{
         if(typeof json === 'string' && json.length > MAX_IMPORT_JSON_LENGTH){
@@ -4657,7 +5048,14 @@
         try{ serialized = JSON.stringify(candidate); }
         catch(serializeErr){ return {ok:false, error:'failed to serialize imported progress: ' + String(serializeErr)}; }
         try{ localStorage.setItem(PKEY, serialized); }
-        catch(storageErr){ return {ok:false, error:'failed to save imported progress: ' + String(storageErr)}; }
+        catch(storageErr){
+          // Never downgrade the sticky 'unavailable' reason to the
+          // self-healing 'write-failed' one -- see this function's own
+          // comment above for the exact clobber this prevents.
+          if(persistState.reason !== 'unavailable'){ markSessionOnly('write-failed'); }
+          return {ok:false, error:'failed to save imported progress: ' + String(storageErr)};
+        }
+        markPersistent();
         state = candidate;
         emit('progress', null);
         refreshProgressUI();
@@ -4694,14 +5092,16 @@
     },
     // Same stale-ID-policy exception as the #resetBtn UI handler above:
     // state = blankState() wholesale-replaces state, current or stale
-    // records included, never a selective strip.
+    // records included, never a selective strip. ok now genuinely means
+    // "both storage operations durably succeeded" (Issue #2) -- see
+    // performReset()'s own comment; previously this always returned
+    // {ok:true} even when the underlying storage removal failed
+    // entirely, a false-durable-success claim this task exists to
+    // correct. Callers that want the reason can call
+    // getPersistenceStatus() immediately afterward.
     reset: function(){
-      try{ localStorage.removeItem(PKEY_V1); }catch(e){}
-      state = blankState();
-      saveProgress();
-      refreshProgressUI();
-      rebuildContentWidgets();
-      return {ok:true};
+      var result = performReset(false);
+      return {ok: result.v1Removed && result.v2Cleared};
     },
 
     /* --- events: 'answer' | 'exercise' | 'progress' | 'content' | '*' --- */
