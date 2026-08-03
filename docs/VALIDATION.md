@@ -2004,6 +2004,76 @@ existing `progress`/`answer`/`exercise`/`persistence` event semantics
 are unchanged. The content-pack decision for runtime-injected questions
 remains undecided and unimplemented.
 
+### Correction — three test-coverage claims were stronger than the tests actually proved, added 2026-08-03
+
+Independent review of draft PR #21 (head `98b8d85`) confirmed the
+implementation and analytics decision sound and CI green, but found
+three test-claim mismatches, all corrected on the same branch before
+merge:
+
+1. **The multi-group aggregate test's title claimed different
+   difficulties, but all three chosen questions were difficulty `x:1`.**
+   It could not have detected a difficulty-grouping regression. Corrected
+   to use six questions deliberately spanning multiple domains, multiple
+   topics, and all three difficulty levels (`x:1`/`x:2`/`x:3`), with a
+   mix of mastered and unmastered latest outcomes, asserting
+   `answered`/`mastered`/`masteryPct`/`correct`/`pct` exactly for every
+   affected `byDomain`/`byTopic`/`byDifficulty` row and confirming no
+   unexpected aggregate key is introduced (via an exact `Set` comparison
+   against the affected keys).
+2. **The `getWeakAreas()` sort-order test created only one qualifying
+   topic.** A one-row array cannot prove rows are sorted weakest-first;
+   the later reattempt changed that single row's value but still never
+   exercised ordering. Corrected to create two independently qualifying
+   topics (each with 3 distinct answered questions, clearing
+   `minAnswered:3`) with different last-attempt mastery percentages (33%
+   and 67%), asserting the weaker topic sorts first, then reattempting
+   enough questions across a real reload to invert which topic is
+   weaker (100% and 0%) and confirming the returned order genuinely
+   reverses.
+3. **The Playwright event-contract test never performed a reattempt
+   despite its own title.** It answered one fresh question once and
+   asserted event counts from that single answer — the "reattempt"
+   claim was untested. Corrected to: answer a question on first load,
+   reload the page, install fresh event counters and a navigation
+   sentinel, prove reading analytics emits zero events, then answer the
+   SAME question again with the OPPOSITE correctness. Now asserts the
+   sentinel survived (proving the reattempt was an in-place interaction,
+   not an unexpected second navigation), `n===2`, `c` reflects the
+   latest outcome, mastery changed immediately, exactly one `answer`
+   event, exactly one `progress` event, zero `exercise` events, zero
+   `persistence`-transition events, and the wildcard event count
+   agreeing with exactly those two events (no invented analytics
+   event).
+
+Additionally, an unnecessary `waitForLoadState("networkidle")` at the
+end of the first Playwright test (after every assertion had already
+completed, providing no further proof) was removed — this repository has
+repeatedly documented `networkidle`-based flakes under parallel-worker
+contention, and a wait with no corresponding proof obligation is pure
+risk. Console cleanliness is instead asserted directly from the
+already-listening `consoleIssues` fixture.
+
+**Mutation-tested**, each reverted and confirmed `index.html`
+byte-identical via `diff` before committing:
+
+5. Collapsed `tally()`'s difficulty grouping into a single bucket
+   (`groupBy === 'x' ? '1' : String(q[groupBy])`) — failed exactly the
+   corrected multi-group aggregate test, and no others.
+6. Reversed `getWeakAreas()`'s sort comparator
+   (`b.masteryPct - a.masteryPct`) — failed exactly the corrected
+   `getWeakAreas()` test, specifically on row order, and no others.
+
+Full local validation after this correction: `npm test` (160/160,
+unchanged test count — both corrections rewrote existing tests rather
+than adding new ones), `npx playwright test
+tests/e2e/analytics-semantics.spec.mjs` (8/8 across both projects), and
+the complete `npx playwright test` suite.
+
+No product behavior changed by this correction — `index.html`'s only
+changes were the two temporary, reverted mutations above; the shipped
+analytics implementation is identical to the previously reviewed head.
+
 ## Gates still open
 
 ### Browser behavior

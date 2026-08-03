@@ -2843,43 +2843,84 @@ test("incorrect then correct reattempt (through the real reload/rebuild path): m
   assert.ok(!unmastered.some((e) => e.id === question.id), "getUnmastered() excludes it once mastered");
 });
 
-test("multiple questions across different domains, topics, and difficulties: every aggregate, explicit field, and compatibility alias is exact", () => {
+test("multiple questions across different domains, topics, and ALL THREE difficulty levels: every affected aggregate row, explicit field, and compatibility alias is exact, with no unexpected keys", () => {
   const env = boot();
-  const q1 = env.api.getQuestions("m1")[0]; // orientation / orientation
-  const q2 = env.api.getQuestions("m2")[0]; // specimen / specimen-collection
-  const q9 = env.api.getQuestions("m9")[0]; // analysis / chromosome-id
-  const wrong2 = q2.a === 0 ? 1 : 0;
+  // Six questions, chosen specifically to span multiple domains AND
+  // topics AND all three difficulty levels (x:1, x:2, x:3), with a
+  // deliberate mix of mastered and unmastered latest outcomes -- the
+  // prior version of this test used three difficulty-1 questions and
+  // therefore never actually exercised byDifficulty's x:2/x:3 rows.
+  const qOrient1 = env.api.getQuestions("m1")[0];  // orientation / orientation, x:1
+  const qOrient2 = env.api.getQuestions("m1")[2];  // orientation / orientation, x:2
+  const qSpec1   = env.api.getQuestions("m2")[0];  // specimen / specimen-collection, x:1
+  const qSpec3   = env.api.getQuestions("m2")[3];  // specimen / specimen-collection, x:3
+  const qAnalysis = env.api.getQuestions("m9")[0]; // analysis / chromosome-id, x:1
+  const qMolecular = env.api.getQuestions("m15")[0]; // molecular / fish-array, x:2
 
-  quizMount(env, "m1").querySelectorAll(".qitem")[0].querySelectorAll(".qopt")[q1.a].click(); // correct
-  quizMount(env, "m2").querySelectorAll(".qitem")[0].querySelectorAll(".qopt")[wrong2].click(); // incorrect
-  quizMount(env, "m9").querySelectorAll(".qitem")[0].querySelectorAll(".qopt")[q9.a].click(); // correct
+  assert.equal(qOrient1.x, 1); assert.equal(qOrient2.x, 2);
+  assert.equal(qSpec1.x, 1); assert.equal(qSpec3.x, 3);
+  assert.equal(qAnalysis.x, 1); assert.equal(qMolecular.x, 2);
+
+  const wrongOrient2 = qOrient2.a === 0 ? 1 : 0;
+  const wrongAnalysis = qAnalysis.a === 0 ? 1 : 0;
+
+  quizMount(env, "m1").querySelectorAll(".qitem")[0].querySelectorAll(".qopt")[qOrient1.a].click(); // correct, x1
+  quizMount(env, "m1").querySelectorAll(".qitem")[2].querySelectorAll(".qopt")[wrongOrient2].click(); // incorrect, x2
+  quizMount(env, "m2").querySelectorAll(".qitem")[0].querySelectorAll(".qopt")[qSpec1.a].click(); // correct, x1
+  quizMount(env, "m2").querySelectorAll(".qitem")[3].querySelectorAll(".qopt")[qSpec3.a].click(); // correct, x3
+  quizMount(env, "m9").querySelectorAll(".qitem")[0].querySelectorAll(".qopt")[wrongAnalysis].click(); // incorrect, x1
+  quizMount(env, "m15").querySelectorAll(".qitem")[0].querySelectorAll(".qopt")[qMolecular.a].click(); // correct, x2
 
   const stats = env.api.getStats();
-  assert.equal(stats.questionsAnswered, 3);
-  assert.equal(stats.questionsMastered, 2);
-  assert.equal(stats.lastAttemptMasteryPct, Math.round((2 / 3) * 100));
+  assert.equal(stats.questionsAnswered, 6);
+  assert.equal(stats.questionsMastered, 4); // qOrient1, qSpec1, qSpec3, qMolecular correct; qOrient2, qAnalysis incorrect
+  assert.equal(stats.lastAttemptMasteryPct, Math.round((4 / 6) * 100));
   assert.equal(stats.questionsCorrect, stats.questionsMastered);
   assert.equal(stats.overallPct, stats.lastAttemptMasteryPct);
 
-  for (const [domainKey, expectAnswered, expectMastered] of [
-    [q1.d, 1, 1],
-    [q2.d, 1, 0],
-    [q9.d, 1, 1],
-  ]) {
-    const row = stats.byDomain[domainKey];
-    assert.equal(row.answered, expectAnswered, `byDomain.${domainKey}.answered`);
-    assert.equal(row.mastered, expectMastered, `byDomain.${domainKey}.mastered`);
-    assert.equal(row.masteryPct, expectAnswered ? Math.round((expectMastered / expectAnswered) * 100) : null);
-    assert.equal(row.correct, row.mastered, `byDomain.${domainKey}.correct alias`);
-    assert.equal(row.pct, row.masteryPct, `byDomain.${domainKey}.pct alias`);
+  function assertRowExact(rows, key, expectAnswered, expectMastered) {
+    const row = rows[key];
+    assert.ok(row, `expected a row for key "${key}"`);
+    assert.equal(row.answered, expectAnswered, `${key}.answered`);
+    assert.equal(row.mastered, expectMastered, `${key}.mastered`);
+    assert.equal(row.masteryPct, expectAnswered ? Math.round((expectMastered / expectAnswered) * 100) : null, `${key}.masteryPct`);
+    assert.equal(row.correct, row.mastered, `${key}.correct alias`);
+    assert.equal(row.pct, row.masteryPct, `${key}.pct alias`);
   }
-  // Topic and difficulty aggregates use the exact same tally() machinery;
-  // spot-check one of each to confirm the shared code path, not just the
-  // domain grouping, exposes the new fields correctly.
-  assert.equal(stats.byTopic[q1.t].mastered, 1);
-  assert.equal(stats.byTopic[q1.t].correct, 1);
-  assert.equal(stats.byDifficulty[String(q1.x)].mastered >= 1, true);
-  assert.equal(stats.byDifficulty[String(q1.x)].correct, stats.byDifficulty[String(q1.x)].mastered);
+
+  // byDomain: orientation (qOrient1 correct + qOrient2 incorrect = 2
+  // answered, 1 mastered), specimen (qSpec1 + qSpec3, both correct = 2,
+  // 2), analysis (qAnalysis incorrect = 1, 0), molecular (qMolecular
+  // correct = 1, 1) -- driven by the questions' own `.d` fields, not
+  // hardcoded domain-name literals, so this can never silently pass
+  // against the wrong key.
+  assertRowExact(stats.byDomain, qOrient1.d, 2, 1);
+  assertRowExact(stats.byDomain, qSpec1.d, 2, 2);
+  assertRowExact(stats.byDomain, qAnalysis.d, 1, 0);
+  assertRowExact(stats.byDomain, qMolecular.d, 1, 1);
+  // No unexpected aggregate keys introduced -- exactly these four domains.
+  assert.deepEqual(
+    new Set(Object.keys(stats.byDomain)),
+    new Set([qOrient1.d, qSpec1.d, qAnalysis.d, qMolecular.d]),
+  );
+
+  // byTopic: orientation (2,1), specimen-collection (2,2), chromosome-id (1,0), fish-array (1,1)
+  assertRowExact(stats.byTopic, qOrient1.t, 2, 1);
+  assertRowExact(stats.byTopic, qSpec1.t, 2, 2);
+  assertRowExact(stats.byTopic, qAnalysis.t, 1, 0);
+  assertRowExact(stats.byTopic, qMolecular.t, 1, 1);
+  assert.deepEqual(
+    new Set(Object.keys(stats.byTopic)),
+    new Set([qOrient1.t, qSpec1.t, qAnalysis.t, qMolecular.t]),
+  );
+
+  // byDifficulty: x1 = qOrient1(correct) + qSpec1(correct) + qAnalysis(incorrect) => 3 answered, 2 mastered
+  //               x2 = qOrient2(incorrect) + qMolecular(correct)                  => 2 answered, 1 mastered
+  //               x3 = qSpec3(correct)                                            => 1 answered, 1 mastered
+  assertRowExact(stats.byDifficulty, "1", 3, 2);
+  assertRowExact(stats.byDifficulty, "2", 2, 1);
+  assertRowExact(stats.byDifficulty, "3", 1, 1);
+  assert.deepEqual(new Set(Object.keys(stats.byDifficulty)), new Set(["1", "2", "3"]));
 });
 
 test("unanswered questions affect coverage (questionsTotal) but never enter the answered-question mastery denominator", () => {
@@ -2967,38 +3008,68 @@ test("a runtime-injected question participates in analytics only while currently
   assert.equal(second.api.getUnmastered().every((e) => e.id !== "analytics-injected-1"), true, "an unrecognized id never appears in current-facing analytics");
 });
 
-test("getWeakAreas(): distinct answered questions, latest outcomes, minAnswered as a distinct-question threshold (not an attempt threshold), sorted by mastery, with compatible fields", () => {
+test("getWeakAreas(): distinct answered questions, latest outcomes, minAnswered as a distinct-question threshold (not an attempt threshold), TWO independently qualifying topics sorted weakest-first, with compatible fields, and the order genuinely reverses after real reload/rebuild reattempts", () => {
   const env = boot();
-  const q1 = env.api.getQuestions("m2")[0];
-  const q2 = env.api.getQuestions("m2")[1];
-  const q3 = env.api.getQuestions("m2")[2];
-  const wrong1 = q1.a === 0 ? 1 : 0;
-  const wrong2 = q2.a === 0 ? 1 : 0;
-  const mount = quizMount(env, "m2");
-  mount.querySelectorAll(".qitem")[0].querySelectorAll(".qopt")[wrong1].click(); // incorrect
-  mount.querySelectorAll(".qitem")[1].querySelectorAll(".qopt")[wrong2].click(); // incorrect
-  mount.querySelectorAll(".qitem")[2].querySelectorAll(".qopt")[q3.a].click(); // correct
+  // Two independent topics, each with 3 distinct answered questions (the
+  // prior version of this test created only one qualifying topic, so a
+  // one-row array could never actually prove sort order).
+  const specQ = env.api.getQuestions("m2").slice(0, 3);      // specimen-collection
+  const analysisQ = env.api.getQuestions("m9").slice(0, 3);  // chromosome-id
+  const wrongSpec0 = specQ[0].a === 0 ? 1 : 0;
+  const wrongSpec1 = specQ[1].a === 0 ? 1 : 0;
+  const wrongAnalysis2 = analysisQ[2].a === 0 ? 1 : 0;
+
+  const specMount = quizMount(env, "m2");
+  specMount.querySelectorAll(".qitem")[0].querySelectorAll(".qopt")[wrongSpec0].click(); // incorrect
+  specMount.querySelectorAll(".qitem")[1].querySelectorAll(".qopt")[wrongSpec1].click(); // incorrect
+  specMount.querySelectorAll(".qitem")[2].querySelectorAll(".qopt")[specQ[2].a].click(); // correct
+  // specimen-collection: 1/3 correct = 33% -- the weaker topic
+
+  const analysisMount = quizMount(env, "m9");
+  analysisMount.querySelectorAll(".qitem")[0].querySelectorAll(".qopt")[analysisQ[0].a].click(); // correct
+  analysisMount.querySelectorAll(".qitem")[1].querySelectorAll(".qopt")[analysisQ[1].a].click(); // correct
+  analysisMount.querySelectorAll(".qitem")[2].querySelectorAll(".qopt")[wrongAnalysis2].click(); // incorrect
+  // chromosome-id: 2/3 correct = 67% -- the stronger topic
 
   const belowThreshold = env.api.getWeakAreas(4);
-  assert.equal(belowThreshold.length, 0, "3 distinct answered questions in this topic is below a minAnswered:4 threshold");
+  assert.equal(belowThreshold.length, 0, "3 distinct answered questions per topic is below a minAnswered:4 threshold (counts distinct questions, not attempts)");
 
   const rows = env.api.getWeakAreas(3);
-  assert.equal(rows.length, 1);
-  const row = rows[0];
-  assert.equal(row.answered, 3, "counts distinct answered questions, not attempts");
-  assert.equal(row.mastered, 1);
-  assert.equal(row.masteryPct, Math.round((1 / 3) * 100));
-  assert.equal(row.correct, row.mastered, "compatibility alias agrees");
-  assert.equal(row.pct, row.masteryPct, "compatibility alias agrees");
+  assert.equal(rows.length, 2, "both topics independently qualify at minAnswered:3");
+  assert.equal(rows[0].topic, specQ[0].t, "the weaker topic (33%) sorts first");
+  assert.equal(rows[0].answered, 3);
+  assert.equal(rows[0].mastered, 1);
+  assert.equal(rows[0].masteryPct, Math.round((1 / 3) * 100));
+  assert.equal(rows[0].correct, rows[0].mastered, "compatibility alias agrees");
+  assert.equal(rows[0].pct, rows[0].masteryPct, "compatibility alias agrees");
+  assert.equal(rows[1].topic, analysisQ[0].t, "the stronger topic (67%) sorts second");
+  assert.equal(rows[1].answered, 3);
+  assert.equal(rows[1].mastered, 2);
+  assert.equal(rows[1].masteryPct, Math.round((2 / 3) * 100));
+  assert.equal(rows[1].correct, rows[1].mastered);
+  assert.equal(rows[1].pct, rows[1].masteryPct);
 
-  // Reattempt one incorrect question to correct, across the real
-  // reload/rebuild path, and confirm the sort order updates by the new
-  // latest-attempt mastery.
+  // Reverse which topic is weaker, entirely through the real
+  // reload/rebuild reattempt path: bring specimen-collection up to 100%
+  // and bring chromosome-id down to 0%.
   const reloaded = boot({ storage: { [V2_KEY]: JSON.stringify(env.api.getProgress()) } });
-  quizMount(reloaded, "m2").querySelectorAll(".qitem")[0].querySelectorAll(".qopt")[q1.a].click();
-  const improvedRows = reloaded.api.getWeakAreas(3);
-  assert.equal(improvedRows[0].mastered, 2);
-  assert.equal(improvedRows[0].masteryPct, Math.round((2 / 3) * 100));
+  const reloadedSpecMount = quizMount(reloaded, "m2");
+  reloadedSpecMount.querySelectorAll(".qitem")[0].querySelectorAll(".qopt")[specQ[0].a].click(); // now correct
+  reloadedSpecMount.querySelectorAll(".qitem")[1].querySelectorAll(".qopt")[specQ[1].a].click(); // now correct
+  const reloadedAnalysisMount = quizMount(reloaded, "m9");
+  const wrongAnalysis0 = analysisQ[0].a === 0 ? 1 : 0;
+  const wrongAnalysis1 = analysisQ[1].a === 0 ? 1 : 0;
+  reloadedAnalysisMount.querySelectorAll(".qitem")[0].querySelectorAll(".qopt")[wrongAnalysis0].click(); // now incorrect
+  reloadedAnalysisMount.querySelectorAll(".qitem")[1].querySelectorAll(".qopt")[wrongAnalysis1].click(); // now incorrect
+
+  const reversedRows = reloaded.api.getWeakAreas(3);
+  assert.equal(reversedRows.length, 2);
+  assert.equal(reversedRows[0].topic, analysisQ[0].t, "chromosome-id is now the weaker topic (0%) and sorts first");
+  assert.equal(reversedRows[0].masteryPct, 0);
+  assert.equal(reversedRows[0].mastered, 0);
+  assert.equal(reversedRows[1].topic, specQ[0].t, "specimen-collection is now the stronger topic (100%) and sorts second -- the order genuinely reversed");
+  assert.equal(reversedRows[1].masteryPct, 100);
+  assert.equal(reversedRows[1].mastered, 3);
 });
 
 test("exportJSON()'s stats snapshot reports the same analytics model and field semantics as getStats(), and import atomicity is unaffected", () => {

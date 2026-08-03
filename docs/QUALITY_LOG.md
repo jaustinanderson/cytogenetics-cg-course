@@ -3278,3 +3278,95 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   mastery), either rename it to be unambiguous or add an explicitly
   named, equally accessible alternative — do not rely on documentation
   alone to correct a misleading name callers will encounter first.
+
+### Addendum — independent review of draft PR #21 found three test-coverage claims stronger than the tests actually proved
+
+- **Status:** Corrected on the same branch
+  (`claude/issue-2-analytics-semantics`), before merge. Independent
+  review at head `98b8d85b0660aeaac0cf21dbd69e758e41839229` confirmed
+  the implementation and analytics decision sound and CI green
+  (run `30828361852`), but found three test claims stronger than what
+  the tests actually exercised.
+- **Finding 1 — confirmed, the "different difficulties" claim was
+  untested.** The multi-group aggregate test's own title claimed
+  coverage across different domains, topics, AND difficulties, but all
+  three selected questions (`m1-q1`, `m2-q1`, `m9-q1`) were difficulty
+  `x:1`. A regression that broke `byDifficulty` grouping specifically
+  could not have been caught. The test also only spot-checked one topic
+  row and one difficulty row rather than asserting every affected row
+  exactly.
+- **Finding 2 — confirmed, `getWeakAreas()`'s sort order was never
+  actually tested.** The test created exactly one topic with enough
+  distinct answered questions to qualify (`minAnswered:3`), so
+  `getWeakAreas()` always returned a single-row array. A single-row
+  array cannot demonstrate sort order — reversing or removing the
+  comparator entirely would have produced an identical single-row result
+  and passed regardless. The subsequent reattempt changed that one row's
+  value but still never exercised ordering between two rows.
+- **Finding 3 — confirmed, the Playwright "reattempt" test never
+  reattempted.** Despite its title ("a real reattempt still fires
+  exactly one answer/progress event pair"), the test answered a single
+  fresh question exactly once and asserted event counts from that one
+  answer — no reload, no reattempt, no proof that a reattempt's event
+  behavior matches a first answer's. Additionally, an unrelated
+  `waitForLoadState("networkidle")` appeared after all assertions in a
+  neighboring test had already completed, adding a timing dependency
+  with no corresponding proof obligation — exactly the class of wait
+  responsible for this repository's own previously documented,
+  recurring parallel-worker-contention flakes.
+- **Impact:** None shipped — the underlying implementation was already
+  correct (confirmed by the corrected, stronger tests below still
+  passing against the unmodified implementation); this was a
+  test-coverage gap, not a product defect. Found and fixed before merge.
+- **Cause:** Each test's premise (different difficulties; multiple
+  qualifying topics; a genuine reattempt) was assumed from the test's
+  own title/intent rather than verified by checking which concrete
+  fixture values and call sequence the test body actually used.
+- **Correct action:** A test's title is a claim; the fixture data and
+  call sequence must be checked to actually produce the conditions the
+  title claims, not merely be plausible under a quick reading. A sort
+  test needs at least two independently ordered items; an "aggregate
+  across categories" test needs fixtures that actually span every named
+  category; a "reattempt" test needs an actual second attempt on the
+  same item through the application's real supported path.
+- **Correction:** Rewrote the multi-group aggregate test with six
+  questions deliberately spanning multiple domains, multiple topics, and
+  all three difficulty levels, asserting every affected
+  `byDomain`/`byTopic`/`byDifficulty` row's `answered`/`mastered`/
+  `masteryPct`/`correct`/`pct` exactly, plus an exact key-set comparison
+  proving no unexpected aggregate key appears. Rewrote the
+  `getWeakAreas()` test with two independently qualifying topics at
+  different mastery percentages, asserting weakest-first order, then
+  reattempting enough questions across a real reload to invert which
+  topic is weaker and confirming the returned order reverses. Rewrote
+  the Playwright event test to answer once, reload, install fresh
+  counters and a navigation sentinel, prove analytics reads emit zero
+  events, then reattempt the same question with the opposite
+  correctness, asserting the sentinel survived (no unexpected
+  navigation), `n===2`, the latest `c`, immediate mastery change, and
+  exact event counts (one `answer`, one `progress`, zero `exercise`,
+  zero `persistence`, wildcard count agreeing with exactly those two).
+  Removed the unnecessary `networkidle` wait, asserting console
+  cleanliness directly from the already-listening fixture instead. Full
+  coverage list: `docs/VALIDATION.md`'s "Correction — three
+  test-coverage claims were stronger than the tests actually proved."
+- **Mutation-tested**, each reverted and confirmed `index.html`
+  byte-identical via `diff` before committing:
+  5. Collapsed `tally()`'s difficulty grouping into a single bucket —
+     failed exactly the corrected multi-group aggregate test, and no
+     others.
+  6. Reversed `getWeakAreas()`'s sort comparator — failed exactly the
+     corrected `getWeakAreas()` test, specifically on row order, and no
+     others.
+- **Full local validation:** `npm test` (160/160, test count unchanged —
+  both corrections rewrote existing tests rather than adding new ones),
+  `npx playwright test tests/e2e/analytics-semantics.spec.mjs` (8/8
+  across both projects), and the complete `npx playwright test` suite.
+- **Prevention:** When reviewing a test whose name asserts a specific
+  property (ordering, cross-category coverage, a specific interaction
+  sequence like a reattempt), verify the property directly from the
+  fixture values and call sequence in the test body — not from the test
+  name or a summary of what it "should" cover. A test that would pass
+  identically under a plausible regression (e.g. a one-row array under
+  any sort comparator; a single-difficulty fixture under broken
+  difficulty grouping) is not evidence for the property its name claims.

@@ -790,24 +790,38 @@ Playwright tests in `tests/e2e/analytics-semantics.spec.mjs` cover:
 fresh-state zero/null baselines; single-question mastery; a
 correct→incorrect and an incorrect→correct reattempt through the real
 reload/rebuild path (proving 0%/100%, never 50%); multi-question
-aggregation across domains/topics/difficulties; coverage vs. mastery
-denominator independence; stale-record exclusion from every
-current-facing figure while remaining in `getProgress()`/`exportJSON()`;
-exercise/module-completion non-interference with question analytics; a
+aggregation across multiple domains, topics, and **all three difficulty
+levels** (`x:1`/`x:2`/`x:3`), with exact `answered`/`mastered`/
+`masteryPct`/`correct`/`pct` asserted for every affected
+`byDomain`/`byTopic`/`byDifficulty` row and confirmation that no
+unexpected aggregate key is introduced; coverage vs. mastery denominator
+independence; stale-record exclusion from every current-facing figure
+while remaining in `getProgress()`/`exportJSON()`; exercise/
+module-completion non-interference with question analytics; a
 runtime-injected question's session-scoped participation under the
-existing stale-ID policy; `getWeakAreas()`'s distinct-question threshold
-and sort order; `exportJSON()`/`getStats()` field agreement; and the
-analytics/event separation (no new event, existing event counts
-unaffected). **Mutation-tested** (4 targeted reversions, each confirmed
-to fail exactly the tests that depend on the guard it removed, then
-reverted and confirmed byte-identical via `diff`): summing attempt
-count `n` into the mastery denominator instead of counting distinct
-questions; making mastery sticky ("ever answered correctly") by
-OR-ing prior correctness into `recordAnswer()` instead of tracking only
-the latest outcome; making `questionsCorrect` disagree with
-`questionsMastered` by one; and removing the stale-id exclusion guard
-so stale records re-entered question analytics. Full record:
-`docs/QUALITY_LOG.md` QL-027.
+existing stale-ID policy; `getWeakAreas()`'s distinct-question threshold,
+with **two independently qualifying topics** proving weakest-first sort
+order (not just a single-row array, which cannot prove ordering), and a
+real reload/rebuild reattempt sequence that reverses which topic is
+weaker, with the returned order confirmed to reverse correctly;
+`exportJSON()`/`getStats()` field agreement; and the analytics/event
+separation, proven via a genuine reload-then-reattempt sequence (not
+merely a first attempt) with a navigation sentinel confirming the
+reattempt is an in-place interaction — exactly one `answer` event, one
+`progress` event, zero `exercise` events, zero `persistence`-transition
+events, and the wildcard count agreeing with exactly those two events
+(no invented analytics event). **Mutation-tested** (6 targeted
+reversions, each confirmed to fail exactly the tests that depend on the
+guard it removed, then reverted and confirmed byte-identical via
+`diff`): summing attempt count `n` into the mastery denominator instead
+of counting distinct questions; making mastery sticky ("ever answered
+correctly") by OR-ing prior correctness into `recordAnswer()` instead of
+tracking only the latest outcome; making `questionsCorrect` disagree
+with `questionsMastered` by one; removing the stale-id exclusion guard
+so stale records re-entered question analytics; collapsing
+`tally()`'s difficulty grouping into a single bucket; and reversing
+`getWeakAreas()`'s sort comparator. Full record: `docs/QUALITY_LOG.md`
+QL-027 and its addendum.
 
 ## Public API
 
