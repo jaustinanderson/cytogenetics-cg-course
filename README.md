@@ -132,7 +132,17 @@ result.
 
 Current analytics describe **last-attempt mastery**, not total-attempt accuracy.
 That distinction is intentional documentation of the present implementation,
-not a claim that it is the final metric design.
+not a claim that it is the final metric design. `getStats()` names this
+explicitly as `analyticsModel: "last-attempt-mastery-v1"` and exposes
+`questionsMastered`/`lastAttemptMasteryPct` alongside the original
+`questionsCorrect`/`overallPct` fields, kept as compatibility aliases with
+identical values. Total-attempt accuracy is not implemented and cannot be
+derived from the current progress schema — a v2 outcome record stores only
+the latest correctness and a total attempt count, not a per-attempt history,
+so two genuinely different attempt histories (e.g. two-of-three attempts
+correct vs. one-of-three) can produce the identical stored record. See
+`docs/ARCHITECTURE.md` "Analytics semantics: last-attempt mastery" for the
+full model.
 
 ## Architecture
 

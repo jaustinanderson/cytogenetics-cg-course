@@ -4602,7 +4602,88 @@
     emit('exercise', {id:eid, correct:!!correct});
   }
 
-  /* --- analytics: performance by domain / topic / difficulty --- */
+  /* ============================ ANALYTICS SEMANTICS (Issue #2) ============================
+     Defines and names, precisely, the ONLY analytics model this course has
+     ever actually implemented: LAST-ATTEMPT MASTERY, identified publicly as
+     analyticsModel:'last-attempt-mastery-v1'. See
+     docs/ARCHITECTURE.md "Analytics semantics: last-attempt mastery" for the
+     full policy this implements; this comment summarizes only the mechanics.
+
+     Why this is the only model v2 CAN implement: an outcome record is
+     {c: <latest correctness>, n: <total attempt count>, ts: <latest
+     timestamp>} -- it deliberately never stored a per-attempt history or an
+     independently maintained "how many of these n attempts were correct"
+     counter. That means two genuinely different attempt histories collapse
+     to the SAME stored record: answering (correct, incorrect, correct) and
+     answering (incorrect, incorrect, correct) both end at {c:true, n:3},
+     even though the first has 2 of 3 attempts correct and the second has
+     only 1 of 3 -- confirmed by direct execution against the real
+     recordAnswer() path before writing this comment. Genuine total-attempt
+     accuracy is therefore NOT derivable from any existing or future v2
+     record as currently shaped; it would require either a new persisted
+     per-attempt history or an independently maintained correct-attempt
+     counter -- either is a `SCHEMA_V`-relevant shape change this task
+     deliberately does NOT make -- plus an explicit policy decision for
+     every record written before that change, whose true historical
+     correct-attempt count would be permanently unknowable and must not be
+     fabricated, inferred, or backfilled. This PR does not build that; it
+     only names, documents, and tests the model that has always actually
+     existed, and adds machine-readable fields so callers cannot mistake it
+     for something it isn't.
+
+     The model, precisely:
+       - Population: distinct CURRENT quiz-question ids (questionIndex()).
+       - "Answered": has a current outcome record in state.answers.
+       - "Mastered": answered AND that record's `c` is true.
+       - "Unmastered": unanswered, OR answered with `c` false.
+       - Reattempting an already-answered question never creates a second
+         answered question -- the SAME qid's record is overwritten in
+         place (see recordAnswer()), so the distinct-answered count is
+         unaffected; only that one question's mastered/unmastered state
+         can flip, immediately, to match its new latest outcome.
+       - lastAttemptMasteryPct = masteredAnswered / distinctAnswered,
+         rounded; null when distinctAnswered is 0 (not 0%: no current
+         answered questions is a DIFFERENT fact than "answered but none
+         mastered," which correctly reports 0%).
+       - Coverage/completion (how much of the bank has been touched at
+         all) is the SEPARATE questionsAnswered / questionsTotal ratio --
+         this function does not conflate the two.
+       - `n` is exposed (via getUnmastered()) purely as an attempt COUNT;
+         it is never used as a denominator for mastery, here or anywhere
+         else in this file.
+       - Stale/unknown ids (docs/QUALITY_LOG.md QL-024) are excluded from
+         every figure below via the questionIndex() membership check,
+         exactly as before this task -- unchanged.
+       - A runtime-injected question (addQuestions()) is current -- and
+         therefore counted -- only while QUIZZES still contains it this
+         session; whether injected questions persist across a reload is
+         the separate, still-open content-pack decision, not decided or
+         implemented here.
+       - Exercise records (state.exercises) and module-completion records
+         (state.modules) are answered through entirely separate recording
+         functions (recordExercise(), markModule()) and are NEVER read by
+         questionIndex(), tally(), getStats()'s question-facing fields,
+         getWeakAreas(), or getUnmastered() -- confirmed by inspection of
+         every function below, which reads only state.answers keyed
+         against live QUIZZES data. Module completion is a distinct,
+         manually-declared completion signal (doneCount()/modulesComplete)
+         and is never represented as question mastery.
+
+     Public API contract (unchanged in shape, only additive):
+       getStats() adds analyticsModel, questionsMastered, and
+       lastAttemptMasteryPct; questionsCorrect and overallPct remain as
+       compatibility aliases with IDENTICAL values (assigned from the same
+       computed numbers, never recomputed separately, so the two names can
+       never silently diverge). Each byDomain/byTopic/byDifficulty row
+       (tally()'s output) adds `mastered`/`masteryPct` alongside the
+       existing `correct`/`pct` aliases, same guarantee. getWeakAreas()
+       rows add `mastered`/`masteryPct` alongside existing `correct`/`pct`.
+       getUnmastered()'s shape is unchanged -- it already returned exactly
+       "unanswered or latest-incorrect," which IS this model's definition
+       of unmastered; only its documentation is strengthened here. No
+       field is removed or reinterpreted; no analytics event is added --
+       every function below only reads `state`, and `emit()` is never
+       called anywhere in this section. */
   function questionIndex(){
     var idx = {};
     Object.keys(QUIZZES).forEach(function(k){
@@ -4613,15 +4694,20 @@
   function tally(groupBy){
     var idx = questionIndex(), out = {};
     Object.keys(state.answers).forEach(function(qid){
-      var q = idx[qid]; if(!q){ return; }
+      var q = idx[qid]; if(!q){ return; } // stale/unknown id: excluded (QL-024)
       var key = String(q[groupBy]);
-      out[key] = out[key] || {answered:0, correct:0};
+      out[key] = out[key] || {answered:0, mastered:0};
       out[key].answered++;
-      if(state.answers[qid].c){ out[key].correct++; }
+      if(state.answers[qid].c){ out[key].mastered++; }
     });
     Object.keys(out).forEach(function(k){
       var o = out[k];
-      o.pct = o.answered ? Math.round(o.correct / o.answered * 100) : null;
+      o.masteryPct = o.answered ? Math.round(o.mastered / o.answered * 100) : null;
+      // Compatibility aliases (Issue #2 analytics-semantics task): identical
+      // values, assigned from the same computed numbers -- never a
+      // separately recomputed figure that could silently drift apart.
+      o.correct = o.mastered;
+      o.pct = o.masteryPct;
     });
     return out;
   }
@@ -4640,35 +4726,59 @@
      current-facing figure at read time. */
   function getStats(){
     var idx = questionIndex(), totalQ = Object.keys(idx).length;
-    var answered = 0, correct = 0;
+    var answered = 0, mastered = 0;
     Object.keys(state.answers).forEach(function(qid){
       if(!idx[qid]){ return; } // stale/unknown id: excluded from current stats
       answered++;
-      if(state.answers[qid].c){ correct++; }
+      if(state.answers[qid].c){ mastered++; }
     });
+    var lastAttemptMasteryPct = answered ? Math.round(mastered / answered * 100) : null;
     return {
+      analyticsModel: 'last-attempt-mastery-v1',
       modulesComplete: doneCount(),
       modulesTotal: TOTAL_MODULES,
       questionsTotal: totalQ,
       questionsAnswered: answered,
-      questionsCorrect: correct,
-      overallPct: answered ? Math.round(correct / answered * 100) : null,
+      questionsMastered: mastered,
+      lastAttemptMasteryPct: lastAttemptMasteryPct,
+      // Compatibility aliases: identical values, same source numbers.
+      questionsCorrect: mastered,
+      overallPct: lastAttemptMasteryPct,
       byDomain: tally('d'),
       byTopic: tally('t'),
       byDifficulty: tally('x')
     };
   }
-  /* weakest areas first — what a study agent would consume */
+  /* Weakest areas first (by last-attempt mastery) -- what a study agent
+     would consume. minAnswered gates on the number of DISTINCT current
+     questions answered in that topic (tally()'s `answered`), never on
+     attempt count `n` -- a topic with one question attempted five times
+     still has answered:1 and is excluded by the default minAnswered:3,
+     exactly as a topic with three DIFFERENT questions each attempted
+     once is included. */
   function getWeakAreas(minAnswered){
     minAnswered = minAnswered || 3;
     var by = tally('t'), rows = [];
     Object.keys(by).forEach(function(t){
-      if(by[t].answered >= minAnswered){ rows.push({topic:t, pct:by[t].pct, answered:by[t].answered, correct:by[t].correct}); }
+      if(by[t].answered >= minAnswered){
+        rows.push({
+          topic:t, answered:by[t].answered,
+          mastered:by[t].mastered, masteryPct:by[t].masteryPct,
+          // Compatibility aliases.
+          correct:by[t].mastered, pct:by[t].masteryPct
+        });
+      }
     });
-    rows.sort(function(a,b){ return a.pct - b.pct; });
+    rows.sort(function(a,b){ return a.masteryPct - b.masteryPct; });
     return rows;
   }
-  /* questions never answered, or answered incorrectly on the last attempt */
+  /* Distinct current questions that are NOT mastered: unanswered entirely,
+     or whose latest recorded outcome was incorrect -- this is exactly this
+     course's definition of "unmastered" (see the ANALYTICS SEMANTICS
+     comment above); nothing about this function's behavior changes here,
+     only this documentation. `attempts` (from the record's own `n`) is a
+     plain attempt COUNT for context -- e.g. "answered wrong twice" -- never
+     a mastery denominator; an unanswered question reports attempts:0. */
   function getUnmastered(){
     var idx = questionIndex(), out = [];
     Object.keys(idx).forEach(function(qid){

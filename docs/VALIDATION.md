@@ -1913,6 +1913,97 @@ No question, answer, exercise, scoring, mastery/accuracy semantics,
 stable-ID format, migration policy, `SCHEMA_V`, stale-ID policy, import
 schema, or content-pack decision changed by this correction either.
 
+## Analytics semantics: last-attempt mastery — added 2026-08-03
+
+`tests/dom-behavior.mjs` (Issue #2, `docs/QUALITY_LOG.md` QL-027) adds
+12 dependency-free checks, and a new
+`tests/e2e/analytics-semantics.spec.mjs` adds 4 real-browser Playwright
+checks (both configured projects). See `docs/ARCHITECTURE.md`
+"Analytics semantics: last-attempt mastery" for the full model and
+public-API record. Covers:
+
+- **fresh state:** zero answered, zero mastered, `lastAttemptMasteryPct`
+  is `null` (not `0`), and `questionsCorrect`/`overallPct` agree exactly
+  with the new explicit fields
+- **one question answered correctly:** one distinct answered, one
+  mastered, 100% last-attempt mastery
+- **correct→incorrect reattempt through the real reload/rebuild path**
+  (re-answering a locked item is only reachable across a reload — the
+  clicked option is otherwise permanently disabled): still exactly one
+  distinct answered question, `n` becomes 2, mastered drops from one to
+  zero, mastery becomes **0%, not 50%**, and `getUnmastered()` picks up
+  the question
+- **incorrect→correct reattempt**, same path: still one distinct
+  answered question, `n` becomes 2, mastered becomes one, mastery
+  becomes **100%, not 50%**, and `getUnmastered()` drops the question
+- **multiple questions across different domains/topics/difficulties:**
+  every aggregate (`questionsAnswered`, `questionsMastered`,
+  `lastAttemptMasteryPct`), every `byDomain`/`byTopic`/`byDifficulty`
+  row's explicit fields, and every compatibility alias checked exactly
+- **unanswered questions:** counted in `questionsTotal` (coverage) but
+  never enter the answered-question mastery denominator
+- **stale question records:** remain in `getProgress()`/`exportJSON()`,
+  confirmed excluded from `questionsAnswered`/`questionsMastered`/
+  `lastAttemptMasteryPct`/`byDomain`/`getWeakAreas()`/`getUnmastered()`
+- **exercise records and module-completion records:** confirmed to never
+  enter question-mastery/coverage analytics, while continuing to behave
+  normally through their own separate signals (`state.exercises`,
+  `modulesComplete`)
+- **a runtime-injected question:** participates in analytics while
+  registered this session, becomes inert (preserved, not fabricated or
+  deleted) under the existing stale-ID policy in a fresh session with no
+  re-injection — this test does not decide or implement content-pack
+  persistence
+- **`getWeakAreas()`:** distinct-answered-question `minAnswered`
+  threshold (not an attempt-count threshold — a 3-distinct-question
+  topic passes `minAnswered:3` but not `minAnswered:4` regardless of how
+  many times any single question was attempted), sort order by latest
+  mastery, and explicit/compatible field agreement, including after a
+  real reload/rebuild reattempt changes the sort order
+- **`exportJSON()`:** its embedded `stats` snapshot agrees field-for-field
+  with a live `getStats()` call; a malformed import still leaves live
+  state/stats untouched (existing atomicity re-confirmed, unchanged)
+- **analytics/event separation:** `getStats()`/`getWeakAreas()`/
+  `getUnmastered()`/`exportJSON()` fire zero events; a real answer and a
+  real reattempt each still fire exactly one `answer` and one `progress`
+  event, and no new `persistence`-like event was introduced for
+  analytics
+
+**Mutation-tested** (4 reversions in `index.html`, each run against the
+full `npm test` suite, each confirmed to fail only the tests that
+depend on the guard it removed, then reverted and confirmed
+byte-identical via `diff` before committing):
+
+1. Summed attempt count `n` into `getStats()`'s `answered` denominator
+   instead of counting distinct questions — failed exactly the two
+   reattempt tests (which depend on the distinct-question count staying
+   at 1 across a reattempt), and no others.
+2. Made mastery sticky ("ever answered correctly") by changing
+   `recordAnswer()` to `c:(prev && prev.c) || !!correct` instead of
+   tracking only the latest outcome — failed exactly the
+   correct→incorrect reattempt test (the one assertion that depends on
+   mastery being able to *drop*), and no others.
+3. Made `questionsCorrect` disagree with `questionsMastered` by a
+   constant offset — failed the new alias-agreement tests *and* several
+   pre-existing tests that independently assert `questionsCorrect`
+   against a directly-computed expected value (confirming the
+   alias-agreement guarantee is load-bearing for old and new tests
+   alike), and no others.
+4. Removed the stale-id exclusion guard in `getStats()` — failed the new
+   stale-record analytics-exclusion test *and* every pre-existing
+   QL-024 stale-ID test that depends on the same guard, and no others.
+
+Full local validation: `npm test` (160/160), targeted
+`npx playwright test tests/e2e/analytics-semantics.spec.mjs` (8/8 across
+both projects), and the complete `npx playwright test` suite.
+
+No question, answer, rationale, exercise, case, flashcard, or scientific
+content changed. No image added or replaced. `SCHEMA_V`, stable-ID
+format, migration policy, stale-ID policy, import schema, scoring, or
+existing `progress`/`answer`/`exercise`/`persistence` event semantics
+are unchanged. The content-pack decision for runtime-injected questions
+remains undecided and unimplemented.
+
 ## Gates still open
 
 ### Browser behavior

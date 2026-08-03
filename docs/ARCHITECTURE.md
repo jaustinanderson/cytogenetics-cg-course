@@ -76,7 +76,9 @@ Schema v2 stores:
 
 `c` is the last recorded correctness state, `n` is attempt count, and `ts` is
 the latest timestamp. Current headline analytics use last-attempt mastery,
-not total-attempt accuracy.
+not total-attempt accuracy — see "Analytics semantics: last-attempt mastery"
+below for the full, tested definition and why this schema cannot compute
+total-attempt accuracy.
 
 `exercises` keys are each item's own explicit, literal `id` field (see
 `EXERCISES.*` in `index.html`), not derived from its position in the item
@@ -699,6 +701,113 @@ measurement JS intact (caught by the mobile-sidebar overlap test and
 both recovery/scroll-extent tests, for genuine overlap and
 missing-reservation reasons respectively). Full record:
 `docs/QUALITY_LOG.md` QL-026 and its two addenda.
+
+### Analytics semantics: last-attempt mastery
+
+As of 2026-08-03 (Issue #2, `docs/QUALITY_LOG.md` QL-027), the course
+names, documents, and tests the one analytics model it has always
+actually implemented — **last-attempt mastery** — rather than leaving
+`getStats()`'s field names (`questionsCorrect`, `overallPct`) to be
+mistaken for total-attempt accuracy, which this schema cannot compute.
+
+**Why total-attempt accuracy is not implemented.** A v2 outcome record
+is `{c: <latest correctness>, n: <total attempt count>, ts: <latest
+timestamp>}` — it never stored a per-attempt history or an
+independently maintained correct-attempt counter. Confirmed by direct
+execution before this task: answering a question (correct, incorrect,
+correct) across three real reloads, and answering a *different*
+question (incorrect, incorrect, correct) across three real reloads,
+both end at the byte-identical `{c:true, n:3}` shape (only `ts`
+differs) — 2-of-3 attempts correct and 1-of-3 attempts correct are
+indistinguishable from the stored record alone. Genuine total-attempt
+accuracy would require either a newly persisted per-attempt history or
+an independently maintained correct-attempt counter — either is a
+`SCHEMA_V`-relevant shape change this task deliberately does not make —
+plus an explicit, separate policy decision for every record already
+written before that change, whose true historical correct-attempt
+count would be permanently unknowable and must never be fabricated,
+inferred, or backfilled.
+
+**The model, precisely** (`analyticsModel: 'last-attempt-mastery-v1'`):
+
+- Population: distinct **current** quiz-question ids (`questionIndex()`
+  — live `QUIZZES` data only).
+- **Answered**: has a current outcome record in `state.answers`.
+- **Mastered**: answered AND that record's `c` is `true`.
+- **Unmastered**: unanswered, or answered with `c` `false`.
+- Reattempting an already-answered question never creates a second
+  answered question — the same `qid`'s single record is overwritten in
+  place, so the distinct-answered count is unaffected; only that one
+  question's mastered/unmastered state can flip, immediately, to match
+  its new latest outcome. A correct→incorrect reattempt therefore drops
+  a 1-of-1-answered topic's mastery from 100% to 0%, never to 50% — `n`
+  (attempt count) is never used as, or blended into, a mastery
+  denominator anywhere in this file.
+- `lastAttemptMasteryPct = masteredAnswered / distinctAnswered`,
+  rounded; `null` when zero questions are currently answered (distinct
+  from "answered but none mastered," which correctly reports `0`).
+- Completion/coverage (`questionsAnswered / questionsTotal`) is a
+  **separate** figure from mastery and is not conflated with it.
+- Stale/unknown ids (QL-024) remain excluded from every figure below,
+  unchanged. A runtime-injected question (`addQuestions()`) counts only
+  while it is still present in the live question index this session;
+  this task does not decide whether injected questions persist across
+  reloads — that is the separate, still-open content-pack item.
+- Exercise records (`state.exercises`) and module-completion records
+  (`state.modules`) are recorded through entirely separate functions
+  (`recordExercise()`, `markModule()`) and are never read by
+  `questionIndex()`, `tally()`, `getStats()`'s question-facing fields,
+  `getWeakAreas()`, or `getUnmastered()` — module completion is a
+  distinct, manually-declared completion signal
+  (`doneCount()`/`modulesComplete`), never represented as question
+  mastery.
+
+**Public API — additive, backward-compatible.** `getStats()` adds
+`analyticsModel`, `questionsMastered`, and `lastAttemptMasteryPct`;
+`questionsCorrect` and `overallPct` remain as compatibility aliases with
+values assigned from the exact same computed numbers (never
+independently recomputed, so the pair can never silently diverge). Each
+`byDomain`/`byTopic`/`byDifficulty` row (`tally()`'s output) adds
+`mastered`/`masteryPct` alongside the existing `correct`/`pct` aliases,
+same guarantee. `getWeakAreas()` rows add the same
+`mastered`/`masteryPct` fields alongside `correct`/`pct`; its
+`minAnswered` parameter continues to gate on the number of *distinct*
+current questions answered in that topic, never on attempt count.
+`getUnmastered()`'s return shape is unchanged — it already returned
+exactly "unanswered or latest-incorrect," which *is* this model's
+definition of unmastered; `attempts` (from the record's own `n`) is
+documented as a plain attempt count, never a mastery denominator.
+`exportJSON()`'s embedded `stats` snapshot is produced by the same
+`getStats()` call and therefore reports identical fields. No analytics
+event is added; reading any analytics method never calls `emit()`.
+
+`SCHEMA_V` remains `2` — no stored field's shape changes, no fabricated
+correct-attempt count is introduced, and no historical record is
+rewritten or migrated.
+
+12 new tests in `tests/dom-behavior.mjs` and 4 new real-browser
+Playwright tests in `tests/e2e/analytics-semantics.spec.mjs` cover:
+fresh-state zero/null baselines; single-question mastery; a
+correct→incorrect and an incorrect→correct reattempt through the real
+reload/rebuild path (proving 0%/100%, never 50%); multi-question
+aggregation across domains/topics/difficulties; coverage vs. mastery
+denominator independence; stale-record exclusion from every
+current-facing figure while remaining in `getProgress()`/`exportJSON()`;
+exercise/module-completion non-interference with question analytics; a
+runtime-injected question's session-scoped participation under the
+existing stale-ID policy; `getWeakAreas()`'s distinct-question threshold
+and sort order; `exportJSON()`/`getStats()` field agreement; and the
+analytics/event separation (no new event, existing event counts
+unaffected). **Mutation-tested** (4 targeted reversions, each confirmed
+to fail exactly the tests that depend on the guard it removed, then
+reverted and confirmed byte-identical via `diff`): summing attempt
+count `n` into the mastery denominator instead of counting distinct
+questions; making mastery sticky ("ever answered correctly") by
+OR-ing prior correctness into `recordAnswer()` instead of tracking only
+the latest outcome; making `questionsCorrect` disagree with
+`questionsMastered` by one; and removing the stale-id exclusion guard
+so stale records re-entered question analytics. Full record:
+`docs/QUALITY_LOG.md` QL-027.
 
 ## Public API
 

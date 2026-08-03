@@ -3194,3 +3194,87 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   Whenever a fix changes an element's position/flow scheme, explicitly
   re-derive and test every property that scheme change could plausibly
   affect, rather than only the property the fix was originally aimed at.
+
+## QL-027 — Analytics field names implied total-attempt accuracy the v2 schema cannot compute; named, documented, and tested the actual last-attempt mastery model instead
+
+- **Status:** Corrected on branch `claude/issue-2-analytics-semantics`
+  (Issue #2), draft PR open for independent review, not yet merged.
+- **Finding — confirmed ambiguity, reproduced by direct execution before
+  any fix was written.** A v2 outcome record is `{c: <latest
+  correctness>, n: <total attempt count>, ts: <latest timestamp>}` — it
+  never stored a per-attempt history or an independently maintained
+  correct-attempt counter. Answering a question (correct, incorrect,
+  correct) across three real reloads, and answering a *different*
+  question (incorrect, incorrect, correct) across three real reloads,
+  both produced the byte-identical stored shape `{c:true, n:3}` (only
+  `ts` differed) — 2-of-3 attempts correct and 1-of-3 attempts correct
+  are genuinely indistinguishable from the stored record alone.
+  Meanwhile `getStats()` exposed `questionsCorrect` and `overallPct` —
+  names that read naturally as "how many questions were answered
+  correctly overall" / "overall percent correct," i.e. total-attempt
+  accuracy — when they have only ever meant "questions whose latest
+  attempt was correct." The field names did not disclose this.
+- **Impact:** None shipped incorrectly — the underlying behavior
+  (last-attempt mastery) was always correct and already documented in
+  `README.md`/`docs/CLAUDE_HANDOFF.md` in prose; this is a
+  documentation/API-clarity gap, not a data-correctness bug. Found and
+  addressed before merge.
+- **Cause:** The schema was designed to answer "what is this question's
+  current status" cheaply (one record, overwritten in place), which is
+  sufficient for last-attempt mastery but was never extended to answer
+  "how many of the attempts across this question's history were
+  correct" — a fundamentally different question requiring different
+  persisted information. The public field names did not signal which
+  question they answer.
+- **Correct action:** Name the actual model precisely
+  (`analyticsModel:'last-attempt-mastery-v1'`), add unambiguous fields
+  (`questionsMastered`, `lastAttemptMasteryPct`) alongside the existing
+  ones as compatibility aliases (never removed or reinterpreted), and
+  state explicitly, in both code comments and documentation, why genuine
+  total-attempt accuracy is not implemented and cannot be derived from
+  existing data — rather than silently leaving misleading names in place
+  or fabricating a metric the data cannot support.
+- **Correction:** `getStats()` now returns `analyticsModel`,
+  `questionsMastered`, `lastAttemptMasteryPct`, plus `questionsCorrect`/
+  `overallPct` as compatibility aliases assigned from the identical
+  computed numbers (never independently recomputed). `tally()`'s
+  `byDomain`/`byTopic`/`byDifficulty` rows gained `mastered`/`masteryPct`
+  alongside the existing `correct`/`pct` aliases. `getWeakAreas()` rows
+  gained the same pair. `getUnmastered()`'s return shape is unchanged —
+  it already implemented exactly this model's definition of
+  "unmastered"; only its documentation was strengthened. `SCHEMA_V`
+  stays `2` — no stored field's shape changed, no historical record was
+  rewritten, and no fabricated correct-attempt count was introduced for
+  existing data. Full model definition: `docs/ARCHITECTURE.md`
+  "Analytics semantics: last-attempt mastery."
+- **12 new dependency-free tests** in `tests/dom-behavior.mjs` and **4
+  new real-browser Playwright tests** in
+  `tests/e2e/analytics-semantics.spec.mjs` — full coverage list:
+  `docs/VALIDATION.md` "Analytics semantics: last-attempt mastery."
+- **Mutation-tested**, each reverted and confirmed `index.html`
+  byte-identical via `diff` before committing:
+  1. Summed attempt count `n` into the mastery denominator instead of
+     counting distinct answered questions — failed exactly the two
+     reattempt tests, and no others.
+  2. Made mastery sticky ("ever answered correctly") by OR-ing prior
+     correctness into `recordAnswer()`'s stored `c` — failed exactly the
+     correct→incorrect reattempt test (the one assertion sensitive to
+     mastery being able to *drop*), and no others.
+  3. Made `questionsCorrect` disagree with `questionsMastered` by a
+     constant offset — failed the new alias-agreement tests *and*
+     several pre-existing tests that independently assert
+     `questionsCorrect` against a directly-computed value, confirming
+     the alias guarantee is load-bearing for old and new tests alike.
+  4. Removed the stale-id exclusion guard in `getStats()` — failed the
+     new stale-record exclusion test *and* every pre-existing QL-024
+     stale-ID test depending on the same guard.
+- **Full local validation:** `npm test` (160/160),
+  `npx playwright test tests/e2e/analytics-semantics.spec.mjs` (8/8
+  across both projects), and the complete `npx playwright test` suite.
+- **Prevention:** A public field's name is part of its contract. When a
+  computed figure could plausibly be misread as a different, more
+  general metric than the one actually implemented (here: "correct" /
+  "percent correct" read as total-attempt accuracy, not latest-outcome
+  mastery), either rename it to be unambiguous or add an explicitly
+  named, equally accessible alternative — do not rely on documentation
+  alone to correct a misleading name callers will encounter first.

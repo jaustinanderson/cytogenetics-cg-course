@@ -6,8 +6,36 @@ All notable repository changes are recorded here.
 
 ### Added
 
+- Named, documented, and tested the course's actual analytics model —
+  **last-attempt mastery** — instead of leaving `getStats()`'s field
+  names (`questionsCorrect`, `overallPct`) to be mistaken for
+  total-attempt accuracy (`index.html`, Issue #2, draft PR — not yet
+  merged): a v2 outcome record `{c, n, ts}` stores only the latest
+  correctness and a total attempt count, never a per-attempt history —
+  confirmed by direct execution that two genuinely different attempt
+  histories (2-of-3 attempts correct vs. 1-of-3, both ending on a
+  correct attempt) produce a byte-identical stored record, so
+  total-attempt accuracy is not implemented and cannot be derived from
+  existing data. `getStats()` adds `analyticsModel:
+  'last-attempt-mastery-v1'`, `questionsMastered`, and
+  `lastAttemptMasteryPct`; `questionsCorrect`/`overallPct` remain as
+  compatibility aliases with identical values. Every `byDomain`/
+  `byTopic`/`byDifficulty` row and `getWeakAreas()` row gains
+  `mastered`/`masteryPct` alongside existing `correct`/`pct` aliases.
+  A correctness-changing reattempt (only reachable across a real
+  reload) now provably changes that one question's mastery immediately
+  without inflating the distinct-answered count or blending attempt
+  count into the mastery percentage (0%/100%, never 50%). Stale
+  records, exercise records, and module-completion records remain
+  excluded from question analytics, unchanged. `SCHEMA_V` stays `2` —
+  no historical record is rewritten or fabricated. 12 new
+  dependency-free tests and 4 new real-browser Playwright tests in
+  `tests/e2e/analytics-semantics.spec.mjs`, mutation-tested across 4
+  reversions. See `docs/QUALITY_LOG.md` QL-027 and
+  `docs/ARCHITECTURE.md` "Analytics semantics: last-attempt mastery"
+  for the full record.
 - Storage-failure detection and an honest session-only warning
-  (`index.html`, Issue #2, draft PR — not yet merged): `saveProgress()`
+  (`index.html`, Issue #2, **merged**): `saveProgress()`
   previously caught every `localStorage` write error silently and still
   advanced/reported progress as if it had been saved, `loadProgress()`
   treated a genuine read failure identically to "no progress yet" with
