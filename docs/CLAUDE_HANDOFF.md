@@ -1363,6 +1363,98 @@ and implements the stale question/exercise/module ID policy, and
   UI, analytics redesign, content-pack format, image-manifest
   normalization) were touched.
 
+A fourth isolated Milestone 1 task (branch
+`claude/issue-2-exercise-rerender`, "Part of Issue 2", draft PR): makes
+every exercise widget accurately re-render after progress import and
+Reset, and `docs/QUALITY_LOG.md` QL-025:
+
+- **Confirmed, primary defect:** `importJSON()` and the API `reset()`
+  method both rebuilt only `.quiz-mount` widgets, never `.exer`
+  (exercise) ones, so a rendered exercise widget's score, status, and
+  controls silently disagreed with `getProgress()` immediately after
+  either call — reproduced through the real public API and rendered DOM
+  before any fix was written (importing a fully-answered exercise left
+  the widget showing `0 / 4`/"Not started"; answering live then importing
+  blank progress left every stale disabled control and feedback element
+  in place; `reset()` after answering left the same stale state).
+- **Fix:** added `rebuildContentWidgets()`
+  (`$all('.quiz-mount').forEach(buildQuiz); $all('.exer').forEach(buildExercise);`)
+  and routed `init()`, `importJSON()`, and `reset()` through it, replacing
+  three separately maintained selector loops with one. `buildExercise()`'s
+  own rendering logic is otherwise byte-for-byte unchanged from `main`.
+- **A follow-on positioning "fix" was tried, self-caught as a real
+  regression by the pre-existing test suite, and reverted before
+  committing** — the kind of finding this handoff log exists to record
+  honestly: while reproducing the primary defect, it looked like a second
+  gap also needed fixing (exercise widgets never resumed at the "right"
+  item, even on a genuine reload — always restarting at item 0 regardless
+  of persisted progress). A first version added resume-position logic
+  (start at the first unanswered item, or the last item if complete).
+  Running the **complete** local Playwright suite — not just the tests
+  written for this change — surfaced that this broke
+  `tests/e2e/progressive-disclosure.spec.mjs`'s pre-existing "reattempting
+  an exercise item after reload" test (predating this branch, from Issue
+  #11's progressive-disclosure work, confirmed to pass on unmodified
+  `main`): that test answers an item *incorrectly*, reloads, and expects
+  to click the *same item* again to correct it — the positioning change
+  navigated away from that item the moment it had any persisted record.
+  Reconsidered: `buildExercise()` always restarting at item 0 with fresh,
+  unlocked controls is the app's existing, intentional design (exactly
+  matching `buildQuiz()`'s own behavior — a rebuilt quiz mount never
+  disables an already-answered question's options either), not an
+  oversight this task needed to close. The positioning logic was reverted
+  in full.
+- **Event contract measured, not assumed:** `importJSON()` still fires
+  exactly one `progress` event; `reset()` still fires exactly one
+  `progress` event (via its existing `saveProgress()` call); rebuilding
+  widgets never manufactures an `answer`/`exercise` event, since neither
+  `buildQuiz()` nor `buildExercise()` ever calls
+  `recordAnswer()`/`recordExercise()` — confirmed by a dedicated test, not
+  assumed from the code.
+- **Disclosure state unaffected:** a `.exer` element IS the `<details>`
+  itself (confirmed against the static markup), and `buildExercise()`
+  only ever replaces `host.innerHTML`, never `host`'s own `open`
+  attribute, so open/closed state survives a rebuild with no extra code.
+- **15 new tests** total: 9 in `tests/dom-behavior.mjs` (115 → 124) and 6
+  real-browser Playwright tests in
+  `tests/e2e/progress-and-reset.spec.mjs` — partial-import restores exact
+  score/status with item 0 available for reattempt, completed-import
+  shows the summary accurately while item 0 stays reattemptable,
+  blank-import stale-state removal, the public `reset()` API clearing
+  exercise progress/both storage keys/rendered UI via the `#resetBtn`
+  UI path, no duplicate controls/listeners/scoring across repeated
+  import/reset, reattempting an already-recorded item without
+  double-counting (the dependency-free counterpart to the pre-existing
+  Playwright test that caught the reverted regression above), stable-ID
+  migration/stale-ID handling remaining intact, the measured event
+  contract, and disclosure-state preservation. **Mutation-tested:**
+  reverting `importJSON()`/`reset()`'s calls back to the original
+  quiz-only selector loop (leaving `init()` and the helper untouched)
+  failed exactly the five tests that depend on either call site
+  rebuilding an exercise widget — reverted and confirmed byte-identical
+  via `diff`.
+- **Correction (same branch, before merge):** independent review found
+  the `#resetBtn`-driven UI Reset test above ends in `location.reload()`,
+  which would rebuild every widget via `init()` regardless of whether the
+  public `reset()` method itself was fixed — that test alone could not
+  prove `reset()`'s own effect. Added a 6th Playwright test that calls
+  `window.CytoCourse.reset()` directly, with no `#resetBtn` click, no
+  `location.reload()`, and no navigation, proven via a `window`-scoped
+  sentinel that a real navigation would silently wipe. Mutation-tested by
+  reverting only `reset()`'s call to `rebuildContentWidgets()` (leaving
+  `importJSON()`/`init()` untouched): the new direct-call test failed for
+  the expected reason, while the reload-based UI test and the
+  `importJSON()` tests kept passing under the identical mutation —
+  directly confirming the reload-based test could not have caught this.
+  Full record: `docs/QUALITY_LOG.md` QL-025's addendum.
+- Strictly scoped: no question, answer, rationale, scoring,
+  mastery/accuracy semantics, stable-ID format, migration policy,
+  `SCHEMA_V`, image, styling, layout, accessibility presentation,
+  provenance, image-manifest structure, or content-pack decision changed,
+  and none of the other Issue #2 items (storage-failure UI, analytics
+  redesign, content-pack format, provenance fields, image-manifest
+  normalization) were touched.
+
 ## Read these files first
 
 1. `README.md`

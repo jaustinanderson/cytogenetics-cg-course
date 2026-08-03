@@ -375,6 +375,80 @@ Known design debt:
 
 These are Milestone 1 work, not hidden behavior.
 
+### Content-widget rebuild after import and Reset
+
+As of 2026-08-03 (Issue #2, `docs/QUALITY_LOG.md` QL-025), `init()`,
+`CytoCourse.importJSON()`, and `CytoCourse.reset()` all rebuild every
+quiz and exercise widget through one shared `rebuildContentWidgets()`
+helper, rather than three separately maintained selector loops.
+Previously, `importJSON()` and `reset()` rebuilt only `.quiz-mount`
+widgets, never `.exer` ones — a rendered exercise widget's score, status,
+and per-item controls silently disagreed with `getProgress()` immediately
+after either call, confirmed as a real, currently-shipped defect by
+direct execution before it was fixed.
+
+`buildQuiz()`/`buildExercise()` are both full `innerHTML` replacements
+seeded fresh from persisted records on every call, so calling either
+again is idempotent — the previous subtree, and every listener attached
+to it, is discarded, not duplicated. Neither function ever calls
+`recordAnswer()`/`recordExercise()` or emits an event; both only read
+`state` to seed their initial render, so a rebuild triggered by import or
+Reset never manufactures an `answer`/`exercise` event — `importJSON()`
+still fires exactly one `progress` event (via its existing logic) and
+`reset()` still fires exactly one `progress` event (via its existing
+`saveProgress()` call), unchanged from before this fix.
+
+**`buildExercise()` always starts at item 0, deliberately.** A rebuilt
+exercise widget always shows item 0 first, with fresh/enabled controls,
+regardless of how much progress is already recorded for that or any
+other item — this is not an oversight; it is the existing, intentional
+design, and this fix does not change it. A resume-to-first-unanswered-
+item positioning change was tried while investigating this rendering
+gap, then reverted before committing: running the complete local
+Playwright suite (not only the tests written for this change) surfaced
+that it broke `tests/e2e/progressive-disclosure.spec.mjs`'s
+"reattempting an exercise item after reload" test — a pre-existing,
+shipped test (predating this work, from Issue #11) that depends on
+clicking item 0 again after a reload to correct a previous answer. The
+positioning change navigated away from item 0 the moment it had any
+persisted record, breaking that contract. `buildExercise()`'s rendering
+logic is therefore byte-for-byte unchanged from before this fix; only
+`rebuildContentWidgets()` and the three call sites routed through it are
+new. This exactly matches `buildQuiz()`'s own established behavior (a
+rebuilt quiz mount never disables an already-answered question's options
+either, confirmed directly) — re-clicking an item that already has a
+persisted record correctly replaces its outcome via `state.exercises[id]`
+without double-counting `answeredCount`, exactly like re-answering a quiz
+question after a reload already did. Neither widget type has ever
+persisted *which* option a learner chose, only whether the outcome was
+correct, so nothing could accurately mark a specific wrong option as
+"still selected" on a rebuild even if that were otherwise desired. Full
+account, including the reverted attempt: `docs/QUALITY_LOG.md` QL-025.
+
+**Disclosure state is unaffected.** A `.quiz-mount` is a plain container
+`<div>` whose entire `innerHTML` — including a fresh `<details
+class="quiz">` with no `open` attribute — is replaced on every
+`buildQuiz()` call, so a quiz widget has always collapsed back to closed
+on any rebuild; that pre-existing behavior is unchanged. A `.exer`
+element IS the `<details>` itself (see `index.html`'s static markup), and
+`buildExercise()` only ever replaces `host.innerHTML` (its children),
+never `host`'s own `open` attribute — so an exercise widget's open/closed
+state survives a rebuild by construction, with no extra code required to
+preserve it.
+
+9 new tests in `tests/dom-behavior.mjs` (115 → 124) and 5 new real-browser
+Playwright tests in `tests/e2e/progress-and-reset.spec.mjs` cover the
+fix, including reattempt-without-double-counting (through the real UI,
+now that a rebuild can surface an already-recorded item to reattempt —
+the dependency-free counterpart to the pre-existing Playwright test that
+caught the reverted regression above), stable-ID migration/stale-ID
+handling remaining intact, the documented event contract, and
+disclosure-state preservation. **Mutation-tested:** reverting
+`importJSON()`/`reset()`'s calls back to the original quiz-only selector
+loop (leaving `init()` and the helper itself untouched) failed exactly
+the five tests that depend on either call site rebuilding an exercise
+widget. Full record: `docs/QUALITY_LOG.md` QL-025.
+
 ## Public API
 
 `window.CytoCourse` provides read, analysis, write, and event methods. Read

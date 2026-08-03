@@ -834,6 +834,242 @@ test("an explicit, confirmed Reset removes current AND stale records everywhere,
   );
 });
 
+/* ============================ exercise widget re-render (Issue #2 / QL-025) ============================
+   Confirmed defect, reproduced through the real public API and rendered
+   DOM before any fix was written: importJSON() and the API reset()
+   method only ever rebuilt `.quiz-mount` widgets
+   (`$all('.quiz-mount').forEach(buildQuiz)`), never `.exer` ones, so an
+   exercise widget's rendered score/status/controls silently disagreed
+   with `getProgress()`/`getStats()` immediately after either call --
+   fixed by routing all three call sites (init(), importJSON(), reset())
+   through one shared rebuildContentWidgets() helper.
+
+   A resume-to-first-unanswered-item positioning change was ALSO tried
+   while investigating this, then reverted before committing: it broke an
+   existing, shipped, already-tested contract --
+   tests/e2e/progressive-disclosure.spec.mjs's "reattempting an exercise
+   item after reload" test -- which depends on an exercise widget always
+   restarting at item 0 on any rebuild, with fresh/enabled controls,
+   specifically so a learner can correct a previous answer by clicking
+   item 0 again after a reload. buildExercise() therefore still always
+   starts at item 0 and never pre-locks any item's controls from
+   persisted state, exactly matching buildQuiz's own established
+   behavior (confirmed directly: a rebuilt quiz mount never disables an
+   already-answered question's options either) -- this rebuild fix only
+   ensures buildExercise() actually RUNS after import/reset, not that it
+   renders differently once it does. See index.html's
+   rebuildContentWidgets() comment and docs/QUALITY_LOG.md QL-025 for the
+   full account, including the reverted positioning attempt. */
+
+test("importJSON() with a partially completed exercise restores the exact rendered state: score, status, and item 0 available for reattempt", () => {
+  const env = boot();
+  const items = env.api.getExercises().ex7.items;
+  const host = env.body.querySelectorAll('.exer[data-exer="ex7"]')[0];
+
+  const result = env.api.importJSON({
+    v: 2, modules: {}, answers: {},
+    exercises: { [items[0].id]: { c: true, n: 1, ts: 1 }, [items[1].id]: { c: false, n: 1, ts: 1 } },
+    started: 0,
+  });
+  assert.equal(result.ok, true, `expected success, got ${JSON.stringify(result)}`);
+
+  assert.equal(host.querySelector(".eh-score").textContent, "1 / 4", "summary score reflects exactly the imported outcomes");
+  assert.equal(host.querySelector(".eh-state").textContent, "In progress");
+  assert.equal(
+    host.querySelector(".exer-prompt").textContent,
+    items[0].prompt,
+    "always starts at item 0 on a rebuild, matching the existing reattempt-after-reload contract",
+  );
+  const opts = host.querySelectorAll(".eopt");
+  assert.ok(opts.every((o) => !o.disabled), "item 0 is available fresh/interactive, not stale-disabled, even though it already has a persisted record -- reattempt remains possible");
+  assert.ok(!host.querySelector(".exer-fb").classList.contains("show"), "no stale feedback carried over");
+  assert.equal(host.querySelector(".exer-next").disabled, true, "Next stays disabled until item 0 is (re)answered in this render");
+  assert.equal(host.querySelector(".exer-prog").textContent, `Item 1 of ${items.length} · Score 1`);
+});
+
+test("importJSON() with a completed exercise shows its completed state accurately in the summary while item 0 remains reattemptable", () => {
+  const env = boot();
+  const items = env.api.getExercises().ex7.items;
+  const host = env.body.querySelectorAll('.exer[data-exer="ex7"]')[0];
+
+  const exercises = Object.fromEntries(items.map((it, i) => [it.id, { c: i % 2 === 0, n: 1, ts: 1 }]));
+  const expectedScore = items.filter((_, i) => i % 2 === 0).length;
+  const result = env.api.importJSON({ v: 2, modules: {}, answers: {}, exercises, started: 0 });
+  assert.equal(result.ok, true, `expected success, got ${JSON.stringify(result)}`);
+
+  assert.equal(host.querySelector(".eh-score").textContent, `${expectedScore} / ${items.length}`);
+  assert.equal(host.querySelector(".eh-state").textContent, "Completed");
+  assert.equal(
+    host.querySelector(".exer-prompt").textContent,
+    items[0].prompt,
+    "always starts at item 0 on a rebuild, matching the existing reattempt-after-reload contract -- even for a fully completed exercise",
+  );
+  assert.equal(host.querySelector(".exer-next").textContent, "Next", "item 0 is not the last item, so the button reads Next, not Finish");
+  assert.ok(host.querySelectorAll(".eopt").every((o) => !o.disabled), "item 0 remains reattemptable");
+});
+
+test("answering an exercise in the UI, then importing blank progress, removes every stale answered/disabled/feedback state", () => {
+  const env = boot();
+  const items = env.api.getExercises().ex7.items;
+  const host = env.body.querySelectorAll('.exer[data-exer="ex7"]')[0];
+
+  host.querySelectorAll(".eopt")[items[0].answer].click();
+  assert.equal(host.querySelector(".eh-score").textContent, "1 / 4", "sanity: the UI answer really was recorded and rendered");
+  assert.ok(host.querySelectorAll(".eopt").every((o) => o.disabled), "sanity: item 0's controls are locked after answering it live");
+
+  const result = env.api.importJSON({ v: 2, modules: {}, answers: {}, exercises: {}, started: 0 });
+  assert.equal(result.ok, true, `expected success, got ${JSON.stringify(result)}`);
+
+  assert.equal(host.querySelector(".eh-score").textContent, "0 / 4", "the stale score is gone");
+  assert.equal(host.querySelector(".eh-state").textContent, "Not started");
+  assert.equal(host.querySelector(".exer-prompt").textContent, items[0].prompt, "back to the first item");
+  assert.ok(host.querySelectorAll(".eopt").every((o) => !o.disabled), "the stale disabled state is gone");
+  assert.ok(!host.querySelector(".exer-fb").classList.contains("show"), "the stale feedback is gone");
+  assert.equal(host.querySelector(".exer-next").disabled, true, "the stale enabled Next button is gone");
+});
+
+test("the public reset() API clears exercise progress, both storage keys, statistics, and rendered exercise UI", () => {
+  const env = boot();
+  const items = env.api.getExercises().ex7.items;
+  const host = env.body.querySelectorAll('.exer[data-exer="ex7"]')[0];
+  host.querySelectorAll(".eopt")[items[0].answer].click();
+  env.storage.setItem(V1_KEY, JSON.stringify({ m1: true }));
+  assert.ok(env.storage.getItem(V1_KEY), "sanity: legacy v1 key is present before reset()");
+
+  const result = env.api.reset();
+  assert.equal(result.ok, true, `expected success, got ${JSON.stringify(result)}`);
+
+  assert.equal(env.storage.getItem(V1_KEY), null, "legacy v1 key is removed by reset()");
+  const stored = JSON.parse(env.storage.getItem(V2_KEY));
+  assert.deepEqual(stored.exercises, {}, "v2 storage no longer carries the exercise record");
+
+  assert.deepEqual(env.api.getProgress().exercises, {});
+  assert.equal(host.querySelector(".eh-score").textContent, "0 / 4");
+  assert.equal(host.querySelector(".eh-state").textContent, "Not started");
+  assert.ok(host.querySelectorAll(".eopt").every((o) => !o.disabled), "the rebuilt exercise is answerable again");
+});
+
+test("repeated import and reset operations on an exercise widget create no duplicate controls, listeners, or scoring", () => {
+  const env = boot();
+  const items = env.api.getExercises().ex7.items;
+  const host = env.body.querySelectorAll('.exer[data-exer="ex7"]')[0];
+
+  const seed = { v: 2, modules: {}, answers: {}, exercises: { [items[0].id]: { c: true, n: 1, ts: 1 } }, started: 0 };
+  env.api.importJSON(seed);
+  env.api.importJSON(seed);
+  env.api.importJSON(seed);
+  env.api.reset();
+  env.api.reset();
+  const finalSeed = env.api.importJSON(seed);
+  assert.equal(finalSeed.ok, true);
+
+  assert.equal(
+    env.body.querySelectorAll('.exer[data-exer="ex7"]').length,
+    1,
+    "still exactly one exercise widget for ex7, not accumulated duplicates",
+  );
+  assert.equal(host.querySelectorAll(".eopt").length, items[0].options.length, "no duplicate option buttons");
+  assert.equal(host.querySelector(".eh-score").textContent, "1 / 4", "no duplicate-listener score inflation across repeated rebuilds");
+
+  // A single click on a freshly rebuilt item must fire recordExercise()
+  // exactly once, never more, proving no listener stacking across the
+  // five rebuilds above.
+  let exerciseEvents = 0;
+  env.api.on("exercise", () => { exerciseEvents += 1; });
+  host.querySelectorAll(".eopt")[items[1].answer].click();
+  assert.equal(exerciseEvents, 1, "exactly one exercise event from one click, no stacked listeners");
+});
+
+test("reattempting an exercise item after an import-driven rebuild replaces its prior outcome without double-counting", () => {
+  const env = boot();
+  const items = env.api.getExercises().ex7.items;
+  const host = env.body.querySelectorAll('.exer[data-exer="ex7"]')[0];
+
+  // item 1 pre-recorded INCORRECT via import; item 0 left unanswered so
+  // the widget resumes there.
+  const result = env.api.importJSON({
+    v: 2, modules: {}, answers: {},
+    exercises: { [items[1].id]: { c: false, n: 1, ts: 1 } },
+    started: 0,
+  });
+  assert.equal(result.ok, true);
+  assert.equal(host.querySelector(".eh-score").textContent, "0 / 4");
+
+  host.querySelectorAll(".eopt")[items[0].answer].click(); // answer item 0 correctly
+  host.querySelector(".exer-next").click(); // advance to item 1, the already-recorded one
+
+  assert.equal(host.querySelector(".exer-prompt").textContent, items[1].prompt);
+  assert.ok(host.querySelectorAll(".eopt").every((o) => !o.disabled), "item 1 is reattemptable, not locked, after the rebuild");
+
+  host.querySelectorAll(".eopt")[items[1].answer].click(); // reattempt item 1, this time correctly
+
+  const rec = env.api.getProgress().exercises[items[1].id];
+  assert.deepEqual(rec, { c: true, n: 2, ts: rec.ts }, "the outcome is replaced (c:true) and the attempt count increments -- n:2, not a fresh n:1");
+  assert.equal(
+    Object.keys(env.api.getProgress().exercises).length,
+    2,
+    "exactly two exercise records exist (item 0, item 1) -- reattempting item 1 did not create a duplicate record",
+  );
+  assert.equal(host.querySelector(".eh-score").textContent, "2 / 4", "score reflects both items now correct, not double-counted");
+});
+
+test("stable-ID migration and stale-exercise-ID handling remain intact after the rebuild fix", () => {
+  const seedEnv = boot();
+  const item0 = seedEnv.api.getExercises().ex7.items[0]; // legacyId "ex7-1"
+  const seeded = {
+    v: 2, modules: {}, answers: {},
+    exercises: { "ex7-1": { c: true, n: 1, ts: 5 }, "ex7-77": { c: false, n: 2, ts: 9 } },
+    started: 0,
+  };
+  const env = boot({ storage: { [V2_KEY]: JSON.stringify(seeded) } });
+  const host = env.body.querySelectorAll('.exer[data-exer="ex7"]')[0];
+
+  const progress = env.api.getProgress();
+  assert.deepEqual(progress.exercises[item0.id], { c: true, n: 1, ts: 5 }, "the legacy key migrated to its item's stable id");
+  assert.equal(progress.exercises["ex7-1"], undefined);
+  assert.deepEqual(
+    progress.exercises["ex7-77"],
+    { c: false, n: 2, ts: 9 },
+    "the orphaned (stale) legacy-shaped key is preserved untouched -- Issue #2 stale-ID policy is unaffected by this rebuild fix",
+  );
+  assert.equal(host.querySelector(".eh-score").textContent, "1 / 4", "the rendered widget agrees: the stale key never counts, only the real migration does");
+});
+
+test("import and reset fire exactly the documented events: progress on both, never a manufactured answer/exercise event", () => {
+  const env = boot();
+  const items = env.api.getExercises().ex7.items;
+  let progressEvents = 0, answerEvents = 0, exerciseEvents = 0;
+  env.api.on("progress", () => { progressEvents += 1; });
+  env.api.on("answer", () => { answerEvents += 1; });
+  env.api.on("exercise", () => { exerciseEvents += 1; });
+
+  const importResult = env.api.importJSON({
+    v: 2, modules: {}, answers: {},
+    exercises: { [items[0].id]: { c: true, n: 1, ts: 1 } },
+    started: 0,
+  });
+  assert.equal(importResult.ok, true);
+  assert.equal(progressEvents, 1, "importJSON() fires exactly one progress event, as already documented");
+  assert.equal(answerEvents, 0, "rebuilding widgets from imported data must never manufacture an answer event");
+  assert.equal(exerciseEvents, 0, "rebuilding widgets from imported data must never manufacture an exercise event");
+
+  const resetResult = env.api.reset();
+  assert.equal(resetResult.ok, true);
+  assert.equal(progressEvents, 2, "reset() fires exactly one more progress event (via its existing saveProgress() call), as already documented");
+  assert.equal(answerEvents, 0);
+  assert.equal(exerciseEvents, 0);
+});
+
+test("a preserved disclosure open/closed state survives an import-driven exercise rebuild", () => {
+  const env = boot();
+  const host = env.body.querySelectorAll('.exer[data-exer="ex7"]')[0];
+  host.open = true;
+
+  const result = env.api.importJSON({ v: 2, modules: {}, answers: {}, exercises: {}, started: 0 });
+  assert.equal(result.ok, true);
+  assert.equal(host.open, true, "the <details> element's own open attribute is untouched by an innerHTML-only rebuild");
+});
+
 /* ============================ import / export ============================ */
 
 test("export and import round-trip preserves progress", () => {

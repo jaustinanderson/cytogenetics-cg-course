@@ -6,6 +6,30 @@ All notable repository changes are recorded here.
 
 ### Added
 
+- Exercise widgets now correctly re-render after `CytoCourse.importJSON()`
+  and `CytoCourse.reset()` (`index.html`, Issue #2): both previously
+  rebuilt only `.quiz-mount` widgets, never `.exer` (exercise) ones, so a
+  rendered exercise widget's score, status, and controls silently
+  disagreed with `getProgress()` immediately after either call —
+  confirmed as a real, currently-shipped defect by direct execution
+  before any fix was written. Fixed by adding `rebuildContentWidgets()`
+  and routing `init()`, `importJSON()`, and `reset()` through it instead
+  of three separately maintained selector loops; `buildExercise()`'s own
+  rendering logic (including its existing reattempt-after-reload
+  behavior — an exercise widget always restarts at item 0 with fresh,
+  unlocked controls on any rebuild, letting a learner correct a previous
+  answer) is unchanged. A resume-position variant of this fix was tried
+  and reverted before committing after it broke a pre-existing, shipped
+  Playwright test depending on that exact reattempt behavior; see
+  `docs/QUALITY_LOG.md` QL-025 for the full account. 9 new dependency-free
+  regression tests in `tests/dom-behavior.mjs` (115 → 124) and 6 new
+  real-browser Playwright tests in
+  `tests/e2e/progress-and-reset.spec.mjs` — including one that calls
+  `window.CytoCourse.reset()` directly, with no page reload or
+  navigation, specifically to prove the public API method itself (not a
+  subsequent reload) rebuilds the exercise widget — mutation-tested. Does
+  not change stable-ID formats, migration policy, `SCHEMA_V`, or the
+  stale-ID policy (Issue #2)
 - Stale question/exercise/module ID policy (`index.html`, Issue #2): a
   `modules`/`answers`/`exercises` key that no longer corresponds to
   current `MODULES`/`QUIZZES`/`EXERCISES` data (a renumbered or removed

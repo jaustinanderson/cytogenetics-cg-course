@@ -1459,6 +1459,130 @@ above) rather than imposing a new restriction.
 No question, answer, rationale, scoring, image, styling, layout, or
 accessibility presentation changed.
 
+## Exercise widget re-render after import and Reset — added 2026-08-03
+
+`tests/dom-behavior.mjs` (Issue #2, `docs/QUALITY_LOG.md` QL-025) adds 9
+dependency-free checks (115 → 124), and
+`tests/e2e/progress-and-reset.spec.mjs` adds 5 real-browser Playwright
+checks, covering `importJSON()`/`reset()` correctly rebuilding `.exer`
+(exercise) widgets, which they previously did not — a real, confirmed
+defect reproduced through the real public API and rendered DOM before
+any fix was written. See `docs/ARCHITECTURE.md` "Content-widget rebuild
+after import and Reset" for the full decision record, including a
+resume-to-first-unanswered-item positioning change that was tried while
+investigating this, caught as a real regression by the pre-existing
+`tests/e2e/progressive-disclosure.spec.mjs` reattempt test when the
+*complete* local suite was run (not only the new tests), and reverted
+before committing — `buildExercise()`'s rendering logic ends this branch
+byte-for-byte unchanged from `main`. Covers:
+
+- **partial import restores exact rendered state:** an exercise imported
+  with one correct and one incorrect item shows the right summary score
+  (`1 / 4`) and status (`In progress`); the widget starts at item 0 (its
+  established, unchanged behavior) with fresh/enabled controls even
+  though item 0 already has a persisted record — reattempt remains
+  possible — no stale feedback, and Next correctly disabled until item 0
+  is itself (re)answered in this render
+- **completed import shows completed state accurately in the summary:**
+  an exercise imported with every item answered shows the correct
+  summary (`4 / 4`, `Completed`); the widget still starts at item 0,
+  labeled `Next` (not `Finish`, since item 0 isn't the last item), with
+  controls enabled for reattempt
+- **answering live then importing blank progress removes every stale
+  visual/interactive trace:** score, disabled controls, and feedback all
+  reset to their fresh, unanswered state
+- **the public `reset()` API clears exercise progress, both storage
+  keys, statistics, and the rendered widget** — extended from the
+  existing quiz-only `reset()` test to also seed and verify an answered
+  exercise item and the legacy v1 key
+- **no duplicate controls, listeners, or scoring across repeated
+  import/reset operations:** five back-to-back import/reset calls leave
+  exactly one exercise widget, exactly the expected number of option
+  buttons, and exactly one `exercise` event per click afterward (proving
+  no listener stacking)
+- **reattempting an already-recorded item after a rebuild replaces its
+  prior outcome without double-counting:** an item pre-recorded via
+  import, then re-answered through the real UI once the widget actually
+  rebuilds and surfaces it, updates `c`/increments `n` in place rather
+  than creating a second record or inflating the answered count — the
+  dependency-free counterpart to the pre-existing
+  `tests/e2e/progressive-disclosure.spec.mjs` reattempt test that caught
+  the reverted positioning regression described above
+- **stable-ID migration and stale-exercise-ID handling remain intact:**
+  an orphaned legacy key stays inert alongside a real legacy→stable
+  migration, and the rendered widget agrees (QL-005/QL-024 unaffected)
+- **the documented event contract holds:** `importJSON()` and `reset()`
+  each fire exactly one `progress` event as already documented, and
+  rebuilding widgets never manufactures an `answer` or `exercise` event
+- **disclosure state survives a rebuild:** an exercise widget left open
+  before an import stays open afterward, verified structurally (a
+  `.exer` element IS the `<details>` itself, so `buildExercise()`'s
+  `host.innerHTML`-only replacement never touches `host`'s own `open`
+  attribute)
+
+Real-browser coverage in `tests/e2e/progress-and-reset.spec.mjs` repeats
+the partial-import, completed-import, blank-import, confirmed-Reset, and
+reattempt scenarios above against actual Chromium rendering, each
+asserting a clean page-origin console alongside the rendered-state
+checks. The full local suite, including the pre-existing
+`tests/e2e/progressive-disclosure.spec.mjs`/`tests/e2e/quiz-and-exercise.spec.mjs`
+files this branch did not intentionally modify, was run and passed
+before committing — the same run that originally caught the reverted
+positioning regression.
+
+**Mutation-tested:** reverting `importJSON()`/`reset()`'s calls to
+`rebuildContentWidgets()` back to the original
+`$all('.quiz-mount').forEach(buildQuiz)` line (leaving `init()` and the
+helper itself untouched, isolating exactly the two broken connections)
+failed exactly the five tests that depend on either call site rebuilding
+an exercise widget, and no others.
+
+No question, answer, rationale, scoring, mastery/accuracy semantics,
+stable-ID format, migration policy, `SCHEMA_V`, image, provenance, or
+content-pack decision changed.
+
+### Correction — direct public API coverage for `reset()`, added 2026-08-03
+
+Independent review found that the "confirmed Reset path" real-browser
+test above drives Reset through `#resetBtn`, whose handler ends in
+`location.reload()` — a full page re-execution that would rebuild every
+widget from scratch via `init()` regardless of whether the public
+`CytoCourse.reset()` method itself ever rebuilt exercise widgets. That
+test therefore could not, by itself, prove `reset()`'s own effect — only
+that the page looks right after a reload masks it.
+
+Added one new test to `tests/e2e/progress-and-reset.spec.mjs`: answers an
+exercise item live (score, status, disabled controls, and feedback all
+visibly non-default), installs `progress`/`answer`/`exercise` event
+counters, then calls `window.CytoCourse.reset()` **directly** via
+`page.evaluate()` — no `#resetBtn` click, no `location.reload()`, no
+navigation — and checks the rendered exercise widget, `getProgress()`,
+`getStats()`, and both storage keys immediately afterward. Proves no
+navigation occurred via a `window`-scoped sentinel property set
+immediately before calling `reset()`: a real navigation replaces `window`
+entirely, silently wiping the sentinel, so its survival is direct,
+checked evidence, not an assumption from the absence of a `page.reload()`
+call in the test source. Confirms exactly one `progress` event and zero
+`answer`/`exercise` events, matching this course's standing
+measured-not-assumed event-contract discipline.
+
+**Mutation-tested:** reverted `reset()`'s call to
+`rebuildContentWidgets()` back to the original quiz-only
+`$all('.quiz-mount').forEach(buildQuiz)` line — deliberately leaving
+`importJSON()` and `init()` untouched, isolating exactly the one
+connection this correction targets. The new direct-call test failed for
+the expected reason (the exercise widget's score still read the stale
+`"1 / 4"`); the pre-existing `#resetBtn`-driven UI-Reset test and the
+`importJSON()` tests both continued to pass under the same mutation,
+directly confirming the reload-based test cannot detect this specific
+defect. One unrelated test (`importJSON()` with a fully completed
+exercise) failed intermittently in the same run; confirmed as the
+pre-existing cross-file flake already documented for this branch by
+rerunning it in isolation with the mutation still applied, where it
+passed. Reverted and confirmed `index.html` byte-identical via `diff`.
+
+Full record: `docs/QUALITY_LOG.md` QL-025's addendum.
+
 ## Gates still open
 
 ### Browser behavior

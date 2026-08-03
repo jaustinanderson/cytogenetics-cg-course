@@ -2644,3 +2644,188 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   key at once) used to prove the default path — a policy statement with
   an unstated exception is exactly as dangerous as one with an unproven
   guarantee.
+
+## QL-025 — Exercise widgets were never rebuilt after import or Reset; a follow-on positioning "fix" was itself caught as a regression by the existing e2e suite and reverted
+
+- **Status:** Corrected on branch `claude/issue-2-exercise-rerender`
+  (Issue #2), before merge.
+- **Finding — confirmed, primary defect.** `importJSON()` and the API
+  `reset()` method both rebuilt only `.quiz-mount` widgets
+  (`$all('.quiz-mount').forEach(buildQuiz)`); neither ever rebuilt `.exer`
+  (exercise) widgets. Reproduced through the real public API and rendered
+  DOM before any fix was written: (1) importing a state where every item
+  of exercise `ex7` had a persisted `{c:true,...}` record left the
+  rendered widget showing `0 / 4` / "Not started" — completely disagreeing
+  with `getProgress()`, which correctly showed all four items answered;
+  (2) answering an exercise live (options rendered `disabled`, feedback
+  shown) and then importing blank progress left every stale
+  disabled/feedback/score element on screen, untouched, even though
+  `getStats()` correctly reported zero; (3) calling `reset()` after
+  answering an exercise item left the same stale rendered state in place.
+  All three were independently confirmed as real, working defects by
+  direct execution against the pre-fix code.
+- **Impact:** None shipped — found and fixed within this same branch
+  before merge.
+- **Cause:** Three separate call sites (`init()`, `importJSON()`,
+  `reset()`) each duplicated the same incomplete
+  `$all('.quiz-mount').forEach(buildQuiz)` selector loop, so fixing one
+  site by hand would not have guaranteed the other two stayed correct —
+  and in fact `init()` already correctly built both widget types (it has
+  its own, separate `$all('.exer').forEach(buildExercise)` line), while
+  `importJSON()`/`reset()` never did, silently diverging over time.
+- **Correct action:** When the same rebuild logic is needed from more
+  than one call site, centralize it once and route every call site
+  through that single function, rather than trusting each site to
+  independently remember every widget type that needs rebuilding — the
+  divergence between `init()` and the other two call sites here is
+  exactly the failure mode a shared helper eliminates by construction.
+- **Correction:** Added `rebuildContentWidgets()`
+  (`$all('.quiz-mount').forEach(buildQuiz); $all('.exer').forEach(buildExercise);`)
+  and routed `init()`, `importJSON()`, and `reset()` through it, replacing
+  three separate selector loops with one. `buildQuiz()`/`buildExercise()`
+  are both full `innerHTML` replacements seeded fresh from persisted
+  records, so calling either again is idempotent — no duplicate DOM nodes
+  or listeners accumulate. Neither function ever calls
+  `recordAnswer()`/`recordExercise()` or emits an event, so a rebuild
+  never manufactures an `answer`/`exercise` event; `importJSON()`/`reset()`
+  still fire only their existing, already-documented `progress` event.
+
+  ### A follow-on "fix" was tried, caught as a real regression by the existing test suite, and reverted before committing
+
+  While reproducing the primary defect, a second issue appeared to exist:
+  even a genuine full-page reload never restored an exercise widget's
+  resume position — `buildExercise()` always started at array index 0
+  regardless of how much progress was already recorded, so a learner who
+  answered item 0 and reloaded would see item 0's prompt again rather
+  than the next unanswered item, and a fully completed exercise would
+  restart at item 0. A first version of this fix added resume-position
+  logic (start at the first item without a persisted record, or the last
+  item if every item already has one) to make this look "restored."
+
+  Running the **complete** local Playwright suite (not just the new
+  tests) surfaced that this "fix" **broke an existing, shipped,
+  already-tested contract**:
+  `tests/e2e/progressive-disclosure.spec.mjs`'s
+  "reattempting an exercise item after reload updates the score to the
+  latest result without double-counting" test (added earlier, predating
+  this branch, under Issue #11's progressive-disclosure work) — confirmed
+  to pass on unmodified `main` before concluding this was a real
+  regression, not a flake. That test answers an exercise item
+  *incorrectly*, reloads, and expects to click the **same item again**
+  (now with fresh, unlocked controls) to correct it. The resume-position
+  logic navigated *away* from that item the moment it had any persisted
+  record — including an incorrect one — so the test's second click landed
+  on the wrong item and the test failed for a real, structural reason.
+
+  Reflecting on this: `buildExercise()` always restarting at item 0 with
+  fresh, unlocked controls on every rebuild is not an oversight this
+  branch needed to close — it is the **existing, intentional design**,
+  exactly matching `buildQuiz()`'s own established behavior (a rebuilt
+  quiz mount never disables an already-answered question's options
+  either, confirmed directly), which exists specifically so a learner can
+  correct a previous answer after a reload. Neither widget type has ever
+  persisted *which* option a learner chose, only whether the outcome was
+  correct, so a "locked, showing the right answer" rendering of an
+  already-recorded item was never something either widget could do
+  precisely anyway. The resume-position logic was reverted in full,
+  restoring `buildExercise()`'s opening lines to their exact pre-branch
+  form (confirmed via `diff` against `main`) — this branch's product
+  change is therefore *only* `rebuildContentWidgets()` and the three call
+  sites routed through it; `buildExercise()`'s internal rendering logic
+  is untouched.
+- **9 new tests** in `tests/dom-behavior.mjs` (115 → 124) plus 5 new
+  real-browser Playwright tests in `tests/e2e/progress-and-reset.spec.mjs`:
+  importing a partially completed exercise restores the exact score and
+  status, with item 0 available for reattempt (not stale-disabled);
+  importing a fully completed exercise shows its completed state
+  accurately in the summary while item 0 remains reattemptable; answering
+  live then importing blank progress removes every stale
+  answered/disabled/feedback state; the public `reset()` API clears
+  exercise progress, both storage keys, statistics, and the rendered
+  widget; repeated import/reset operations create no duplicate DOM
+  elements, listeners, or scoring; reattempting an already-recorded item
+  after an import-driven rebuild replaces its prior outcome without
+  double-counting (through the real UI, now that a rebuild can actually
+  surface an already-recorded item to reattempt — the dependency-free
+  counterpart to the pre-existing Playwright test that caught the
+  reverted regression above); stable-ID migration and stale-exercise-ID
+  handling remain intact after the rebuild fix (an orphaned legacy key
+  stays inert alongside a real migration, exactly as QL-005/QL-024
+  established); import and reset fire exactly the already-documented
+  events (`progress` on both, never a manufactured `answer`/`exercise`
+  event); and a preserved `<details>` open/closed disclosure state
+  survives a rebuild (verified structurally: a `.exer` element IS the
+  `<details>` itself, so `buildExercise()`'s `host.innerHTML` replacement
+  never touches `host`'s own `open` attribute — confirmed directly rather
+  than assumed).
+- **Mutation-tested:** reverting `importJSON()`/`reset()`'s calls to
+  `rebuildContentWidgets()` back to the original
+  `$all('.quiz-mount').forEach(buildQuiz)` line (leaving `init()` and the
+  helper itself untouched, so only the two specific connections were
+  broken, not widget-building generally) failed exactly the five tests
+  that depend on either call site actually rebuilding an exercise widget,
+  and no others — reverted and confirmed byte-identical via `diff`.
+- **Prevention:** Run the *complete* local test suite — not just the
+  tests written for the current change — before concluding a fix is
+  correct; a suite scoped only to what a change is expected to touch
+  cannot catch that change silently breaking an established contract
+  elsewhere, which is exactly what happened here and exactly what caught
+  it. `docs/ARCHITECTURE.md` records the rendering-approach decision and
+  the reattempt-preservation rationale, including the reverted attempt;
+  `docs/VALIDATION.md` records the corrected test-coverage list;
+  `docs/ROADMAP.md` checks off the corresponding Milestone 1 item.
+
+### Addendum — independent review found the UI Reset test could not prove the public API path was fixed
+
+- **Status:** Corrected on the same branch (`claude/issue-2-exercise-rerender`),
+  before merge.
+- **Finding:** The real-browser "confirmed Reset path" test added by this
+  entry drives Reset through `#resetBtn`, whose handler ends in
+  `location.reload()` — a full page re-execution that calls `init()`,
+  which has always correctly rebuilt both quiz and exercise widgets. That
+  test therefore could pass even if the public `CytoCourse.reset()`
+  method itself never rebuilt exercise widgets at all: the subsequent
+  reload would mask the defect by rebuilding everything from scratch
+  regardless of what `reset()` itself did. The defect this branch fixes
+  is specifically that `reset()` (and `importJSON()`) did not rebuild
+  exercise widgets — a reload-based test cannot isolate that claim.
+- **Impact:** None shipped — a coverage gap, not a product defect; found
+  before merge.
+- **Correction:** Added a dedicated real-browser test that calls
+  `window.CytoCourse.reset()` directly via `page.evaluate()` — no
+  `#resetBtn` click, no `location.reload()`, no navigation of any kind —
+  and asserts the rendered exercise widget, `getProgress()`, `getStats()`,
+  and both storage keys immediately afterward. Proves no navigation
+  occurred via a `window`-scoped sentinel property set before calling
+  `reset()`: a real navigation replaces `window` entirely, which would
+  silently wipe the sentinel, so its survival is direct evidence no
+  reload happened (checked instead of merely assumed from the absence of
+  a `page.reload()` call in the test source). Also installs
+  `progress`/`answer`/`exercise` event counters immediately before
+  calling `reset()` (after the setup answer above, so that answer's own
+  events are not miscounted as `reset()`'s) and asserts exactly one
+  `progress` event and zero `answer`/`exercise` events — measured, not
+  assumed, matching this course's standing event-contract discipline.
+- **Mutation-tested:** reverted `reset()`'s call to
+  `rebuildContentWidgets()` back to the original quiz-only
+  `$all('.quiz-mount').forEach(buildQuiz)` line — deliberately leaving
+  `importJSON()` and `init()` untouched, isolating exactly the one
+  connection this correction targets — and the new direct-call test
+  failed for the expected reason (`.eh-score` still read the stale
+  `"1 / 4"` instead of `"0 / 4"`, since the exercise widget was never
+  rebuilt). The pre-existing UI-Reset (`#resetBtn`) test and the
+  `importJSON()` tests continued to pass under this same mutation,
+  confirming the reload-based test genuinely cannot detect this specific
+  defect — exactly the gap this correction closes. One other test
+  (`importJSON()` with a fully completed exercise) failed intermittently
+  during the same run; confirmed as the pre-existing, unrelated
+  cross-file flake already documented in this branch's Playwright runs
+  by rerunning it in isolation with the mutation still applied, where it
+  passed. Reverted the mutation and confirmed `index.html` byte-identical
+  to the pre-mutation file via `diff`.
+- **Prevention:** When a UI action ends in a page reload/navigation, a
+  test driving that UI path cannot, by itself, prove a claim about the
+  underlying method's own behavior — the reload can mask an unfixed
+  method. Any claim about a specific public API method's own effect
+  needs a test that calls that method directly and checks state before
+  anything else (a reload, a navigation) could have contributed.
