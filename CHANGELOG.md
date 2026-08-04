@@ -6,11 +6,49 @@ All notable repository changes are recorded here.
 
 ### Added
 
+- Defined and enforced the runtime-injected-question lifecycle
+  (`index.html`, Issue #2, draft PR — not yet merged): adopted a
+  deliberate **split lifecycle** — a question definition added via
+  `addQuestions()` remains session-only (never written to
+  `localStorage`, `state`, `exportJSON()`, or accepted back in by
+  `importJSON()`), but its recorded answer OUTCOME, once recorded, is
+  durable in existing v2 progress by stable id, exactly like an
+  authored question's outcome; reintroducing the same id later revives
+  the preserved outcome via the existing stale-ID policy, with no
+  injection-specific code. The caller owns semantic id stability — the
+  app cannot detect reuse of an id for materially different content
+  across sessions, since a v2 outcome carries no definition/fingerprint
+  to compare against, stated honestly rather than assumed away. New
+  `CytoCourse.getRuntimeContentPolicy()` exposes this contract
+  machine-readably (a fresh, 7-field object every call). Also fixed a
+  real, independently reproduced defect: `addQuestions()` previously
+  stored the caller's own object reference, so mutating the source
+  object or its options array after a successful call changed the
+  live, accepted question; it now commits a fresh, canonical, fully
+  detached snapshot. Validation was strengthened to the same
+  cross-realm-safe standard already used for progress import,
+  rejecting accessor properties, symbol keys, dangerous keys, sparse
+  arrays, non-record objects, and unrecognized fields, without ever
+  invoking a caller getter. The previously-unvalidated optional `w`
+  (wrong-answer feedback) field now has a complete, defined, validated
+  schema. Does NOT build a persistent/versioned content-pack format —
+  only documents its prerequisites for a later, separately scoped
+  design. `SCHEMA_V` stays `2`. 11 new dependency-free tests and 6 new
+  real-browser Playwright tests in
+  `tests/e2e/runtime-content-lifecycle.spec.mjs`, mutation-tested
+  across 4 reversions. See `docs/QUALITY_LOG.md` QL-028 and
+  `docs/ARCHITECTURE.md` "Runtime-injected content lifecycle" for the
+  full record. Also corrected a misleading README statement implying
+  injected questions "unless external tooling exports and preserves
+  the result" could be preserved through the built-in export — the
+  built-in export/import never carries a definition through; external
+  capture of `getQuestions()`'s output is not a supported versioned
+  format.
 - Named, documented, and tested the course's actual analytics model —
   **last-attempt mastery** — instead of leaving `getStats()`'s field
   names (`questionsCorrect`, `overallPct`) to be mistaken for
-  total-attempt accuracy (`index.html`, Issue #2, draft PR — not yet
-  merged): a v2 outcome record `{c, n, ts}` stores only the latest
+  total-attempt accuracy (`index.html`, Issue #2, **merged**): a v2
+  outcome record `{c, n, ts}` stores only the latest
   correctness and a total attempt count, never a per-attempt history —
   confirmed by direct execution that two genuinely different attempt
   histories (2-of-3 attempts correct vs. 1-of-3, both ending on a

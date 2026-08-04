@@ -3370,3 +3370,129 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   identically under a plausible regression (e.g. a one-row array under
   any sort comparator; a single-difficulty fixture under broken
   difficulty grouping) is not evidence for the property its name claims.
+
+## QL-028 — `addQuestions()` stored the caller's own object reference, letting a post-call mutation change a live, accepted question; defined and enforced the runtime-content split lifecycle while fixing it
+
+- **Status:** Corrected on branch `claude/issue-2-runtime-content-policy`
+  (Issue #2), draft PR open for independent review, not yet merged.
+- **Finding 1 — confirmed, real defect: `addQuestions()` stored a live
+  caller reference, not a detached copy.** `addQuestions()` validated
+  each incoming question, then executed
+  `arr.forEach(function(q){ QUIZZES[key].push(q); })` — pushing the
+  caller's own object (and its `o` options array, and its optional `w`
+  wrong-answer-feedback object) directly into live `QUIZZES`. Reproduced
+  by direct execution before any fix: after a successful
+  `addQuestions()` call returned, mutating the caller's original
+  `source.q`, `source.o[0]`, `source.a`, and `source.why` all changed
+  the live, currently-rendered, currently-scored question — including
+  its correct-answer index, confirmed by re-answering the original
+  correct option and observing it now scored incorrect.
+- **Finding 2 — confirmed by direct execution, the pre-existing
+  session-only/durable-outcome split (not itself a defect, but
+  previously undocumented as a coherent policy).** A question added via
+  `addQuestions()` exists only in the current session; reloading
+  without reinjection removes its definition from the live quiz
+  entirely; if it had been answered, that outcome remains an ordinary
+  v2 progress record, now excluded from every current-facing figure by
+  the existing stale-ID policy (QL-024); `exportJSON()` includes the
+  outcome (keyed by id) but never the definition; importing that export
+  does not recreate the definition; and reintroducing the identical
+  definition under the same id later revives the preserved outcome
+  automatically, via the general QL-024 reintroduction rule, with no
+  injection-specific code. This is a genuine split lifecycle — session-
+  only definitions, durable-by-id outcomes — and had not previously
+  been named or documented as such; the checklist item ("decide whether
+  runtime-injected questions remain session-only or use a versioned
+  content pack") had not actually been closed.
+- **Impact:** None shipped — a real defect (Finding 1) plus an
+  undocumented-but-correct existing behavior (Finding 2), both addressed
+  before merge.
+- **Cause:** `addQuestions()`'s validation function (`questionError()`)
+  only checked the SHAPE of each field; nothing in the write path ever
+  built a fresh object to commit, so the accepted array element and the
+  caller's original element were, and remained, literally the same
+  object reference.
+- **Correct action:** A public write API accepting caller-supplied
+  objects that will be retained past the call's return must commit a
+  detached, canonical copy — never the caller's own reference — exactly
+  the same principle already applied to progress import
+  (`validateImportedState()` rebuilds a fresh object graph; see its own
+  file-level comment). Separately, adopt and document the split
+  lifecycle explicitly rather than leaving "session-only" as an
+  incomplete half-truth that omits the durable-outcome behavior.
+- **Correction:**
+  1. `validateRuntimeQuestion(q)` (new) validates using the same
+     cross-realm-safe primitives already established for progress
+     import (`isPlainObject`/`isSafeKey`/`hasOwn`) and, only on success,
+     returns a freshly built canonical snapshot — a new object, a new
+     `o` array (`.slice()`), and, if present, a new `w` object rebuilt
+     key-by-key — referencing nothing from the caller's original object
+     graph at any depth. `addQuestions()` now pushes only these
+     canonical snapshots into `QUIZZES`.
+  2. Validation was simultaneously strengthened to the same standard as
+     progress import: rejects any accessor property (via property
+     descriptors, before any value is read — a rejected batch entry's
+     `id`, for the diagnostic report only, is likewise read via a
+     descriptor, never `q.id`, so an adversarial getter is never
+     invoked even to explain a rejection), any symbol key, any
+     non-enumerable property, any dangerous key
+     (`__proto__`/`constructor`/`prototype`), any sparse array (in `o`
+     or in the top-level batch array), any non-record object (checked
+     by prototype-chain shape, not same-realm identity, so a legitimate
+     VM- or browser-realm input is never wrongly rejected), any field
+     reachable only via the prototype chain, and any unrecognized
+     top-level field.
+  3. The existing optional `w` (wrong-answer feedback) field — already
+     read at render time via `data.w[chosen]` but never previously
+     validated at all — now has a complete, defined, validated schema:
+     a plain object mapping a valid option index to a non-empty
+     feedback string; anything else (wrong shape, an out-of-range key,
+     a non-string value) rejects the question.
+  4. Added `getRuntimeContentPolicy()`: a small, machine-readable public
+     method returning a fresh, frozen-shape 7-field object stating the
+     policy explicitly — including the one honestly-stated limitation
+     that the application cannot detect a caller reusing a stable id
+     for materially different content across sessions, since a v2
+     outcome record carries no definition or content fingerprint to
+     compare against.
+  5. Documented, but did not implement, the prerequisites for any later
+     persistent/versioned content-pack design — see
+     `docs/ARCHITECTURE.md` "Future content-pack prerequisites."
+- **11 new dependency-free tests** in `tests/dom-behavior.mjs` and **6
+  new real-browser Playwright tests** in
+  `tests/e2e/runtime-content-lifecycle.spec.mjs` — full coverage list:
+  `docs/VALIDATION.md` "Runtime-injected content lifecycle."
+- **Mutation-tested**, each reverted and confirmed `index.html`
+  byte-identical via `diff` before committing:
+  1. Reverted `addQuestions()` to push the caller's original object
+     reference instead of the canonical snapshot — failed exactly the
+     caller-reference-mutation test, and no others.
+  2. Added `QUIZZES` to `exportJSON()`'s output — failed the new
+     definition-never-in-export test *and* five pre-existing round-trip
+     import tests (the added, unrecognized wrapper key is also rejected
+     by the existing, independently strict import-wrapper key
+     whitelist — an explainable, legitimate side effect of this
+     specific mutation).
+  3. Removed the stale-id exclusion guard in `getStats()` — failed the
+     new stale-outcome-analytics-exclusion test, the new
+     `importJSON()`/reinjection tests, *and* every pre-existing QL-024
+     stale-ID test depending on the same shared guard.
+  4. Weakened `validateRuntimeQuestion()`'s entry check from
+     `isPlainObject(q)` to a bare `typeof q === 'object'` check — failed
+     exactly the new adversarial-inputs test (which also directly
+     confirms an adversarial `id` getter is never invoked), and no
+     others.
+- **Full local validation:** `npm test` (171/171),
+  `npx playwright test tests/e2e/runtime-content-lifecycle.spec.mjs`
+  (12/12 across both projects), and the complete `npx playwright test`
+  suite.
+- **Prevention:** Any public write method that accepts a caller-supplied
+  object and retains data from it past the call's return must build a
+  detached copy before committing — a live reference to caller-owned
+  data is a mutation-after-the-fact hazard by construction, regardless
+  of how thoroughly the object's shape was validated at the moment of
+  the call. Additionally: an optional field that is read at render time
+  (`w`) but never validated at write time is a latent, currently-
+  harmless gap that becomes a real one the moment its write path is
+  ever more permissive than assumed — treat "supported but unvalidated"
+  as equivalent to "unsupported" until a schema is defined for it.

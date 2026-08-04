@@ -106,6 +106,7 @@ CytoCourse.getStats();
 CytoCourse.getWeakAreas(3);
 CytoCourse.getUnmastered();
 CytoCourse.exportJSON();
+CytoCourse.getRuntimeContentPolicy();
 ```
 
 Validated runtime injection is available for an existing quiz:
@@ -126,9 +127,24 @@ CytoCourse.addQuestions("m15", [
 ```
 
 Incoming batches are atomic: malformed questions, invalid answer indexes,
-unknown domains, or globally duplicate IDs reject the entire batch. Runtime
-injection is session-only unless external tooling exports and preserves the
-result.
+unknown domains, globally duplicate IDs, or any structurally unsafe field
+(an accessor property, a symbol key, a dangerous key, a sparse array, an
+unrecognized field, or a non-record object) reject the entire batch, and
+a successful call commits a detached canonical copy — mutating the
+source object or its options array afterward cannot change the live
+question. This is a deliberate **split lifecycle**: the question
+**definition** is session-only and is never written to `localStorage`,
+`exportJSON()`, or accepted back in by `importJSON()`. If the injected
+question is answered, that **outcome** (not the definition) is durable
+in progress by stable ID, exactly like an authored question's outcome —
+reintroducing the same ID in a later session revives it automatically.
+External tooling may separately capture `CytoCourse.getQuestions()`'s
+output for its own purposes, but this is not a supported, versioned
+content-pack format: the built-in export/import does not carry a
+definition through, and re-importing such a capture will not reinstall
+it. `CytoCourse.getRuntimeContentPolicy()` states this contract
+explicitly and machine-readably. See `docs/ARCHITECTURE.md`
+"Runtime-injected content lifecycle" for the full policy.
 
 Current analytics describe **last-attempt mastery**, not total-attempt accuracy.
 That distinction is intentional documentation of the present implementation,

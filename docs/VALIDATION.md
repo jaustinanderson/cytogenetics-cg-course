@@ -2074,6 +2074,126 @@ No product behavior changed by this correction — `index.html`'s only
 changes were the two temporary, reverted mutations above; the shipped
 analytics implementation is identical to the previously reviewed head.
 
+## Runtime-injected content lifecycle — added 2026-08-04
+
+`tests/dom-behavior.mjs` (Issue #2, `docs/QUALITY_LOG.md` QL-028) adds
+11 dependency-free checks, and a new
+`tests/e2e/runtime-content-lifecycle.spec.mjs` adds 6 real-browser
+Playwright checks (both configured projects). See
+`docs/ARCHITECTURE.md` "Runtime-injected content lifecycle" for the
+full policy and public-API record. Independently reproduced before any
+change, via direct execution: a question added through `addQuestions()`
+exists only in the current session; reloading without reinjection
+removes its definition from the live quiz; an answered question's
+outcome remains an inert stale v2 record after that reload;
+`exportJSON()` includes the outcome but never the definition;
+`importJSON()` of that export does not recreate the definition;
+reintroducing the same id revives the preserved outcome; and — a real,
+confirmed defect — mutating the caller's source object, its options
+array, or its wrong-answer-feedback object *after* a successful
+`addQuestions()` call changed the live, accepted question, because the
+caller's own object references were pushed directly into `QUIZZES`.
+Covers:
+
+- **`getRuntimeContentPolicy()`:** the exact 7-field shape (checked via
+  an exact sorted-key-set comparison, so an unexpected field is caught),
+  every field's exact value, and that mutating a returned object never
+  affects a later call.
+- **valid injection → render → answer → single content event:** the
+  existing `content` event still fires exactly once per batch with its
+  documented `{quiz, added}` payload; answering the injected question
+  does not fire a second one.
+- **the caller-reference defect, corrected:** mutating the source
+  object's prompt/rationale, pushing an extra option onto its array
+  post-call, flipping its answer index, and mutating its
+  wrong-answer-feedback object are all confirmed to leave the live
+  question completely unchanged — proven both by reading the question
+  back (`getQuestions()`) and, more directly, by answering the
+  *original* correct option and confirming it still scores correct
+  (which a flipped `a` would not).
+- **eight adversarial input shapes, each rejected atomically** with
+  nothing added, no widget rebuild, and no `content` event: an accessor
+  `id` property (with direct proof, via a boolean flag set inside the
+  getter, that it is never invoked), a symbol-keyed extra property, a
+  non-enumerable `id` property, a dangerous own key (`__proto__` via
+  `defineProperty`), a sparse options array, an unrecognized extra
+  top-level field, a non-record object (`Date`), and an inherited
+  (prototype-chain, not own) `id`.
+- **atomic batch rejection:** one valid and one invalid question in the
+  same `addQuestions()` call rejects the entire batch — the valid
+  question is not partially committed.
+- **reload without reinjection:** only authored questions remain
+  (`questionsTotal` returns to its pre-injection value); the injected
+  definition's prompt/options/rationale text is confirmed absent from
+  both raw `localStorage` and `exportJSON()`'s output via direct
+  substring search, while the outcome (keyed by id) is confirmed present
+  in the export.
+- **the preserved stale outcome's analytics exclusion:** confirmed
+  zero contribution to `questionsAnswered`, `questionsMastered`,
+  `byDomain`, `getWeakAreas()`, `getUnmastered()`, and the rendered quiz
+  widget (item count matches only currently-known questions) after a
+  reload with no reinjection.
+- **`importJSON()` does not install a definition:** importing an
+  exported state containing only the injected question's outcome
+  imports the outcome (as an ordinary, currently-stale record) but never
+  reintroduces the definition.
+- **reinjection revives the same record, and a reattempt does not
+  duplicate it:** reintroducing the identical definition/id after a
+  stale reload picks the preserved outcome back up with its original
+  attempt count intact (not a fresh record); a subsequent real
+  reload/rebuild reattempt with the opposite answer updates that *same*
+  record's `n`/`c` and leaves exactly one record for that id, both in
+  the dependency-free suite and, separately, across three real page
+  reloads in the Playwright suite.
+- **Reset removes the durable outcome** exactly like any other current
+  or stale progress record, confirmed absent again after a subsequent
+  reload, in both the dependency-free suite and the real-browser
+  `#resetBtn` UI path (checked against both storage keys).
+- **no regression to unrelated content:** an authored module's
+  `getQuestions()` output is confirmed byte-for-byte unchanged
+  (`JSON.stringify` equality) after an unrelated `addQuestions()` call
+  into a different module.
+
+**Mutation-tested** (4 reversions in `index.html`, each confirmed to
+fail exactly the tests that depend on the guard it removed — or, where
+the guard is shared infrastructure, exactly the expected broader set —
+then reverted and confirmed byte-identical via `diff` before
+committing):
+
+1. Reverted `addQuestions()` to push the caller's original object
+   (`arr.forEach(...QUIZZES[key].push(q)...)`) instead of the canonical
+   detached snapshot — failed exactly the caller-reference-mutation
+   test, and no others.
+2. Added `QUIZZES` to `exportJSON()`'s output object, simulating
+   definitions leaking into export — failed the new
+   "reload without reinjection..." test (which searches the export text
+   for the injected definition) *and* five pre-existing round-trip
+   import tests, because the added, unrecognized `quizzes` wrapper key
+   is also rejected by the existing, independently strict
+   `validateImportEnvelope()` key whitelist — a legitimate, explainable
+   side effect of this specific mutation, not a coincidental flake.
+3. Removed the stale-id exclusion guard in `getStats()` — failed the
+   new "that stale outcome contributes nothing..." test, the new
+   `importJSON()`/reinjection tests (both of which check
+   `questionsAnswered` after a reload), *and* every pre-existing QL-024
+   stale-ID test that depends on the same shared guard.
+4. Weakened `validateRuntimeQuestion()`'s entry check from `isPlainObject(q)`
+   to `!q || typeof q !== 'object'` — failed exactly the new
+   adversarial-inputs test (and would have let the accessor `id` getter
+   be invoked, which that test also directly checks), and no others.
+
+Full local validation: `npm test` (171/171), targeted
+`npx playwright test tests/e2e/runtime-content-lifecycle.spec.mjs`
+(12/12 across both projects), and the complete `npx playwright test`
+suite.
+
+No question, answer, rationale, image, or scientific claim changed. No
+image added or replaced. `SCHEMA_V`, stable-ID format, migration
+policy, stale-ID policy, import schema, scoring, analytics semantics,
+storage-failure behavior, Reset behavior, and existing
+`progress`/`answer`/`exercise`/`content`/`persistence` event semantics
+are unchanged. No persistent content-pack format was built.
+
 ## Gates still open
 
 ### Browser behavior
