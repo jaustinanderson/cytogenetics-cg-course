@@ -3194,3 +3194,179 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   Whenever a fix changes an element's position/flow scheme, explicitly
   re-derive and test every property that scheme change could plausibly
   affect, rather than only the property the fix was originally aimed at.
+
+## QL-027 — Analytics field names implied total-attempt accuracy the v2 schema cannot compute; named, documented, and tested the actual last-attempt mastery model instead
+
+- **Status:** Corrected on branch `claude/issue-2-analytics-semantics`
+  (Issue #2), draft PR open for independent review, not yet merged.
+- **Finding — confirmed ambiguity, reproduced by direct execution before
+  any fix was written.** A v2 outcome record is `{c: <latest
+  correctness>, n: <total attempt count>, ts: <latest timestamp>}` — it
+  never stored a per-attempt history or an independently maintained
+  correct-attempt counter. Answering a question (correct, incorrect,
+  correct) across three real reloads, and answering a *different*
+  question (incorrect, incorrect, correct) across three real reloads,
+  both produced the byte-identical stored shape `{c:true, n:3}` (only
+  `ts` differed) — 2-of-3 attempts correct and 1-of-3 attempts correct
+  are genuinely indistinguishable from the stored record alone.
+  Meanwhile `getStats()` exposed `questionsCorrect` and `overallPct` —
+  names that read naturally as "how many questions were answered
+  correctly overall" / "overall percent correct," i.e. total-attempt
+  accuracy — when they have only ever meant "questions whose latest
+  attempt was correct." The field names did not disclose this.
+- **Impact:** None shipped incorrectly — the underlying behavior
+  (last-attempt mastery) was always correct and already documented in
+  `README.md`/`docs/CLAUDE_HANDOFF.md` in prose; this is a
+  documentation/API-clarity gap, not a data-correctness bug. Found and
+  addressed before merge.
+- **Cause:** The schema was designed to answer "what is this question's
+  current status" cheaply (one record, overwritten in place), which is
+  sufficient for last-attempt mastery but was never extended to answer
+  "how many of the attempts across this question's history were
+  correct" — a fundamentally different question requiring different
+  persisted information. The public field names did not signal which
+  question they answer.
+- **Correct action:** Name the actual model precisely
+  (`analyticsModel:'last-attempt-mastery-v1'`), add unambiguous fields
+  (`questionsMastered`, `lastAttemptMasteryPct`) alongside the existing
+  ones as compatibility aliases (never removed or reinterpreted), and
+  state explicitly, in both code comments and documentation, why genuine
+  total-attempt accuracy is not implemented and cannot be derived from
+  existing data — rather than silently leaving misleading names in place
+  or fabricating a metric the data cannot support.
+- **Correction:** `getStats()` now returns `analyticsModel`,
+  `questionsMastered`, `lastAttemptMasteryPct`, plus `questionsCorrect`/
+  `overallPct` as compatibility aliases assigned from the identical
+  computed numbers (never independently recomputed). `tally()`'s
+  `byDomain`/`byTopic`/`byDifficulty` rows gained `mastered`/`masteryPct`
+  alongside the existing `correct`/`pct` aliases. `getWeakAreas()` rows
+  gained the same pair. `getUnmastered()`'s return shape is unchanged —
+  it already implemented exactly this model's definition of
+  "unmastered"; only its documentation was strengthened. `SCHEMA_V`
+  stays `2` — no stored field's shape changed, no historical record was
+  rewritten, and no fabricated correct-attempt count was introduced for
+  existing data. Full model definition: `docs/ARCHITECTURE.md`
+  "Analytics semantics: last-attempt mastery."
+- **12 new dependency-free tests** in `tests/dom-behavior.mjs` and **4
+  new real-browser Playwright tests** in
+  `tests/e2e/analytics-semantics.spec.mjs` — full coverage list:
+  `docs/VALIDATION.md` "Analytics semantics: last-attempt mastery."
+- **Mutation-tested**, each reverted and confirmed `index.html`
+  byte-identical via `diff` before committing:
+  1. Summed attempt count `n` into the mastery denominator instead of
+     counting distinct answered questions — failed exactly the two
+     reattempt tests, and no others.
+  2. Made mastery sticky ("ever answered correctly") by OR-ing prior
+     correctness into `recordAnswer()`'s stored `c` — failed exactly the
+     correct→incorrect reattempt test (the one assertion sensitive to
+     mastery being able to *drop*), and no others.
+  3. Made `questionsCorrect` disagree with `questionsMastered` by a
+     constant offset — failed the new alias-agreement tests *and*
+     several pre-existing tests that independently assert
+     `questionsCorrect` against a directly-computed value, confirming
+     the alias guarantee is load-bearing for old and new tests alike.
+  4. Removed the stale-id exclusion guard in `getStats()` — failed the
+     new stale-record exclusion test *and* every pre-existing QL-024
+     stale-ID test depending on the same guard.
+- **Full local validation:** `npm test` (160/160),
+  `npx playwright test tests/e2e/analytics-semantics.spec.mjs` (8/8
+  across both projects), and the complete `npx playwright test` suite.
+- **Prevention:** A public field's name is part of its contract. When a
+  computed figure could plausibly be misread as a different, more
+  general metric than the one actually implemented (here: "correct" /
+  "percent correct" read as total-attempt accuracy, not latest-outcome
+  mastery), either rename it to be unambiguous or add an explicitly
+  named, equally accessible alternative — do not rely on documentation
+  alone to correct a misleading name callers will encounter first.
+
+### Addendum — independent review of draft PR #21 found three test-coverage claims stronger than the tests actually proved
+
+- **Status:** Corrected on the same branch
+  (`claude/issue-2-analytics-semantics`), before merge. Independent
+  review at head `98b8d85b0660aeaac0cf21dbd69e758e41839229` confirmed
+  the implementation and analytics decision sound and CI green
+  (run `30828361852`), but found three test claims stronger than what
+  the tests actually exercised.
+- **Finding 1 — confirmed, the "different difficulties" claim was
+  untested.** The multi-group aggregate test's own title claimed
+  coverage across different domains, topics, AND difficulties, but all
+  three selected questions (`m1-q1`, `m2-q1`, `m9-q1`) were difficulty
+  `x:1`. A regression that broke `byDifficulty` grouping specifically
+  could not have been caught. The test also only spot-checked one topic
+  row and one difficulty row rather than asserting every affected row
+  exactly.
+- **Finding 2 — confirmed, `getWeakAreas()`'s sort order was never
+  actually tested.** The test created exactly one topic with enough
+  distinct answered questions to qualify (`minAnswered:3`), so
+  `getWeakAreas()` always returned a single-row array. A single-row
+  array cannot demonstrate sort order — reversing or removing the
+  comparator entirely would have produced an identical single-row result
+  and passed regardless. The subsequent reattempt changed that one row's
+  value but still never exercised ordering between two rows.
+- **Finding 3 — confirmed, the Playwright "reattempt" test never
+  reattempted.** Despite its title ("a real reattempt still fires
+  exactly one answer/progress event pair"), the test answered a single
+  fresh question exactly once and asserted event counts from that one
+  answer — no reload, no reattempt, no proof that a reattempt's event
+  behavior matches a first answer's. Additionally, an unrelated
+  `waitForLoadState("networkidle")` appeared after all assertions in a
+  neighboring test had already completed, adding a timing dependency
+  with no corresponding proof obligation — exactly the class of wait
+  responsible for this repository's own previously documented,
+  recurring parallel-worker-contention flakes.
+- **Impact:** None shipped — the underlying implementation was already
+  correct (confirmed by the corrected, stronger tests below still
+  passing against the unmodified implementation); this was a
+  test-coverage gap, not a product defect. Found and fixed before merge.
+- **Cause:** Each test's premise (different difficulties; multiple
+  qualifying topics; a genuine reattempt) was assumed from the test's
+  own title/intent rather than verified by checking which concrete
+  fixture values and call sequence the test body actually used.
+- **Correct action:** A test's title is a claim; the fixture data and
+  call sequence must be checked to actually produce the conditions the
+  title claims, not merely be plausible under a quick reading. A sort
+  test needs at least two independently ordered items; an "aggregate
+  across categories" test needs fixtures that actually span every named
+  category; a "reattempt" test needs an actual second attempt on the
+  same item through the application's real supported path.
+- **Correction:** Rewrote the multi-group aggregate test with six
+  questions deliberately spanning multiple domains, multiple topics, and
+  all three difficulty levels, asserting every affected
+  `byDomain`/`byTopic`/`byDifficulty` row's `answered`/`mastered`/
+  `masteryPct`/`correct`/`pct` exactly, plus an exact key-set comparison
+  proving no unexpected aggregate key appears. Rewrote the
+  `getWeakAreas()` test with two independently qualifying topics at
+  different mastery percentages, asserting weakest-first order, then
+  reattempting enough questions across a real reload to invert which
+  topic is weaker and confirming the returned order reverses. Rewrote
+  the Playwright event test to answer once, reload, install fresh
+  counters and a navigation sentinel, prove analytics reads emit zero
+  events, then reattempt the same question with the opposite
+  correctness, asserting the sentinel survived (no unexpected
+  navigation), `n===2`, the latest `c`, immediate mastery change, and
+  exact event counts (one `answer`, one `progress`, zero `exercise`,
+  zero `persistence`, wildcard count agreeing with exactly those two).
+  Removed the unnecessary `networkidle` wait, asserting console
+  cleanliness directly from the already-listening fixture instead. Full
+  coverage list: `docs/VALIDATION.md`'s "Correction — three
+  test-coverage claims were stronger than the tests actually proved."
+- **Mutation-tested**, each reverted and confirmed `index.html`
+  byte-identical via `diff` before committing:
+  5. Collapsed `tally()`'s difficulty grouping into a single bucket —
+     failed exactly the corrected multi-group aggregate test, and no
+     others.
+  6. Reversed `getWeakAreas()`'s sort comparator — failed exactly the
+     corrected `getWeakAreas()` test, specifically on row order, and no
+     others.
+- **Full local validation:** `npm test` (160/160, test count unchanged —
+  both corrections rewrote existing tests rather than adding new ones),
+  `npx playwright test tests/e2e/analytics-semantics.spec.mjs` (8/8
+  across both projects), and the complete `npx playwright test` suite.
+- **Prevention:** When reviewing a test whose name asserts a specific
+  property (ordering, cross-category coverage, a specific interaction
+  sequence like a reattempt), verify the property directly from the
+  fixture values and call sequence in the test body — not from the test
+  name or a summary of what it "should" cover. A test that would pass
+  identically under a plausible regression (e.g. a one-row array under
+  any sort comparator; a single-difficulty fixture under broken
+  difficulty grouping) is not evidence for the property its name claims.

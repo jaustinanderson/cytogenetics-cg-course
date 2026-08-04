@@ -1572,7 +1572,7 @@ key* an outcome is stored under, not *whether* the exercise DOM re-renders
 after `importJSON()`/`reset()` — those still only call
 `$all('.quiz-mount').forEach(buildQuiz)`, unchanged.)
 
-### Storage failure — draft PR open 2026-08-03, corrected 2026-08-03 (twice), not yet merged
+### Storage failure — resolved, merged 2026-08-03
 
 ~~The application silently tolerates `localStorage` write failure while the
 UI may still imply that progress was saved.~~ Addressed on branch
@@ -1623,15 +1623,34 @@ through without removing the visual obstruction. Verified with real
 `document.elementFromPoint()` hit-testing and rectangle-intersection
 checks, not rectangle math alone.
 
-**Draft PR titled "Communicate session-only progress when storage fails
-(Issue 2)" is open against `main`, CI green, awaiting independent review
-— not yet merged.** Treat this risk as still open until that PR lands.
+**Merged as commit `6a8e42f69e971a7831fd73defc690d13771b4583` (PR #20,
+squash-merged 2026-08-03).** This risk is resolved.
 
-### Analytics semantics
+### Analytics semantics — draft PR open 2026-08-03, not yet merged
 
-Headline analytics represent last-attempt mastery. They do not represent
-total-attempt accuracy. Do not change this silently; define and test any new
-metric.
+~~Headline analytics represent last-attempt mastery. They do not
+represent total-attempt accuracy. Do not change this silently; define
+and test any new metric.~~ Addressed on branch
+`claude/issue-2-analytics-semantics` (Issue #2): the last-attempt
+mastery model is now named and exposed explicitly —
+`getStats().analyticsModel === 'last-attempt-mastery-v1'`, with new
+`questionsMastered`/`lastAttemptMasteryPct` fields and
+`mastered`/`masteryPct` added to every `byDomain`/`byTopic`/
+`byDifficulty`/`getWeakAreas()` row. `questionsCorrect`/`overallPct`/
+`correct`/`pct` remain as compatibility aliases with identical values
+(assigned from the same computed numbers, never recomputed
+separately). Confirmed by direct execution before any fix: a v2 outcome
+record `{c, n, ts}` cannot distinguish a 2-of-3-attempts-correct history
+from a 1-of-3-attempts-correct history that both end on a correct
+attempt, so total-attempt accuracy is documented as NOT implemented and
+not derivable from existing data, rather than silently claimed.
+`SCHEMA_V` stays `2`; no historical record is rewritten or fabricated.
+See `docs/QUALITY_LOG.md` QL-027, `docs/ARCHITECTURE.md` "Analytics
+semantics: last-attempt mastery," and `docs/VALIDATION.md` for the full
+record. **Draft PR titled "Define last-attempt mastery analytics
+semantics (Issue 2)" is open against `main`, CI green, awaiting
+independent review — not yet merged.** Treat this risk as still open
+until that PR lands.
 
 ### Runtime question persistence
 

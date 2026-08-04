@@ -1913,6 +1913,167 @@ No question, answer, exercise, scoring, mastery/accuracy semantics,
 stable-ID format, migration policy, `SCHEMA_V`, stale-ID policy, import
 schema, or content-pack decision changed by this correction either.
 
+## Analytics semantics: last-attempt mastery — added 2026-08-03
+
+`tests/dom-behavior.mjs` (Issue #2, `docs/QUALITY_LOG.md` QL-027) adds
+12 dependency-free checks, and a new
+`tests/e2e/analytics-semantics.spec.mjs` adds 4 real-browser Playwright
+checks (both configured projects). See `docs/ARCHITECTURE.md`
+"Analytics semantics: last-attempt mastery" for the full model and
+public-API record. Covers:
+
+- **fresh state:** zero answered, zero mastered, `lastAttemptMasteryPct`
+  is `null` (not `0`), and `questionsCorrect`/`overallPct` agree exactly
+  with the new explicit fields
+- **one question answered correctly:** one distinct answered, one
+  mastered, 100% last-attempt mastery
+- **correct→incorrect reattempt through the real reload/rebuild path**
+  (re-answering a locked item is only reachable across a reload — the
+  clicked option is otherwise permanently disabled): still exactly one
+  distinct answered question, `n` becomes 2, mastered drops from one to
+  zero, mastery becomes **0%, not 50%**, and `getUnmastered()` picks up
+  the question
+- **incorrect→correct reattempt**, same path: still one distinct
+  answered question, `n` becomes 2, mastered becomes one, mastery
+  becomes **100%, not 50%**, and `getUnmastered()` drops the question
+- **multiple questions across different domains/topics/difficulties:**
+  every aggregate (`questionsAnswered`, `questionsMastered`,
+  `lastAttemptMasteryPct`), every `byDomain`/`byTopic`/`byDifficulty`
+  row's explicit fields, and every compatibility alias checked exactly
+- **unanswered questions:** counted in `questionsTotal` (coverage) but
+  never enter the answered-question mastery denominator
+- **stale question records:** remain in `getProgress()`/`exportJSON()`,
+  confirmed excluded from `questionsAnswered`/`questionsMastered`/
+  `lastAttemptMasteryPct`/`byDomain`/`getWeakAreas()`/`getUnmastered()`
+- **exercise records and module-completion records:** confirmed to never
+  enter question-mastery/coverage analytics, while continuing to behave
+  normally through their own separate signals (`state.exercises`,
+  `modulesComplete`)
+- **a runtime-injected question:** participates in analytics while
+  registered this session, becomes inert (preserved, not fabricated or
+  deleted) under the existing stale-ID policy in a fresh session with no
+  re-injection — this test does not decide or implement content-pack
+  persistence
+- **`getWeakAreas()`:** distinct-answered-question `minAnswered`
+  threshold (not an attempt-count threshold — a 3-distinct-question
+  topic passes `minAnswered:3` but not `minAnswered:4` regardless of how
+  many times any single question was attempted), sort order by latest
+  mastery, and explicit/compatible field agreement, including after a
+  real reload/rebuild reattempt changes the sort order
+- **`exportJSON()`:** its embedded `stats` snapshot agrees field-for-field
+  with a live `getStats()` call; a malformed import still leaves live
+  state/stats untouched (existing atomicity re-confirmed, unchanged)
+- **analytics/event separation:** `getStats()`/`getWeakAreas()`/
+  `getUnmastered()`/`exportJSON()` fire zero events; a real answer and a
+  real reattempt each still fire exactly one `answer` and one `progress`
+  event, and no new `persistence`-like event was introduced for
+  analytics
+
+**Mutation-tested** (4 reversions in `index.html`, each run against the
+full `npm test` suite, each confirmed to fail only the tests that
+depend on the guard it removed, then reverted and confirmed
+byte-identical via `diff` before committing):
+
+1. Summed attempt count `n` into `getStats()`'s `answered` denominator
+   instead of counting distinct questions — failed exactly the two
+   reattempt tests (which depend on the distinct-question count staying
+   at 1 across a reattempt), and no others.
+2. Made mastery sticky ("ever answered correctly") by changing
+   `recordAnswer()` to `c:(prev && prev.c) || !!correct` instead of
+   tracking only the latest outcome — failed exactly the
+   correct→incorrect reattempt test (the one assertion that depends on
+   mastery being able to *drop*), and no others.
+3. Made `questionsCorrect` disagree with `questionsMastered` by a
+   constant offset — failed the new alias-agreement tests *and* several
+   pre-existing tests that independently assert `questionsCorrect`
+   against a directly-computed expected value (confirming the
+   alias-agreement guarantee is load-bearing for old and new tests
+   alike), and no others.
+4. Removed the stale-id exclusion guard in `getStats()` — failed the new
+   stale-record analytics-exclusion test *and* every pre-existing
+   QL-024 stale-ID test that depends on the same guard, and no others.
+
+Full local validation: `npm test` (160/160), targeted
+`npx playwright test tests/e2e/analytics-semantics.spec.mjs` (8/8 across
+both projects), and the complete `npx playwright test` suite.
+
+No question, answer, rationale, exercise, case, flashcard, or scientific
+content changed. No image added or replaced. `SCHEMA_V`, stable-ID
+format, migration policy, stale-ID policy, import schema, scoring, or
+existing `progress`/`answer`/`exercise`/`persistence` event semantics
+are unchanged. The content-pack decision for runtime-injected questions
+remains undecided and unimplemented.
+
+### Correction — three test-coverage claims were stronger than the tests actually proved, added 2026-08-03
+
+Independent review of draft PR #21 (head `98b8d85`) confirmed the
+implementation and analytics decision sound and CI green, but found
+three test-claim mismatches, all corrected on the same branch before
+merge:
+
+1. **The multi-group aggregate test's title claimed different
+   difficulties, but all three chosen questions were difficulty `x:1`.**
+   It could not have detected a difficulty-grouping regression. Corrected
+   to use six questions deliberately spanning multiple domains, multiple
+   topics, and all three difficulty levels (`x:1`/`x:2`/`x:3`), with a
+   mix of mastered and unmastered latest outcomes, asserting
+   `answered`/`mastered`/`masteryPct`/`correct`/`pct` exactly for every
+   affected `byDomain`/`byTopic`/`byDifficulty` row and confirming no
+   unexpected aggregate key is introduced (via an exact `Set` comparison
+   against the affected keys).
+2. **The `getWeakAreas()` sort-order test created only one qualifying
+   topic.** A one-row array cannot prove rows are sorted weakest-first;
+   the later reattempt changed that single row's value but still never
+   exercised ordering. Corrected to create two independently qualifying
+   topics (each with 3 distinct answered questions, clearing
+   `minAnswered:3`) with different last-attempt mastery percentages (33%
+   and 67%), asserting the weaker topic sorts first, then reattempting
+   enough questions across a real reload to invert which topic is
+   weaker (100% and 0%) and confirming the returned order genuinely
+   reverses.
+3. **The Playwright event-contract test never performed a reattempt
+   despite its own title.** It answered one fresh question once and
+   asserted event counts from that single answer — the "reattempt"
+   claim was untested. Corrected to: answer a question on first load,
+   reload the page, install fresh event counters and a navigation
+   sentinel, prove reading analytics emits zero events, then answer the
+   SAME question again with the OPPOSITE correctness. Now asserts the
+   sentinel survived (proving the reattempt was an in-place interaction,
+   not an unexpected second navigation), `n===2`, `c` reflects the
+   latest outcome, mastery changed immediately, exactly one `answer`
+   event, exactly one `progress` event, zero `exercise` events, zero
+   `persistence`-transition events, and the wildcard event count
+   agreeing with exactly those two events (no invented analytics
+   event).
+
+Additionally, an unnecessary `waitForLoadState("networkidle")` at the
+end of the first Playwright test (after every assertion had already
+completed, providing no further proof) was removed — this repository has
+repeatedly documented `networkidle`-based flakes under parallel-worker
+contention, and a wait with no corresponding proof obligation is pure
+risk. Console cleanliness is instead asserted directly from the
+already-listening `consoleIssues` fixture.
+
+**Mutation-tested**, each reverted and confirmed `index.html`
+byte-identical via `diff` before committing:
+
+5. Collapsed `tally()`'s difficulty grouping into a single bucket
+   (`groupBy === 'x' ? '1' : String(q[groupBy])`) — failed exactly the
+   corrected multi-group aggregate test, and no others.
+6. Reversed `getWeakAreas()`'s sort comparator
+   (`b.masteryPct - a.masteryPct`) — failed exactly the corrected
+   `getWeakAreas()` test, specifically on row order, and no others.
+
+Full local validation after this correction: `npm test` (160/160,
+unchanged test count — both corrections rewrote existing tests rather
+than adding new ones), `npx playwright test
+tests/e2e/analytics-semantics.spec.mjs` (8/8 across both projects), and
+the complete `npx playwright test` suite.
+
+No product behavior changed by this correction — `index.html`'s only
+changes were the two temporary, reverted mutations above; the shipped
+analytics implementation is identical to the previously reviewed head.
+
 ## Gates still open
 
 ### Browser behavior

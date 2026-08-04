@@ -304,9 +304,10 @@ review status stable before adding 46 questions.
   (storage-failure UI, analytics semantics, content-pack decision,
   provenance fields, image-manifest normalization, broader API contract
   tests) is explicitly out of scope for that PR and stays open
-- [ ] Validate and communicate `localStorage` availability instead of silently
+- [x] Validate and communicate `localStorage` availability instead of silently
   claiming progress was saved — branch `claude/issue-2-storage-failure-mode`
-  (Issue #2, **draft PR open, not yet merged**): `saveProgress()` previously
+  (Issue #2, **merged as commit `6a8e42f69e971a7831fd73defc690d13771b4583`,
+  PR #20**): `saveProgress()` previously
   caught every storage-write error silently and still advanced/reported
   progress as if it had been saved; `loadProgress()` treated a genuine
   read failure identically to "no progress yet," with no warning; the UI
@@ -340,14 +341,32 @@ review status stable before adding 46 questions.
   bottom-most nav links, both still clickable underneath it. Fixed with
   a live-measured `--storage-warning-h` reservation that `.content` and
   `.sidebar` both account for (148 dependency-free checks, 15
-  real-browser Playwright tests, 8 mutation tests total). Left unchecked
+  real-browser Playwright tests, 8 mutation tests total). Merged after
+  independent review; the remaining Milestone 1 work below (analytics
+  semantics, content-pack decision, provenance fields, image-manifest
+  normalization, broader API contract tests) was out of scope for that
+  PR and stays open
+- [ ] Define analytics semantics — branch
+  `claude/issue-2-analytics-semantics` (Issue #2, **draft PR open, not
+  yet merged**): a v2 outcome record `{c, n, ts}` stores only the latest
+  correctness and a total attempt count, never a per-attempt history —
+  confirmed by direct execution that two genuinely different attempt
+  histories (2-of-3 attempts correct vs. 1-of-3, both ending on a correct
+  attempt) produce the byte-identical stored record, so total-attempt
+  accuracy is not derivable from existing data. `getStats()` now names
+  the model it has always actually implemented
+  (`analyticsModel:'last-attempt-mastery-v1'`) and adds
+  `questionsMastered`/`lastAttemptMasteryPct`, with `questionsCorrect`/
+  `overallPct` retained as compatibility aliases (identical values);
+  every `byDomain`/`byTopic`/`byDifficulty`/`getWeakAreas()` row gains
+  `mastered`/`masteryPct` alongside existing `correct`/`pct` aliases.
+  `SCHEMA_V` stays `2` — no historical record is rewritten or
+  fabricated. See `docs/QUALITY_LOG.md` QL-027 for the full decision
+  record and `docs/VALIDATION.md` for test coverage. Left unchecked
   pending independent review and merge; the remaining Milestone 1 work
-  below (analytics semantics, content-pack decision, provenance fields,
-  image-manifest normalization, broader API contract tests) is out of
-  scope for that PR and stays open regardless
-- [ ] Define analytics semantics:
-  - current behavior: last-attempt mastery
-  - candidate addition: total-attempt accuracy
+  below (content-pack decision, provenance fields, image-manifest
+  normalization, broader API contract tests) is out of scope for that PR
+  and stays open regardless
 - [ ] Decide whether injected questions are intentionally session-only or
   represented by a versioned content-pack format
 - [ ] Add provenance and review fields for releasable questions

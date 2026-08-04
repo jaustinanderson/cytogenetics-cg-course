@@ -2742,6 +2742,386 @@ test("analytics aggregate by domain, topic, and difficulty", () => {
   assert.ok(unmastered.some((entry) => entry.id === questions[1].id));
 });
 
+/* ============================ analytics semantics: last-attempt mastery (Issue #2) ============================
+   The v2 outcome record is {c: <latest correctness>, n: <total attempt
+   count>, ts: <latest timestamp>} -- it never stored a per-attempt
+   history or an independently maintained correct-attempt counter.
+   Confirmed by direct execution before writing this section: answering a
+   question (correct, incorrect, correct) across three reloads and
+   answering a DIFFERENT question (incorrect, incorrect, correct) across
+   three reloads both end at the byte-identical {c:true, n:3} shape (only
+   `ts` differs) -- 2-of-3 correct and 1-of-3 correct are indistinguishable
+   from the stored record alone. Genuine total-attempt accuracy is
+   therefore not implemented and cannot be derived from existing data;
+   this section names, documents, and tests the one model this course has
+   always actually implemented -- LAST-ATTEMPT MASTERY
+   (analyticsModel:'last-attempt-mastery-v1') -- and adds explicit,
+   machine-readable fields alongside the existing ones as compatibility
+   aliases. See index.html's ANALYTICS SEMANTICS comment and
+   docs/ARCHITECTURE.md for the full policy. */
+
+test("fresh state: zero answered, zero mastered, mastery percentage null, and every compatibility alias agrees exactly", () => {
+  const env = boot();
+  const stats = env.api.getStats();
+  assert.equal(stats.analyticsModel, "last-attempt-mastery-v1");
+  assert.equal(stats.questionsAnswered, 0);
+  assert.equal(stats.questionsMastered, 0);
+  assert.equal(stats.lastAttemptMasteryPct, null);
+  assert.equal(stats.questionsCorrect, stats.questionsMastered, "questionsCorrect alias agrees");
+  assert.equal(stats.overallPct, stats.lastAttemptMasteryPct, "overallPct alias agrees");
+  assert.equal(JSON.stringify(stats.byDomain), "{}");
+  assert.equal(env.api.getWeakAreas().length, 0);
+  assert.equal(env.api.getUnmastered().length, 153, "every current question is unmastered when unanswered");
+});
+
+test("one question answered correctly: one distinct answered, one mastered, 100% last-attempt mastery", () => {
+  const env = boot();
+  const question = env.api.getQuestions("m1")[0];
+  quizMount(env, "m1").querySelectorAll(".qitem")[0].querySelectorAll(".qopt")[question.a].click();
+
+  const stats = env.api.getStats();
+  assert.equal(stats.questionsAnswered, 1);
+  assert.equal(stats.questionsMastered, 1);
+  assert.equal(stats.lastAttemptMasteryPct, 100);
+  assert.equal(stats.questionsCorrect, 1);
+  assert.equal(stats.overallPct, 100);
+});
+
+test("correct then incorrect reattempt (through the real reload/rebuild path): mastery follows the LATEST attempt, not attempt count -- 0%, not 50%", () => {
+  let env = boot();
+  const question = env.api.getQuestions("m1")[0];
+  const wrongIndex = question.a === 0 ? 1 : 0;
+
+  quizMount(env, "m1").querySelectorAll(".qitem")[0].querySelectorAll(".qopt")[question.a].click();
+  assert.equal(env.api.getProgress().answers[question.id].c, true, "sanity: first attempt correct");
+
+  // Re-answering an already-answered question is only reachable across a
+  // reload (buildQuiz() never disables an already-recorded item's
+  // controls) -- reboot from the same persisted storage, matching this
+  // repository's standing pattern for reattempt tests.
+  env = boot({ storage: { [V2_KEY]: JSON.stringify(env.api.getProgress()) } });
+  quizMount(env, "m1").querySelectorAll(".qitem")[0].querySelectorAll(".qopt")[wrongIndex].click();
+
+  const record = env.api.getProgress().answers[question.id];
+  assert.equal(record.c, false, "the current outcome is the latest attempt's result");
+  assert.equal(record.n, 2, "attempt count grows, but is never the mastery denominator");
+
+  const stats = env.api.getStats();
+  assert.equal(stats.questionsAnswered, 1, "still exactly one distinct answered question, not two");
+  assert.equal(stats.questionsMastered, 0);
+  assert.equal(stats.lastAttemptMasteryPct, 0, "0%, not 50% -- mastery is not attempt-weighted");
+  assert.equal(stats.overallPct, 0);
+
+  const unmastered = env.api.getUnmastered();
+  assert.ok(unmastered.some((e) => e.id === question.id), "getUnmastered() includes it after the correctness-flipping reattempt");
+  const entry = unmastered.find((e) => e.id === question.id);
+  assert.equal(entry.attempts, 2);
+});
+
+test("incorrect then correct reattempt (through the real reload/rebuild path): mastery follows the LATEST attempt -- 100%, not 50%", () => {
+  let env = boot();
+  const question = env.api.getQuestions("m1")[0];
+  const wrongIndex = question.a === 0 ? 1 : 0;
+
+  quizMount(env, "m1").querySelectorAll(".qitem")[0].querySelectorAll(".qopt")[wrongIndex].click();
+  assert.equal(env.api.getProgress().answers[question.id].c, false, "sanity: first attempt incorrect");
+
+  env = boot({ storage: { [V2_KEY]: JSON.stringify(env.api.getProgress()) } });
+  quizMount(env, "m1").querySelectorAll(".qitem")[0].querySelectorAll(".qopt")[question.a].click();
+
+  const record = env.api.getProgress().answers[question.id];
+  assert.equal(record.c, true);
+  assert.equal(record.n, 2);
+
+  const stats = env.api.getStats();
+  assert.equal(stats.questionsAnswered, 1, "still exactly one distinct answered question");
+  assert.equal(stats.questionsMastered, 1);
+  assert.equal(stats.lastAttemptMasteryPct, 100, "100%, not 50%");
+  assert.equal(stats.overallPct, 100);
+
+  const unmastered = env.api.getUnmastered();
+  assert.ok(!unmastered.some((e) => e.id === question.id), "getUnmastered() excludes it once mastered");
+});
+
+test("multiple questions across different domains, topics, and ALL THREE difficulty levels: every affected aggregate row, explicit field, and compatibility alias is exact, with no unexpected keys", () => {
+  const env = boot();
+  // Six questions, chosen specifically to span multiple domains AND
+  // topics AND all three difficulty levels (x:1, x:2, x:3), with a
+  // deliberate mix of mastered and unmastered latest outcomes -- the
+  // prior version of this test used three difficulty-1 questions and
+  // therefore never actually exercised byDifficulty's x:2/x:3 rows.
+  const qOrient1 = env.api.getQuestions("m1")[0];  // orientation / orientation, x:1
+  const qOrient2 = env.api.getQuestions("m1")[2];  // orientation / orientation, x:2
+  const qSpec1   = env.api.getQuestions("m2")[0];  // specimen / specimen-collection, x:1
+  const qSpec3   = env.api.getQuestions("m2")[3];  // specimen / specimen-collection, x:3
+  const qAnalysis = env.api.getQuestions("m9")[0]; // analysis / chromosome-id, x:1
+  const qMolecular = env.api.getQuestions("m15")[0]; // molecular / fish-array, x:2
+
+  assert.equal(qOrient1.x, 1); assert.equal(qOrient2.x, 2);
+  assert.equal(qSpec1.x, 1); assert.equal(qSpec3.x, 3);
+  assert.equal(qAnalysis.x, 1); assert.equal(qMolecular.x, 2);
+
+  const wrongOrient2 = qOrient2.a === 0 ? 1 : 0;
+  const wrongAnalysis = qAnalysis.a === 0 ? 1 : 0;
+
+  quizMount(env, "m1").querySelectorAll(".qitem")[0].querySelectorAll(".qopt")[qOrient1.a].click(); // correct, x1
+  quizMount(env, "m1").querySelectorAll(".qitem")[2].querySelectorAll(".qopt")[wrongOrient2].click(); // incorrect, x2
+  quizMount(env, "m2").querySelectorAll(".qitem")[0].querySelectorAll(".qopt")[qSpec1.a].click(); // correct, x1
+  quizMount(env, "m2").querySelectorAll(".qitem")[3].querySelectorAll(".qopt")[qSpec3.a].click(); // correct, x3
+  quizMount(env, "m9").querySelectorAll(".qitem")[0].querySelectorAll(".qopt")[wrongAnalysis].click(); // incorrect, x1
+  quizMount(env, "m15").querySelectorAll(".qitem")[0].querySelectorAll(".qopt")[qMolecular.a].click(); // correct, x2
+
+  const stats = env.api.getStats();
+  assert.equal(stats.questionsAnswered, 6);
+  assert.equal(stats.questionsMastered, 4); // qOrient1, qSpec1, qSpec3, qMolecular correct; qOrient2, qAnalysis incorrect
+  assert.equal(stats.lastAttemptMasteryPct, Math.round((4 / 6) * 100));
+  assert.equal(stats.questionsCorrect, stats.questionsMastered);
+  assert.equal(stats.overallPct, stats.lastAttemptMasteryPct);
+
+  function assertRowExact(rows, key, expectAnswered, expectMastered) {
+    const row = rows[key];
+    assert.ok(row, `expected a row for key "${key}"`);
+    assert.equal(row.answered, expectAnswered, `${key}.answered`);
+    assert.equal(row.mastered, expectMastered, `${key}.mastered`);
+    assert.equal(row.masteryPct, expectAnswered ? Math.round((expectMastered / expectAnswered) * 100) : null, `${key}.masteryPct`);
+    assert.equal(row.correct, row.mastered, `${key}.correct alias`);
+    assert.equal(row.pct, row.masteryPct, `${key}.pct alias`);
+  }
+
+  // byDomain: orientation (qOrient1 correct + qOrient2 incorrect = 2
+  // answered, 1 mastered), specimen (qSpec1 + qSpec3, both correct = 2,
+  // 2), analysis (qAnalysis incorrect = 1, 0), molecular (qMolecular
+  // correct = 1, 1) -- driven by the questions' own `.d` fields, not
+  // hardcoded domain-name literals, so this can never silently pass
+  // against the wrong key.
+  assertRowExact(stats.byDomain, qOrient1.d, 2, 1);
+  assertRowExact(stats.byDomain, qSpec1.d, 2, 2);
+  assertRowExact(stats.byDomain, qAnalysis.d, 1, 0);
+  assertRowExact(stats.byDomain, qMolecular.d, 1, 1);
+  // No unexpected aggregate keys introduced -- exactly these four domains.
+  assert.deepEqual(
+    new Set(Object.keys(stats.byDomain)),
+    new Set([qOrient1.d, qSpec1.d, qAnalysis.d, qMolecular.d]),
+  );
+
+  // byTopic: orientation (2,1), specimen-collection (2,2), chromosome-id (1,0), fish-array (1,1)
+  assertRowExact(stats.byTopic, qOrient1.t, 2, 1);
+  assertRowExact(stats.byTopic, qSpec1.t, 2, 2);
+  assertRowExact(stats.byTopic, qAnalysis.t, 1, 0);
+  assertRowExact(stats.byTopic, qMolecular.t, 1, 1);
+  assert.deepEqual(
+    new Set(Object.keys(stats.byTopic)),
+    new Set([qOrient1.t, qSpec1.t, qAnalysis.t, qMolecular.t]),
+  );
+
+  // byDifficulty: x1 = qOrient1(correct) + qSpec1(correct) + qAnalysis(incorrect) => 3 answered, 2 mastered
+  //               x2 = qOrient2(incorrect) + qMolecular(correct)                  => 2 answered, 1 mastered
+  //               x3 = qSpec3(correct)                                            => 1 answered, 1 mastered
+  assertRowExact(stats.byDifficulty, "1", 3, 2);
+  assertRowExact(stats.byDifficulty, "2", 2, 1);
+  assertRowExact(stats.byDifficulty, "3", 1, 1);
+  assert.deepEqual(new Set(Object.keys(stats.byDifficulty)), new Set(["1", "2", "3"]));
+});
+
+test("unanswered questions affect coverage (questionsTotal) but never enter the answered-question mastery denominator", () => {
+  const env = boot();
+  const question = env.api.getQuestions("m1")[0];
+  quizMount(env, "m1").querySelectorAll(".qitem")[0].querySelectorAll(".qopt")[question.a].click();
+
+  const stats = env.api.getStats();
+  assert.equal(stats.questionsTotal, 153, "coverage denominator counts every current question");
+  assert.equal(stats.questionsAnswered, 1, "mastery denominator counts only distinct ANSWERED questions");
+  assert.equal(stats.lastAttemptMasteryPct, 100, "unanswered questions do not dilute the mastery percentage");
+});
+
+test("stale question records remain in getProgress()/exportJSON() but are excluded from every mastery, coverage, grouping, weak-area, and unmastered calculation", () => {
+  const env = boot({
+    storage: {
+      [V2_KEY]: JSON.stringify({
+        v: 2, modules: {}, exercises: {},
+        answers: { "totally-fabricated-stale-id": { c: true, n: 9, ts: 1 } },
+        started: 0,
+      }),
+    },
+  });
+  const stats = env.api.getStats();
+  assert.equal(stats.questionsAnswered, 0);
+  assert.equal(stats.questionsMastered, 0);
+  assert.equal(stats.lastAttemptMasteryPct, null);
+  assert.equal(JSON.stringify(stats.byDomain), "{}");
+  assert.equal(env.api.getWeakAreas(1).length, 0);
+  assert.equal(env.api.getUnmastered().length, 153, "the stale id never appears; every CURRENT question is unmastered");
+
+  assert.deepEqual(env.api.getProgress().answers["totally-fabricated-stale-id"], { c: true, n: 9, ts: 1 }, "the stale record itself is preserved, not deleted");
+  const exported = JSON.parse(env.api.exportJSON());
+  assert.deepEqual(exported.state.answers["totally-fabricated-stale-id"], { c: true, n: 9, ts: 1 }, "exportJSON() preserves the stale record too");
+});
+
+test("exercise records and module-completion records never enter question mastery/coverage analytics, and continue to behave normally elsewhere", () => {
+  const env = boot();
+  env.body.querySelectorAll(".mark-complete")[0].click(); // module completion
+  const exHost = env.body.querySelectorAll(".exer")[0];
+  const exKey = exHost.getAttribute("data-exer");
+  const exItems = env.api.getExercises()[exKey].items;
+  exHost.querySelectorAll(".eopt")[exItems[0].answer].click(); // exercise answer
+
+  const stats = env.api.getStats();
+  assert.equal(stats.questionsAnswered, 0, "the exercise answer and module completion are not quiz-question analytics");
+  assert.equal(stats.questionsMastered, 0);
+  assert.equal(stats.lastAttemptMasteryPct, null);
+  assert.equal(env.api.getUnmastered().length, 153);
+  assert.equal(JSON.stringify(stats.byDomain), "{}");
+
+  // Both still behave normally through their own, separate signals.
+  assert.equal(stats.modulesComplete, 1);
+  assert.equal(env.api.getProgress().exercises[exItems[0].id].c, true);
+});
+
+test("a runtime-injected question participates in analytics only while currently registered, and becomes inert (not fabricated) under the stale-ID policy after a fresh session -- without deciding content-pack persistence", () => {
+  const first = boot();
+  const addResult = first.api.addQuestions("m2", [{
+    id: "analytics-injected-1", d: "operations", t: "lab-ops", x: 1,
+    q: "Injected analytics question?", o: ["Yes", "No"], a: 0, why: "Injected.",
+  }]);
+  assert.equal(addResult.ok, true);
+  const mount = quizMount(first, "m2");
+  const items = mount.querySelectorAll(".qitem");
+  items[items.length - 1].querySelectorAll(".qopt")[0].click(); // answer correctly
+
+  const statsWhileKnown = first.api.getStats();
+  assert.ok(statsWhileKnown.questionsAnswered >= 1, "counted while the injected id is known this session");
+  assert.equal(first.api.getProgress().answers["analytics-injected-1"].c, true);
+
+  // A fresh session from the same storage, without re-injecting -- this
+  // test does not decide or implement whether injected content should
+  // persist; it only proves the existing stale-ID policy (QL-024)
+  // applies identically to analytics for an injected id that is no
+  // longer known.
+  const second = boot({ storage: first.storage._raw });
+  const statsAfterSessionEnds = second.api.getStats();
+  assert.equal(statsAfterSessionEnds.questionsTotal, 153, "the injected question is not part of the base bank");
+  assert.deepEqual(
+    second.api.getProgress().answers["analytics-injected-1"],
+    { c: true, n: 1, ts: first.api.getProgress().answers["analytics-injected-1"].ts },
+    "the record is preserved, not fabricated or deleted",
+  );
+  assert.equal(second.api.getUnmastered().every((e) => e.id !== "analytics-injected-1"), true, "an unrecognized id never appears in current-facing analytics");
+});
+
+test("getWeakAreas(): distinct answered questions, latest outcomes, minAnswered as a distinct-question threshold (not an attempt threshold), TWO independently qualifying topics sorted weakest-first, with compatible fields, and the order genuinely reverses after real reload/rebuild reattempts", () => {
+  const env = boot();
+  // Two independent topics, each with 3 distinct answered questions (the
+  // prior version of this test created only one qualifying topic, so a
+  // one-row array could never actually prove sort order).
+  const specQ = env.api.getQuestions("m2").slice(0, 3);      // specimen-collection
+  const analysisQ = env.api.getQuestions("m9").slice(0, 3);  // chromosome-id
+  const wrongSpec0 = specQ[0].a === 0 ? 1 : 0;
+  const wrongSpec1 = specQ[1].a === 0 ? 1 : 0;
+  const wrongAnalysis2 = analysisQ[2].a === 0 ? 1 : 0;
+
+  const specMount = quizMount(env, "m2");
+  specMount.querySelectorAll(".qitem")[0].querySelectorAll(".qopt")[wrongSpec0].click(); // incorrect
+  specMount.querySelectorAll(".qitem")[1].querySelectorAll(".qopt")[wrongSpec1].click(); // incorrect
+  specMount.querySelectorAll(".qitem")[2].querySelectorAll(".qopt")[specQ[2].a].click(); // correct
+  // specimen-collection: 1/3 correct = 33% -- the weaker topic
+
+  const analysisMount = quizMount(env, "m9");
+  analysisMount.querySelectorAll(".qitem")[0].querySelectorAll(".qopt")[analysisQ[0].a].click(); // correct
+  analysisMount.querySelectorAll(".qitem")[1].querySelectorAll(".qopt")[analysisQ[1].a].click(); // correct
+  analysisMount.querySelectorAll(".qitem")[2].querySelectorAll(".qopt")[wrongAnalysis2].click(); // incorrect
+  // chromosome-id: 2/3 correct = 67% -- the stronger topic
+
+  const belowThreshold = env.api.getWeakAreas(4);
+  assert.equal(belowThreshold.length, 0, "3 distinct answered questions per topic is below a minAnswered:4 threshold (counts distinct questions, not attempts)");
+
+  const rows = env.api.getWeakAreas(3);
+  assert.equal(rows.length, 2, "both topics independently qualify at minAnswered:3");
+  assert.equal(rows[0].topic, specQ[0].t, "the weaker topic (33%) sorts first");
+  assert.equal(rows[0].answered, 3);
+  assert.equal(rows[0].mastered, 1);
+  assert.equal(rows[0].masteryPct, Math.round((1 / 3) * 100));
+  assert.equal(rows[0].correct, rows[0].mastered, "compatibility alias agrees");
+  assert.equal(rows[0].pct, rows[0].masteryPct, "compatibility alias agrees");
+  assert.equal(rows[1].topic, analysisQ[0].t, "the stronger topic (67%) sorts second");
+  assert.equal(rows[1].answered, 3);
+  assert.equal(rows[1].mastered, 2);
+  assert.equal(rows[1].masteryPct, Math.round((2 / 3) * 100));
+  assert.equal(rows[1].correct, rows[1].mastered);
+  assert.equal(rows[1].pct, rows[1].masteryPct);
+
+  // Reverse which topic is weaker, entirely through the real
+  // reload/rebuild reattempt path: bring specimen-collection up to 100%
+  // and bring chromosome-id down to 0%.
+  const reloaded = boot({ storage: { [V2_KEY]: JSON.stringify(env.api.getProgress()) } });
+  const reloadedSpecMount = quizMount(reloaded, "m2");
+  reloadedSpecMount.querySelectorAll(".qitem")[0].querySelectorAll(".qopt")[specQ[0].a].click(); // now correct
+  reloadedSpecMount.querySelectorAll(".qitem")[1].querySelectorAll(".qopt")[specQ[1].a].click(); // now correct
+  const reloadedAnalysisMount = quizMount(reloaded, "m9");
+  const wrongAnalysis0 = analysisQ[0].a === 0 ? 1 : 0;
+  const wrongAnalysis1 = analysisQ[1].a === 0 ? 1 : 0;
+  reloadedAnalysisMount.querySelectorAll(".qitem")[0].querySelectorAll(".qopt")[wrongAnalysis0].click(); // now incorrect
+  reloadedAnalysisMount.querySelectorAll(".qitem")[1].querySelectorAll(".qopt")[wrongAnalysis1].click(); // now incorrect
+
+  const reversedRows = reloaded.api.getWeakAreas(3);
+  assert.equal(reversedRows.length, 2);
+  assert.equal(reversedRows[0].topic, analysisQ[0].t, "chromosome-id is now the weaker topic (0%) and sorts first");
+  assert.equal(reversedRows[0].masteryPct, 0);
+  assert.equal(reversedRows[0].mastered, 0);
+  assert.equal(reversedRows[1].topic, specQ[0].t, "specimen-collection is now the stronger topic (100%) and sorts second -- the order genuinely reversed");
+  assert.equal(reversedRows[1].masteryPct, 100);
+  assert.equal(reversedRows[1].mastered, 3);
+});
+
+test("exportJSON()'s stats snapshot reports the same analytics model and field semantics as getStats(), and import atomicity is unaffected", () => {
+  const env = boot();
+  const question = env.api.getQuestions("m1")[0];
+  quizMount(env, "m1").querySelectorAll(".qitem")[0].querySelectorAll(".qopt")[question.a].click();
+
+  const liveStats = env.api.getStats();
+  const exported = JSON.parse(env.api.exportJSON());
+  assert.equal(exported.stats.analyticsModel, "last-attempt-mastery-v1");
+  assert.equal(JSON.stringify(exported.stats), JSON.stringify(liveStats), "the exported snapshot agrees field-for-field with getStats()");
+
+  // Import atomicity is unrelated to this task and must remain unchanged:
+  // a malformed import still leaves live state/stats untouched.
+  const beforeStats = JSON.stringify(env.api.getStats());
+  const result = env.api.importJSON({ v: 2, modules: {}, answers: "not-an-object", exercises: {}, started: 0 });
+  assert.equal(result.ok, false);
+  assert.equal(JSON.stringify(env.api.getStats()), beforeStats);
+});
+
+test("reading analytics emits no events, and answering/reattempting preserves the existing event contract with no new analytics event added", () => {
+  const env = boot();
+  const counts = { progress: 0, answer: 0, exercise: 0, content: 0, persistence: 0, all: 0 };
+  ["progress", "answer", "exercise", "content", "persistence"].forEach((evt) => {
+    env.api.on(evt, () => { counts[evt] += 1; });
+  });
+  env.api.on("*", () => { counts.all += 1; });
+
+  // Pure reads: none of these may emit anything.
+  env.api.getStats();
+  env.api.getWeakAreas();
+  env.api.getUnmastered();
+  env.api.exportJSON();
+  assert.equal(counts.all, 0, "no event fires from reading analytics");
+
+  const question = env.api.getQuestions("m1")[0];
+  quizMount(env, "m1").querySelectorAll(".qitem")[0].querySelectorAll(".qopt")[question.a].click();
+  assert.equal(counts.answer, 1);
+  assert.equal(counts.progress, 1);
+  assert.equal(counts.exercise, 0);
+  assert.equal(counts.persistence, 0, "no new analytics event was introduced");
+
+  const reloaded = boot({ storage: { [V2_KEY]: JSON.stringify(env.api.getProgress()) } });
+  const wrongIndex = question.a === 0 ? 1 : 0;
+  let reloadedAnswerEvents = 0, reloadedProgressEvents = 0;
+  reloaded.api.on("answer", () => { reloadedAnswerEvents += 1; });
+  reloaded.api.on("progress", () => { reloadedProgressEvents += 1; });
+  quizMount(reloaded, "m1").querySelectorAll(".qitem")[0].querySelectorAll(".qopt")[wrongIndex].click();
+  assert.equal(reloadedAnswerEvents, 1, "a reattempt still fires exactly one answer event, unchanged");
+  assert.equal(reloadedProgressEvents, 1);
+});
+
 /* ============================ accessibility (implemented behavior) ============================ */
 
 test("the document exposes landmarks, a skip link, and labelled regions", () => {
