@@ -3672,3 +3672,146 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   prerequisites are actually present — a comment or convention alone
   cannot prevent a future hand-edit from promoting a record without its
   evidence.
+
+## QL-031 — the question-provenance governance mechanism did not yet fully implement the policy it claimed to enforce (Issue #3, Milestone 1)
+
+- **Status:** Corrected on the same branch
+  (`claude/milestone-1-question-provenance`), draft PR open for
+  independent review, not yet merged. Independent review at head
+  `fd9b897205f9edaeb7c6e87368bc220ba0a9e709` confirmed the separate-
+  registry design (QL-030) and the truthful current-data claims sound,
+  but found nine distinct ways the mechanism could certify incomplete or
+  contradictory records.
+- **Finding 1 — confirmed: duplicate governance ids silently collapsed.**
+  The original implementation's claim that "duplicate keys are
+  structurally impossible in a JS object literal" was wrong — a repeated
+  key silently overwrites the earlier value with no error. Reproduced: a
+  second `"m1-q1": DRAFT_GOVERNANCE_RECORD()` entry collapsed into
+  `QUESTION_GOVERNANCE` while the runtime integrity check and every
+  committed test still passed, because the resulting key SET remained
+  exactly correct even though a real record had been silently discarded.
+- **Finding 2 — confirmed: an inexact citation satisfied
+  "source-checked".** `{citation:"ASCP", edition:null, date:null,
+  url:null}` — a bare organization acronym with no date and no locator —
+  passed `meetsSourceChecked()`, despite `docs/CONTENT_GOVERNANCE.md`
+  explicitly stating "General organization names without an exact source
+  are not sufficient for a disputed claim."
+- **Finding 3 — confirmed: an arbitrary reviewer satisfied
+  "SME-reviewed".** `reviewer:"Nobody"` passed `meetsSmeReviewed()`, even
+  though `docs/CONTENT_GOVERNANCE.md` defines that state specifically as
+  review by Austin, not by an arbitrary named person.
+- **Finding 4 — confirmed: a review-scope length heuristic stood in for
+  actual verification.** `reviewScope:"rationale checked carefully"`
+  (28 characters, not matching the vague-phrase blacklist) satisfied
+  `sme-reviewed`, despite omitting distractor quality, domain/difficulty,
+  originality, exam integrity, and privacy — five of the seven items
+  `docs/CONTENT_GOVERNANCE.md`'s "Review must verify" list requires.
+- **Finding 5 — confirmed: lifecycle and blocker semantics were
+  inconsistent.** A record with `lifecycle:'draft'` but every other field
+  (`drafter`, `sources`, `sourceCheckedBy`/`Date`, `reviewer`,
+  `reviewDate`, `reviewScope`, `editionSensitive`) fully and validly
+  populated reported `blockers:[]` — a bare empty array indistinguishable
+  from a genuinely release-ready record, despite nobody having actually
+  approved promotion.
+- **Finding 6 — confirmed: independent-review evidence was not
+  bidirectionally consistent.** `independentReviewDocumented:false` with
+  `independentReviewer`/`independentReviewDate` still populated was
+  accepted (only the reverse direction — `true` requiring evidence — was
+  checked); a same-person independent reviewer (identical, or a
+  case/whitespace variant of, the drafter or primary reviewer) was
+  accepted with no distinct-identity check at all.
+- **Finding 7 (documentation) — the "computed from evidence" claim
+  overstated the code.** The architecture comment claimed lifecycle was
+  "computed from" evidence; the code only ever prevented it from
+  outrunning its evidence — a stored, intentionally-approved model, which
+  is defensible, but was described backwards.
+- **Finding 8 (disclosure) — wording overclaimed, and the link served an
+  unrendered document.** "Automated tests confirm this course is built
+  and behaves correctly" read as a broader positive-correctness claim
+  than automated tests establish. The relative link to
+  `docs/SCIENTIFIC_REVIEW.md` was confirmed, by direct request, to serve
+  raw `text/markdown` on GitHub Pages (`content-type: text/markdown`) —
+  an unrendered, confusing document in a browser.
+- **Impact:** None shipped — PR #23 remained draft/unmerged throughout;
+  found and fixed before merge.
+- **Cause:** Each defect traces to validating a WEAKER proxy than the
+  policy actually requires: object-literal key uniqueness assumed instead
+  of checked; a citation's mere presence checked instead of its
+  sufficiency; a reviewer's mere non-emptiness checked instead of its
+  approved identity; a review-scope's length checked instead of the
+  actual categories verified; blockers computed only from evidence gaps,
+  never cross-checked against the declared lifecycle; and independent-
+  review evidence checked in only one direction.
+- **Correction:**
+  - `QUESTION_GOVERNANCE_ENTRIES` (ordered `[id, record]` array) +
+    `buildGovernanceRegistry()`, which throws on a repeated id at
+    construction, replaces the object-literal registry.
+  - A source record gained `locator`; `isSufficientGovernanceSource()`
+    requires a ≥20-character citation, an exact edition-or-date, and a
+    locator-or-url.
+  - `APPROVED_SME_REVIEWERS` (`["Jerad Austin Anderson"]`, matching
+    `README.md`'s documented author) + `normalizeGovernanceIdentity()` +
+    `isApprovedSmeReviewer()` gates `sme-reviewed`; never exposed by any
+    public API.
+  - New `reviewChecks` field (closed 7-value `GOVERNANCE_REVIEW_CHECKS`
+    enum, matching `docs/CONTENT_GOVERNANCE.md`'s "Review must verify"
+    list exactly) must be exactly complete for `sme-reviewed`/
+    `release-qualified`; `reviewScope` remains required narrative
+    documentation but is no longer the completeness gate; `notes` cannot
+    substitute for either.
+  - `isReleaseQualified(rec)` (exposed as `releaseQualified` on
+    `getQuestionGovernance()`) plus a new `release-approval-pending`
+    blocker guarantee `blockers.length === 0` if and only if
+    `releaseQualified === true`.
+  - `independentReviewDocumented:false` now requires both evidence
+    fields `null`; `:true` requires `drafter` known and the independent
+    reviewer's normalized identity distinct from both `drafter` and
+    `reviewer`. Independent review remains explicitly NOT a
+    `release-qualified` prerequisite, matching
+    `docs/CONTENT_GOVERNANCE.md`'s actual definition of that state.
+  - The architecture comment now states the stored/approved model
+    honestly.
+  - Disclosure wording changed to "Automated checks validate documented
+    structural and behavioral contracts"; its link now points to
+    GitHub's rendered blob view; the "first-screen" documentation claim
+    was softened to "near the course introduction."
+  - `docs/ARCHITECTURE.md` gained a release-gate reconciliation table
+    naming, for every `docs/CONTENT_GOVERNANCE.md` Release-qualified
+    prerequisite, exactly which mechanism enforces it.
+- **Tests:** `tests/question-governance.mjs` rewritten: 46 dependency-free
+  tests (up from 25), including two isolated single-check source fixtures
+  added specifically so the citation-length and locator/date rules can
+  each be mutation-tested independently. `tests/e2e/review-disclosure.spec.mjs`
+  updated (10 tests): the link test now performs a real `request.get()`
+  against the live GitHub destination and verifies status, content-type,
+  and body content — not merely the href string.
+- **Mutation-tested:** all 10 required scenarios (duplicate id, short
+  citation in isolation, missing date, missing locator, unapproved
+  reviewer, incomplete review-checks, complete-evidence-zero-blockers,
+  contradictory independent-review flag, same-person independent
+  reviewer, hidden disclosure) — each failed exactly its intended test(s)
+  and no others, reverted to byte-identical via `diff` before committing.
+  Also re-verified the two originally-required mutations (removing an
+  authored entry; returning a value without `clone()`) still fail against
+  the corrected schema.
+- **Full local validation:** `npm test` (172 dependency-free DOM-behavior
+  checks + 46 governance checks), targeted
+  `npx playwright test tests/e2e/review-disclosure.spec.mjs` (10/10
+  across both projects), targeted
+  `npx playwright test tests/e2e/runtime-content-lifecycle.spec.mjs`
+  (14/14), and the complete `npx playwright test` suite.
+- **Scope:** No question, answer, rationale, image, or scientific claim
+  changed. No source was added to any current question, no drafter or
+  reviewer was asserted, and no question was marked release-qualified.
+  `SCHEMA_V` stays `2`. Runtime-injected-content lifecycle (QL-028/
+  QL-029) unchanged.
+- **Prevention:** When a validator's job is to gate a policy statement
+  (e.g. "reviewed by Austin," "review must verify these seven things"),
+  check the policy's actual substance (an approved identity registry, a
+  closed structured enum) rather than a structural proxy for it (a
+  non-empty string, a length threshold) — a proxy can always be satisfied
+  by input that technically passes but does not actually mean what the
+  policy requires. Also: any "X is impossible" claim in a comment is
+  itself an untested assertion until a fixture proves it — the
+  duplicate-key claim here was wrong and went unnoticed through an entire
+  prior review round because nobody had actually tried it.

@@ -109,15 +109,23 @@ question's state is enforced, not just recorded in prose: `index.html`
 carries a `QUESTION_GOVERNANCE` registry with one record per authored
 question id, and `window.CytoCourse.getQuestionGovernance()` exposes it
 read-only. A question's record cannot claim Source-checked, SME-reviewed,
-or Release-qualified without the evidence (source, source-checker,
-reviewer, review date, review scope, and — for Release-qualified — drafter
-and an explicit edition-sensitivity assessment) that state requires; the
-app rejects a contradictory record at load time. This document's "all 153
-questions are Draft" claim below is the same fact the registry itself
-enforces — see `docs/ARCHITECTURE.md` "Question provenance and
-scientific-review governance" for the exact schema and lifecycle
-prerequisites, and `docs/CONTENT_GOVERNANCE.md` for the policy this
-implements.
+or Release-qualified without the evidence that state requires — an exact,
+dated, located source; a reviewer identity matching this document's
+"SME-reviewed" definition (Austin, not an arbitrary name); a complete,
+structured set of the "Review must verify" checks from
+`docs/CONTENT_GOVERNANCE.md`; and, for Release-qualified, a named drafter
+and an explicit edition-sensitivity assessment. The app rejects a
+contradictory record at load time. **Corrected 2026-08-04**: independent
+review found the original mechanism accepted a bare organization name as
+a "source," an arbitrary reviewer string as "SME-reviewed," and a
+free-text review-scope description as proof the full checklist was
+verified — none of which actually implemented the policy stated above.
+See `docs/QUALITY_LOG.md` QL-031 for the full defect-by-defect record.
+This document's "all 153 questions are Draft" claim below is the same
+fact the registry itself enforces — see `docs/ARCHITECTURE.md` "Question
+provenance and scientific-review governance" for the exact schema and
+lifecycle prerequisites, and `docs/CONTENT_GOVERNANCE.md` for the policy
+this implements.
 
 ## Current status: what is and is not established
 

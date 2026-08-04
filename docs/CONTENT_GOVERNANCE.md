@@ -75,6 +75,16 @@ that exposes each question's current status and exactly what is missing
 toward release-qualification. All 153 current questions are Draft — see
 `docs/SCIENTIFIC_REVIEW.md`.
 
+**Corrected 2026-08-04** after independent review found the mechanism did
+not yet fully implement this policy: "SME-reviewed" now checks the
+reviewer's identity against an approved-reviewer registry (matching "by
+Austin" exactly, not any non-empty string); "Review must verify" (the
+seven items above) is now a closed, machine-checked `reviewChecks` set,
+not a free-text scope description; and a source citation must carry an
+exact edition/revision/publication date and a specific locator, not a
+bare organization name. See `docs/ARCHITECTURE.md` for the full
+correction record and `docs/QUALITY_LOG.md` QL-031.
+
 ## Corrections
 
 Scientific corrections should be traceable through an issue, pull request, or

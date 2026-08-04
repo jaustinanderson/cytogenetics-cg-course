@@ -27,14 +27,19 @@ test.describe("content-review disclosure", () => {
     expect(text).toMatch(/structurally validated beta/i);
     expect(text).toMatch(/has not yet completed documented, question-by-question scientific review/i);
     expect(text).toMatch(/should not yet be treated as release-qualified/i);
-    // Distinguishes automated/structural validation from scientific review.
-    expect(text).toMatch(/automated tests confirm this course is built and behaves correctly/i);
+    // Corrected 2026-08-04 (independent review point 7): the prior wording
+    // ("Automated tests confirm this course is built and behaves
+    // correctly") overstated the evidence -- it read as a positive
+    // correctness claim rather than a scope limitation. Distinguishes
+    // automated/structural validation from scientific review without
+    // overclaiming what automated checks establish.
+    expect(text).toMatch(/automated checks validate documented structural and behavioral contracts/i);
     expect(text).toMatch(/do not establish scientific accuracy/i);
 
     expect(consoleIssues, JSON.stringify(consoleIssues, null, 2)).toEqual([]);
   });
 
-  test("is positioned inside the hero, immediately after the hero stats -- part of the course introduction, not buried later on the page", async ({
+  test("is positioned inside the hero, immediately after the hero stats -- near the course introduction, not buried later on the page", async ({
     page,
   }) => {
     await page.goto("/");
@@ -52,12 +57,40 @@ test.describe("content-review disclosure", () => {
     expect(disclosureBox.y).toBeGreaterThanOrEqual(statsBox.y + statsBox.height - 1);
   });
 
-  test("links to the authoritative docs/SCIENTIFIC_REVIEW.md review-status record", async ({ page }) => {
+  test("links to the authoritative Scientific Review Status record, and the destination is actually reachable and rendered -- not merely an href string", async ({
+    page,
+    request,
+  }) => {
     await page.goto("/");
     const link = page.locator("#reviewDisclosure a");
     await expect(link).toHaveCount(1);
-    await expect(link).toHaveAttribute("href", "./docs/SCIENTIFIC_REVIEW.md");
     await expect(link).toHaveAccessibleName(/scientific review status/i);
+
+    const href = await link.getAttribute("href");
+    // Corrected 2026-08-04 (independent review point 7): the original
+    // relative link (`./docs/SCIENTIFIC_REVIEW.md`) is served by GitHub
+    // Pages as raw `text/markdown` -- an unrendered, confusing document
+    // in a browser, not a readable page. This now links to GitHub's own
+    // rendered blob view of the same file, which serves `text/html`.
+    expect(href).toBe("https://github.com/jaustinanderson/cytogenetics-cg-course/blob/main/docs/SCIENTIFIC_REVIEW.md");
+
+    // Activate/request the actual destination and verify it is reachable
+    // and contains the expected current-review statement -- proving the
+    // link genuinely delivers a readable page, not just that the href
+    // string looks right. A couple of short retries tolerate GitHub's own
+    // transient rate-limiting (429) on unauthenticated requests -- an
+    // external-network condition, not a defect in this page.
+    let response;
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      response = await request.get(href);
+      if (response.status() !== 429) break;
+      await new Promise((resolve) => setTimeout(resolve, 2000 * attempt));
+    }
+    expect(response.ok(), `expected ${href} to be reachable, got status ${response.status()}`).toBe(true);
+    expect(response.headers()["content-type"] || "").toMatch(/text\/html/i);
+    const body = await response.text();
+    expect(body).toMatch(/Not yet independently reviewed/i);
+    expect(body).toMatch(/Scientific Review Status/i);
   });
 
   test("does not obscure the header, hamburger, or main navigation at this viewport", async ({ page }) => {

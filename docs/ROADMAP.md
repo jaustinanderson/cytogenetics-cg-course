@@ -416,12 +416,17 @@ review status stable before adding 46 questions.
   `CytoCourse.getQuestionGovernance()` public API. All 153 current
   questions remain Draft; nothing is fabricated. Also adds a persistent
   in-course review disclosure. Does not perform scientific review or
-  source attribution. See `docs/QUALITY_LOG.md` QL-030 and
-  `docs/ARCHITECTURE.md` "Question provenance and scientific-review
-  governance" for the full record. Left unchecked pending independent
-  review and merge; image-manifest normalization and broader API
-  contract tests below remain separately scoped and out of this PR's
-  scope regardless
+  source attribution. A second round of independent review before merge
+  found the mechanism did not yet fully implement the stated policy
+  (duplicate-id detection, source sufficiency, an approved-SME-reviewer
+  identity, a structured review-check enum, lifecycle/blocker/
+  releaseQualified invariants, and independent-review bidirectional
+  consistency) — corrected on the same branch; see `docs/QUALITY_LOG.md`
+  QL-030 and QL-031 and `docs/ARCHITECTURE.md` "Question provenance and
+  scientific-review governance" for the full record. Left unchecked
+  pending independent review and merge; image-manifest normalization and
+  broader API contract tests below remain separately scoped and out of
+  this PR's scope regardless
 - [ ] Normalize the image-manifest schema so candidate records use explicit
   unknown values
 - [ ] Add browser contract tests for every public API claim

@@ -1713,6 +1713,26 @@ explicitly unchanged/out of scope — a runtime-injected question is never
 entered into this registry and cannot self-certify a review status. See
 `docs/ARCHITECTURE.md` "Question provenance and scientific-review
 governance" and `docs/QUALITY_LOG.md` QL-030 for the full record.
+
+A second round of independent review (same day, before merge) found the
+mechanism did not yet fully implement the stated policy: duplicate
+governance ids could silently collapse in the original object-literal
+registry; a bare organization-name citation satisfied "source-checked";
+any non-empty string (including `"Nobody"`) satisfied "SME-reviewed";
+a review-scope length heuristic stood in for actually verifying the
+mandatory checklist; a Draft record with complete evidence reported zero
+release blockers; and independent-review evidence fields were not
+bidirectionally consistent. Corrected on the same branch: duplicate-id
+detection at construction time (`buildGovernanceRegistry()`), an exact
+source-sufficiency rule (citation length + edition/date + locator/url),
+an approved-SME-reviewer identity check, a closed structured
+`reviewChecks` set replacing the length heuristic, a `releaseQualified`
+boolean with the invariant `blockers.length === 0` iff
+`releaseQualified === true`, and bidirectional independent-review
+consistency (including same-person rejection). Also corrected the
+disclosure's wording (no longer implies "automated tests confirm...
+behaves correctly") and its link (now the rendered GitHub blob view, not
+raw markdown). See `docs/QUALITY_LOG.md` QL-031 for the full record.
 **Draft PR titled "Add question provenance and review gates (Milestone
 1)" is open against `main`, linked to Issue #3, awaiting independent
 review — not yet merged.** Treat this as an open risk until that PR
