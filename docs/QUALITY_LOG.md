@@ -3579,3 +3579,96 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   distinguishes "absent" from "present with an undefined value," and
   any validator for an optional field should use it explicitly rather
   than inferring presence from a value read.
+
+## QL-030 — added a strict, auditable question-provenance and scientific-review governance model (Issue #3, Milestone 1)
+
+- **Status:** Implemented on branch `claude/milestone-1-question-provenance`
+  (Issue #3), draft PR open for independent review, not yet merged.
+- **Goal.** Prevent any question from being described as source-checked,
+  SME-reviewed, independently reviewed, or release-qualified unless the
+  required evidence is explicitly recorded — see
+  `docs/CONTENT_GOVERNANCE.md` and `docs/SCIENTIFIC_REVIEW.md`, which
+  already documented that no current question carries a recorded source,
+  drafter, reviewer, review date, or review scope, and that all 153
+  authored questions are Draft.
+- **Design decision — a separate registry, not fields on the question.**
+  Three designs were compared before writing code: (1) governance fields
+  added directly to each `QUIZZES` question object — rejected, since it
+  mixes two independently changing lifecycles and would let
+  `addQuestions()` accidentally accept or fabricate governance-shaped
+  fields on a caller-supplied runtime question; (2) a single flat status
+  string per question — rejected, since a bare label cannot carry the
+  required evidence, exactly the "label alone bypasses the gate" failure
+  mode this task exists to prevent; (3) a **separate `QUESTION_GOVERNANCE`
+  registry**, keyed by the question's existing stable authored id — CHOSEN,
+  since it keeps governance data separate from both question content and
+  learner progress (`state`/`SCHEMA_V`, unchanged) and gives one place to
+  enforce "a label requires its evidence." See `docs/ARCHITECTURE.md`
+  "Question provenance and scientific-review governance" for the full
+  record.
+- **Implementation.** `QUESTION_GOVERNANCE` (`index.html`) holds one
+  13-field record per authored question id (lifecycle, drafter, sources,
+  source-check identity/date, reviewer/reviewDate/reviewScope, documented
+  independent review with its own evidence, edition-sensitivity, notes),
+  using `null`/`[]`/`false` — never an ambiguous empty string — for
+  anything not yet recorded. `assertGovernanceRegistryIntegrity()` runs
+  at script-load time and throws if the registry's key set does not
+  exactly match the live authored-question id set, or if any record is
+  structurally invalid or self-contradictory (a declared lifecycle
+  without its prerequisites). `isValidGovernanceRecord()` enforces the
+  full prerequisite chain: `source-checked` requires ≥1 well-formed
+  source plus a source-checker and date; `sme-reviewed` requires
+  everything `source-checked` requires plus a named reviewer, a real
+  date, and a specific (non-vague, ≥15-character) review scope;
+  `release-qualified` requires everything `sme-reviewed` requires plus a
+  named drafter and an explicitly assessed `editionSensitive`.
+  `computeGovernanceBlockers()` returns deterministic, stable reason
+  codes (`missing-drafter`, `missing-sources`, `missing-source-check`,
+  `missing-reviewer`, `missing-review-date`, `missing-review-scope`,
+  `unresolved-edition-sensitivity`). The new public
+  `CytoCourse.getQuestionGovernance(id?)` method is read-only, returns
+  detached (`clone()`-roundtripped) data, emits no event, and returns
+  `null` for any unrecognized id — including a runtime-injected
+  question's id, since `addQuestions()` never reads or writes this
+  registry and `RUNTIME_QUESTION_ALLOWED_KEYS` rejects any
+  governance-shaped field outright, so a caller cannot self-certify a
+  review status. A persistent, non-modal, non-dismissible in-course
+  disclosure (`#reviewDisclosure`, pure static markup, no JS behavior)
+  was added inside the hero, stating the structural-vs-scientific-review
+  distinction and linking to `docs/SCIENTIFIC_REVIEW.md`.
+- **Current data confirmed truthful.** All 153 authored questions remain
+  `draft`; every field is `null`/`[]`/`false`; every record carries all 7
+  blockers; no drafter, source, source-check, reviewer, review date,
+  review scope, independent review, or release-qualification is asserted
+  anywhere in the registry.
+- **25 new dependency-free tests** in `tests/question-governance.mjs`
+  (`npm run test:governance`, included in `npm test`) and **10 new
+  real-browser Playwright tests** in `tests/e2e/review-disclosure.spec.mjs`
+  — see `docs/VALIDATION.md` "Question provenance and scientific-review
+  governance" for the complete coverage list, including fixture-based
+  lifecycle-transition tests built by patching a single registry entry's
+  source text (the only way to exercise the internal validation logic,
+  since there is no public write method for governance data by design).
+- **Mutation-tested:** removing an authored governance entry, adding a
+  stale entry, marking an incomplete record release-qualified, weakening
+  a required source/reviewer/date/scope check, returning the live
+  registry by reference instead of through `clone()`, and
+  removing/hiding `#reviewDisclosure` — each failed exactly its intended
+  test and no others; reverted and confirmed byte-identical via `diff`
+  before committing.
+- **Full local validation:** `npm test` (172 dependency-free DOM-behavior
+  checks + 25 governance checks), targeted
+  `npx playwright test tests/e2e/review-disclosure.spec.mjs` (10/10
+  across both projects), and the complete `npx playwright test` suite.
+- **Scope:** No question, answer, rationale, image, or scientific claim
+  changed — this task adds governance metadata, validation, and a
+  truthful disclosure; it performs no scientific review, source
+  attribution, or content correction. `SCHEMA_V` stays `2`. The
+  runtime-injected-content lifecycle (QL-028/QL-029) is unchanged. The
+  `README.md` beta warning is unchanged.
+- **Prevention:** A lifecycle label is only as trustworthy as the
+  mechanism that assigns it. Any future content-state field must be
+  paired with a load-time or write-time check that the label's own
+  prerequisites are actually present — a comment or convention alone
+  cannot prevent a future hand-edit from promoting a record without its
+  evidence.

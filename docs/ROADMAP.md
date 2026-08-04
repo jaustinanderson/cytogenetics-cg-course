@@ -369,10 +369,11 @@ review status stable before adding 46 questions.
   work below (content-pack decision, provenance fields, image-manifest
   normalization, broader API contract tests) was out of scope for that
   PR and stays open
-- [ ] Decide whether injected questions are intentionally session-only or
+- [x] Decide whether injected questions are intentionally session-only or
   represented by a versioned content-pack format — branch
-  `claude/issue-2-runtime-content-policy` (Issue #2, **draft PR open,
-  not yet merged**): adopts and enforces a deliberate SPLIT lifecycle —
+  `claude/issue-2-runtime-content-policy` (Issue #2, PR #22, **merged**
+  as commit `03862e5103919f96f9ec165e1d4599d20f85a66c`): adopts and
+  enforces a deliberate SPLIT lifecycle —
   a question definition added via `addQuestions()` is session-only
   (never written to `localStorage`, `state`, `exportJSON()`, or accepted
   back in by `importJSON()`), but its recorded ANSWER OUTCOME, once
@@ -397,11 +398,30 @@ review status stable before adding 46 questions.
   content-pack format — only documents its prerequisites for a later,
   separately scoped design. `SCHEMA_V` stays `2`. See
   `docs/QUALITY_LOG.md` QL-028 for the full decision record and
-  `docs/VALIDATION.md` for test coverage. Left unchecked pending
-  independent review and merge; the remaining Milestone 1 work below
-  (provenance fields, image-manifest normalization, broader API
-  contract tests) is out of scope for that PR and stays open regardless
-- [ ] Add provenance and review fields for releasable questions
+  `docs/VALIDATION.md` for test coverage. A second round of independent
+  review before merge found and fixed one further defect — an explicit
+  own `w: undefined` field crashed `addQuestions()` with an uncaught
+  exception instead of a structured rejection — see QL-029. The
+  remaining Milestone 1 work below (provenance fields, image-manifest
+  normalization, broader API contract tests) was out of scope for this
+  item and stays open regardless
+- [ ] Add provenance and review fields for releasable questions — branch
+  `claude/milestone-1-question-provenance` (Issue #3, draft PR open, not
+  yet merged): adds a separate `QUESTION_GOVERNANCE` registry (keyed by
+  each question's existing stable id) recording lifecycle, drafter,
+  structured sources, source-check identity/date,
+  reviewer/date/scope, documented independent review, and edition
+  sensitivity, with prerequisites enforced at load time (a lifecycle
+  label cannot be promoted without its evidence) and a read-only
+  `CytoCourse.getQuestionGovernance()` public API. All 153 current
+  questions remain Draft; nothing is fabricated. Also adds a persistent
+  in-course review disclosure. Does not perform scientific review or
+  source attribution. See `docs/QUALITY_LOG.md` QL-030 and
+  `docs/ARCHITECTURE.md` "Question provenance and scientific-review
+  governance" for the full record. Left unchecked pending independent
+  review and merge; image-manifest normalization and broader API
+  contract tests below remain separately scoped and out of this PR's
+  scope regardless
 - [ ] Normalize the image-manifest schema so candidate records use explicit
   unknown values
 - [ ] Add browser contract tests for every public API claim

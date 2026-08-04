@@ -1026,6 +1026,110 @@ behavior is never mistaken for a placeholder implementation of this:
   externally supplied content exactly as they do to authored content —
   acceptance by the runtime validator is not review.
 
+## Question provenance and scientific-review governance (Issue #3, Milestone 1)
+
+Adds a strict, auditable governance model that prevents any question from
+being described as source-checked, SME-reviewed, independently reviewed, or
+release-qualified unless the required evidence is explicitly recorded — see
+`docs/CONTENT_GOVERNANCE.md` for the human-readable policy and
+`docs/SCIENTIFIC_REVIEW.md` for the current, factual review status this
+model enforces.
+
+**Design decision — a separate registry, not fields on the question.** Three
+designs were compared: (1) adding governance fields directly to each
+`QUIZZES` question object, rejected because it mixes two independently
+changing lifecycles (content authored once; review status changed later, by
+a different actor) and would let `addQuestions()` accidentally accept or
+fabricate governance-shaped fields on a caller-supplied runtime question;
+(2) a single flat status string per question, rejected because a bare label
+cannot carry the evidence (source, reviewer, date, scope) prerequisites
+require, which is exactly the "label alone bypasses the gate" failure mode
+this exists to prevent; (3) a **separate registry** (`QUESTION_GOVERNANCE`),
+keyed by the question's existing stable authored id, holding a complete
+evidence record, with the lifecycle state's validity computed from — never
+merely declared alongside — that evidence. Chosen: it keeps scientific
+governance entirely separate from both question content and learner
+progress (`state`/`SCHEMA_V`, unchanged), reuses the existing stable-id
+identity mechanism (no position-derived identity), and gives one place to
+enforce "a label requires its evidence."
+
+**Registry completeness.** `QUESTION_GOVERNANCE`'s key set must equal
+exactly the current authored question id set (every id in every `QUIZZES.*`
+array, including the `final` pool) — no missing id, no stale id, and
+(structurally impossible in a JS object) no duplicate id. Enforced twice:
+at script-load time by `assertGovernanceRegistryIntegrity()` (throws if a
+key is missing, stale, or a record is invalid), and by a committed
+structural test (`tests/question-governance.mjs`).
+
+**Lifecycle states.** Machine-readable values are the lowercase, hyphenated
+form of `docs/CONTENT_GOVERNANCE.md`'s four content states, reconciled 1:1:
+`'draft'` / `'source-checked'` / `'sme-reviewed'` / `'release-qualified'`.
+
+**Record schema.** Every governance record is a plain object with exactly
+13 own properties: `lifecycle`, `drafter` (string or `null`), `sources`
+(array of `{citation, edition, date, url}`, `[]` if none), `sourceCheckedBy`
+/ `sourceCheckedDate`, `reviewer` / `reviewDate` / `reviewScope`,
+`independentReviewDocumented` (boolean, default `false`) with its own
+`independentReviewer` / `independentReviewDate` evidence, `editionSensitive`
+(boolean once assessed, `null` if not yet assessed), and `notes`. `null`
+means "not yet recorded"; `[]` means "no sources yet cited" — never an
+empty string standing in for either. See `index.html`'s own
+`QUESTION_GOVERNANCE` comment for the complete field-by-field rationale.
+
+**Lifecycle prerequisites, enforced, not trusted.** `isValidGovernanceRecord()`
+rejects any record whose declared `lifecycle` outruns its own evidence:
+`source-checked` requires ≥1 well-formed source plus a source-checker and
+date; `sme-reviewed` requires everything `source-checked` requires plus a
+named reviewer, a real review date, and a specific (non-vague, ≥15
+character) review scope; `release-qualified` requires everything
+`sme-reviewed` requires plus a named drafter and an explicitly assessed
+`editionSensitive`. Independent review is never inferred from `reviewer` or
+authorship — `independentReviewDocumented:true` requires its own
+`independentReviewer`/`independentReviewDate`. A contradictory record (a
+promoted label without its prerequisites) fails validation and makes the
+script throw at load — see `assertGovernanceRegistryIntegrity()`.
+
+**Deterministic release blockers.** `computeGovernanceBlockers()` returns
+zero or more of these exact, stable reason codes, always computed fresh
+from the record, independent of its declared lifecycle: `missing-drafter`,
+`missing-sources`, `missing-source-check`, `missing-reviewer`,
+`missing-review-date`, `missing-review-scope`,
+`unresolved-edition-sensitivity`.
+
+**Current data.** All 153 authored questions are `'draft'`, with every
+field `null`/`[]`/`false` and all 7 blockers present — nothing is asserted
+without evidence. See `docs/SCIENTIFIC_REVIEW.md` for the full record.
+
+**Runtime-injected questions stay outside this registry.** `addQuestions()`
+never reads or writes `QUESTION_GOVERNANCE`; a runtime-injected question's
+id is treated exactly like any other unknown id by
+`getQuestionGovernance()` (returns `null`). `RUNTIME_QUESTION_ALLOWED_KEYS`
+does not include any governance-shaped field, so a caller cannot smuggle a
+self-certified review status onto an injected question — it is rejected as
+an unrecognized field, same as any other unsupported key. The
+runtime-injected-content lifecycle itself (session-only definitions,
+durable-by-id outcomes) is unchanged by this work.
+
+**Public API.** `getQuestionGovernance(id?)` is read-only: with a known
+authored id, returns that record plus a freshly computed `blockers` array;
+with no argument, returns every authored record keyed by id, same shape;
+an unrecognized id (including any runtime-injected question's id) returns
+`null`. Uses the same `clone()` (JSON-roundtrip) detachment as every other
+read method — a caller mutating a returned record cannot reach the live
+registry. Emits no event and does not read or write learner progress.
+`SCHEMA_V` stays `2`; governance metadata is never written to
+`localStorage`, `state`, `exportJSON()`, or accepted by `importJSON()`.
+
+**Public-course disclosure.** A persistent, non-modal, non-dismissible
+in-flow disclosure (`#reviewDisclosure`) sits inside the hero section,
+immediately after the hero stats — part of the course's first-screen
+introduction on both desktop and mobile. It states the structural-vs-
+scientific-review distinction and links to
+`docs/SCIENTIFIC_REVIEW.md`. It is pure static markup with no JS behavior:
+nothing to dismiss, no focus management, and therefore nothing that can
+obstruct or steal focus from course controls. The existing README beta
+warning is unchanged and unaffected.
+
 ## Public API
 
 `window.CytoCourse` provides read, analysis, write, and event methods. Read

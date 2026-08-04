@@ -1693,10 +1693,31 @@ structured rejection. Corrected on the same branch by deciding
 absent-vs-present once, explicitly, via `hasOwn.call(q, 'w')`, with two
 new tests (one dependency-free, one Playwright) and a mutation test
 confirming the correction is load-bearing. See `docs/QUALITY_LOG.md`
-QL-029 for the full record. **Draft PR titled "Define runtime-injected
-content lifecycle (Issue 2)" is open against `main`, CI green, awaiting
-independent review — not yet merged.** Treat this risk as still open
-until that PR lands.
+QL-029 for the full record. **Merged into `main` as squash commit
+`03862e5103919f96f9ec165e1d4599d20f85a66c`** (PR #22, 2026-08-04); all
+post-merge CI, Pages deployment, deployed smoke test, and deployed
+lifecycle/rejection/detachment verification passed. Issue #2 is closed as
+completed. This risk is resolved.
+
+### Question provenance and scientific-review governance — draft PR open 2026-08-04, not yet merged
+
+Added a strict, auditable governance model (`QUESTION_GOVERNANCE`
+registry, `assertGovernanceRegistryIntegrity()`, read-only
+`CytoCourse.getQuestionGovernance()`, and a persistent in-course
+`#reviewDisclosure`) that prevents any question from being described as
+source-checked, SME-reviewed, independently reviewed, or
+release-qualified unless the required evidence is explicitly recorded.
+All 153 authored questions remain Draft; nothing is fabricated. Persistent
+content-pack support and runtime-injected-question governance are
+explicitly unchanged/out of scope — a runtime-injected question is never
+entered into this registry and cannot self-certify a review status. See
+`docs/ARCHITECTURE.md` "Question provenance and scientific-review
+governance" and `docs/QUALITY_LOG.md` QL-030 for the full record.
+**Draft PR titled "Add question provenance and review gates (Milestone
+1)" is open against `main`, linked to Issue #3, awaiting independent
+review — not yet merged.** Treat this as an open risk until that PR
+lands. Does not perform scientific review or source attribution — that
+remains separately scoped, future work.
 
 ### Accessibility
 

@@ -102,6 +102,23 @@ second-person sense above. That distinction is worth stating explicitly
 rather than letting the single word "reviewed" quietly stand in for both
 meanings.
 
+### This record is now backed by a machine-enforced registry (Issue #3, Milestone 1)
+
+As of this addition, every claim in this document about an individual
+question's state is enforced, not just recorded in prose: `index.html`
+carries a `QUESTION_GOVERNANCE` registry with one record per authored
+question id, and `window.CytoCourse.getQuestionGovernance()` exposes it
+read-only. A question's record cannot claim Source-checked, SME-reviewed,
+or Release-qualified without the evidence (source, source-checker,
+reviewer, review date, review scope, and — for Release-qualified — drafter
+and an explicit edition-sensitivity assessment) that state requires; the
+app rejects a contradictory record at load time. This document's "all 153
+questions are Draft" claim below is the same fact the registry itself
+enforces — see `docs/ARCHITECTURE.md` "Question provenance and
+scientific-review governance" for the exact schema and lifecycle
+prerequisites, and `docs/CONTENT_GOVERNANCE.md` for the policy this
+implements.
+
 ## Current status: what is and is not established
 
 ### Course authorship (established, and distinct from independent review)
@@ -328,3 +345,11 @@ documents the recommended wording for a future release
 in progress"*) and what not to claim (*"Validated CG(ASCP) course"*) without
 qualification; that guidance is unaffected by this record and remains the
 standard to follow when release language is next updated.
+
+As of Issue #3 (Milestone 1), the deployed course also carries a persistent,
+in-course disclosure (`#reviewDisclosure`, near the hero) stating
+substantially the same fact in the reader's first screen, not only in this
+repository's documentation — a learner opening the live course now sees
+the structural-vs-scientific-review distinction directly, without needing
+to find this file first. The `README.md` beta warning is unchanged and
+remains in place alongside it.

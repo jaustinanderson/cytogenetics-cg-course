@@ -6,8 +6,40 @@ All notable repository changes are recorded here.
 
 ### Added
 
+- Added a strict, auditable question-provenance and scientific-review
+  governance model (`index.html`, Issue #3, draft PR — not yet merged): a
+  separate `QUESTION_GOVERNANCE` registry, keyed by each authored
+  question's existing stable id, holds a 13-field evidence record
+  (lifecycle, drafter, structured sources, source-check identity/date,
+  reviewer/date/scope, documented independent review, edition
+  sensitivity, notes) — kept entirely separate from question content and
+  learner progress (`SCHEMA_V` unchanged). A question's lifecycle label
+  (`draft`/`source-checked`/`sme-reviewed`/`release-qualified`, matching
+  `docs/CONTENT_GOVERNANCE.md`'s four content states) cannot be promoted
+  without its documented prerequisites — enforced at script-load time by
+  `assertGovernanceRegistryIntegrity()`, which throws on a missing,
+  stale, or self-contradictory record. New read-only
+  `CytoCourse.getQuestionGovernance(id?)` returns a question's status
+  plus a freshly computed `blockers` array naming exactly what is
+  missing toward release-qualification (e.g. `missing-reviewer`,
+  `missing-review-date`, `unresolved-edition-sensitivity`); an unknown
+  id — including any runtime-injected question's id, since
+  `addQuestions()` never touches this registry and rejects
+  governance-shaped fields outright — returns `null`. All 153 current
+  authored questions remain Draft; nothing is fabricated. Also adds a
+  persistent, non-modal, non-dismissible in-course disclosure
+  (`#reviewDisclosure`, inside the hero) stating the
+  structural-vs-scientific-review distinction and linking to
+  `docs/SCIENTIFIC_REVIEW.md`; the existing `README.md` beta warning is
+  unchanged. 25 new dependency-free tests
+  (`tests/question-governance.mjs`) and 10 new real-browser Playwright
+  tests (`tests/e2e/review-disclosure.spec.mjs`), mutation-tested across
+  6 reversions. Performs no scientific review, source attribution, or
+  content correction. See `docs/QUALITY_LOG.md` QL-030 and
+  `docs/ARCHITECTURE.md` "Question provenance and scientific-review
+  governance" for the full record.
 - Defined and enforced the runtime-injected-question lifecycle
-  (`index.html`, Issue #2, draft PR — not yet merged): adopted a
+  (`index.html`, Issue #2, **merged**): adopted a
   deliberate **split lifecycle** — a question definition added via
   `addQuestions()` remains session-only (never written to
   `localStorage`, `state`, `exportJSON()`, or accepted back in by

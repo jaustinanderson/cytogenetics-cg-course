@@ -2253,6 +2253,105 @@ lifecycle, canonical-snapshot detachment, public policy API, and every
 other adversarial-input rejection from the original PR are unchanged.
 `SCHEMA_V` stays `2`.
 
+## Question provenance and scientific-review governance — added 2026-08-04
+
+Adds a `QUESTION_GOVERNANCE` registry (`index.html`), a load-time integrity
+gate (`assertGovernanceRegistryIntegrity()`), a read-only
+`CytoCourse.getQuestionGovernance()` public API method, and a persistent
+in-course review disclosure (`#reviewDisclosure`). See
+`docs/ARCHITECTURE.md` "Question provenance and scientific-review
+governance" for the full schema and design decision, and
+`docs/QUALITY_LOG.md` QL-030 for this task's record.
+
+**25 new dependency-free tests** in `tests/question-governance.mjs` (run
+via `npm run test:governance`, included in `npm test`) cover:
+
+1. Registry completeness — the exact 153-id key set matches every
+   authored question id, with no missing, stale, or duplicate id.
+2. Every current record's exact own-property shape, allowed types, and
+   lifecycle enum.
+3. All 153 current questions are `draft`, and none is release-qualified.
+4. No current record fabricates a drafter, source, source-checker,
+   reviewer, review date, review scope, independent review, or release
+   qualification.
+5. Fixture-based lifecycle-transition tests, built by PATCHING one
+   `QUESTION_GOVERNANCE` entry's source text (replacing
+   `DRAFT_GOVERNANCE_RECORD()` with a literal record) and re-running the
+   patched script in a fresh sandbox — the only way to exercise
+   `isValidGovernanceRecord()`'s internal prerequisite logic, since it is
+   deliberately not exposed on the public, read-only API (there is no
+   public write method for governance data):
+   - a correctly complete record satisfies each of the `source-checked`,
+     `sme-reviewed`, and `release-qualified` transitions (the last with
+     zero blockers);
+   - a `sme-reviewed` record with no reviewer is rejected at load time
+     (missing prerequisites prevent promotion);
+   - a bare `release-qualified` label with otherwise-default (nothing
+     recorded) fields is rejected (a state label alone cannot bypass the
+     gate);
+   - an empty source citation, an impossible calendar date
+     (`2024-02-30`), a vague review scope (`"reviewed"`), an
+     `independentReviewDocumented:true` claim with no supporting
+     evidence, an invented lifecycle value, and a record missing a
+     required own property are each independently rejected.
+6. Public-API tests: a known id returns the exact documented shape; an
+   unknown id (including a non-string or empty-string id) returns `null`,
+   never a default record; the no-argument complete-registry read returns
+   every id in the same shape; `blockers` is always freshly computed, not
+   stored; both the single-id and complete-registry reads are fully
+   detached (mutating a returned record, including deleting a key from
+   the registry read, cannot affect a later call); reading governance
+   emits no `progress`/`answer`/`exercise`/`content`/`persistence` event
+   and does not change `getProgress()`; `SCHEMA_V` stays `2` and
+   `exportJSON()` carries no governance-shaped data.
+7. A runtime-injected question's id is never entered into
+   `QUESTION_GOVERNANCE` (treated exactly like any unknown id), and a
+   caller cannot self-certify a governance status — governance-shaped
+   fields (`lifecycle`, `reviewer`, `reviewScope`, ...) on an injected
+   question are rejected outright as unrecognized fields, same as any
+   other unsupported key. `getRuntimeContentPolicy()` and the runtime
+   lifecycle itself are confirmed unchanged.
+
+**10 new real-browser Playwright tests** in
+`tests/e2e/review-disclosure.spec.mjs`, run under both the desktop
+(1280×900) and narrow/mobile (390×844) configured projects, cover: the
+disclosure is visible and states the structural-vs-scientific-review
+distinction with a clean console; it sits inside the hero, immediately
+after the hero stats; it links to exactly `./docs/SCIENTIFIC_REVIEW.md`
+with an accessible name; it does not sit under the fixed header and a
+hit-test at its own link resolves to the disclosure itself (nothing
+layered on top intercepting pointer events); and it does not steal focus,
+has no dismiss control or `aria-modal`, and the rest of the page (a
+stubbed Print click) remains fully interactive.
+
+**Mutation-tested** (reverted after each, confirmed byte-identical via
+`diff` before committing): removing an authored governance entry from
+`QUESTION_GOVERNANCE` — failed
+`assertGovernanceRegistryIntegrity()`'s missing-record check, caught at
+script load by every test file; adding a stale governance entry for a
+non-existent id — failed the same integrity check's stale-record branch;
+marking an incomplete record `release-qualified` (via the same
+source-patching fixture technique) — failed
+`isValidGovernanceRecord()`'s cross-field lifecycle check; weakening
+`meetsSourceChecked()`/`meetsSmeReviewed()`/`meetsReleaseQualified()` to
+skip one required check — failed exactly the fixture test(s) depending on
+that specific prerequisite; returning `QUESTION_GOVERNANCE` (or one of
+its records) by reference instead of through `clone()` — failed the
+detachment test; and removing/hiding `#reviewDisclosure` — failed the
+Playwright visibility test. Each mutation failed exactly its intended
+test and no others; the source was reverted and confirmed byte-identical
+before committing.
+
+Full local validation: `npm test` (172 dependency-free DOM-behavior
+checks + 25 new governance checks), targeted
+`npx playwright test tests/e2e/review-disclosure.spec.mjs` (10/10 across
+both projects), and the complete `npx playwright test` suite.
+
+No question, answer, rationale, image, or scientific claim changed —
+this task adds governance metadata and a truthful disclosure; it performs
+no scientific review or correction. `SCHEMA_V` stays `2`. The existing
+`README.md` beta warning is unchanged.
+
 ## Gates still open
 
 ### Browser behavior

@@ -56,6 +56,25 @@ Review must verify:
 - absence of recalled exam content
 - absence of PHI or employer-confidential material
 
+### Machine-enforced governance registry (Issue #3, Milestone 1)
+
+The fields above are no longer only a checklist: every one of these fields
+(plus source-check identity/date and whether independent review is
+documented) is now recorded per authored question in a dedicated
+`QUESTION_GOVERNANCE` registry in `index.html`, separate from both the
+question content and learner progress. A question's lifecycle label
+(Draft/Source-checked/SME-reviewed/Release-qualified) cannot be set without
+the evidence this section requires — the app validates that at load time
+and rejects a contradictory record (a label with missing prerequisites)
+outright. This does not change what review actually requires; it prevents
+the record from claiming a review happened without the evidence to back
+it. See `docs/ARCHITECTURE.md` "Question provenance and scientific-review
+governance" for the exact schema, and
+`window.CytoCourse.getQuestionGovernance()` for the read-only public API
+that exposes each question's current status and exactly what is missing
+toward release-qualification. All 153 current questions are Draft — see
+`docs/SCIENTIFIC_REVIEW.md`.
+
 ## Corrections
 
 Scientific corrections should be traceable through an issue, pull request, or
