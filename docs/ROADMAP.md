@@ -346,9 +346,10 @@ review status stable before adding 46 questions.
   semantics, content-pack decision, provenance fields, image-manifest
   normalization, broader API contract tests) was out of scope for that
   PR and stays open
-- [ ] Define analytics semantics — branch
-  `claude/issue-2-analytics-semantics` (Issue #2, **draft PR open, not
-  yet merged**): a v2 outcome record `{c, n, ts}` stores only the latest
+- [x] Define analytics semantics — branch
+  `claude/issue-2-analytics-semantics` (Issue #2, **merged as commit
+  `e70cf6cf9057c4289920d06a7016e3679e796843`, PR #21**): a v2 outcome
+  record `{c, n, ts}` stores only the latest
   correctness and a total attempt count, never a per-attempt history —
   confirmed by direct execution that two genuinely different attempt
   histories (2-of-3 attempts correct vs. 1-of-3, both ending on a correct
@@ -362,13 +363,44 @@ review status stable before adding 46 questions.
   `mastered`/`masteryPct` alongside existing `correct`/`pct` aliases.
   `SCHEMA_V` stays `2` — no historical record is rewritten or
   fabricated. See `docs/QUALITY_LOG.md` QL-027 for the full decision
-  record and `docs/VALIDATION.md` for test coverage. Left unchecked
-  pending independent review and merge; the remaining Milestone 1 work
-  below (content-pack decision, provenance fields, image-manifest
-  normalization, broader API contract tests) is out of scope for that PR
-  and stays open regardless
+  record and `docs/VALIDATION.md` for test coverage. Merged after
+  independent review (including a follow-up correction to three
+  test-coverage claims — QL-027's addendum); the remaining Milestone 1
+  work below (content-pack decision, provenance fields, image-manifest
+  normalization, broader API contract tests) was out of scope for that
+  PR and stays open
 - [ ] Decide whether injected questions are intentionally session-only or
-  represented by a versioned content-pack format
+  represented by a versioned content-pack format — branch
+  `claude/issue-2-runtime-content-policy` (Issue #2, **draft PR open,
+  not yet merged**): adopts and enforces a deliberate SPLIT lifecycle —
+  a question definition added via `addQuestions()` is session-only
+  (never written to `localStorage`, `state`, `exportJSON()`, or accepted
+  back in by `importJSON()`), but its recorded ANSWER OUTCOME, once
+  recorded, is durable in existing v2 progress by stable id, exactly
+  like an authored question's outcome; reintroducing the same id later
+  revives the preserved outcome automatically via the existing stale-ID
+  policy (QL-024). The caller owns semantic id stability — the
+  application cannot detect reuse of an id for materially different
+  content across sessions, since a v2 outcome record carries no
+  definition or content fingerprint to compare against, and this
+  limitation is stated honestly rather than assumed away. Adds
+  `CytoCourse.getRuntimeContentPolicy()`, a small machine-readable
+  read method exposing this contract. Also fixes a real, independently
+  reproduced defect: `addQuestions()` previously pushed the caller's own
+  object reference into live `QUIZZES`, so mutating the caller's source
+  object (or its options array) after a successful call changed the
+  live, accepted question; `addQuestions()` now commits a fresh,
+  canonical, fully detached snapshot, and validation was strengthened to
+  the same cross-realm-safe standard already used for progress import
+  (rejecting accessors, symbol keys, dangerous keys, sparse arrays, and
+  unrecognized fields). Does not build a persistent/versioned
+  content-pack format — only documents its prerequisites for a later,
+  separately scoped design. `SCHEMA_V` stays `2`. See
+  `docs/QUALITY_LOG.md` QL-028 for the full decision record and
+  `docs/VALIDATION.md` for test coverage. Left unchecked pending
+  independent review and merge; the remaining Milestone 1 work below
+  (provenance fields, image-manifest normalization, broader API
+  contract tests) is out of scope for that PR and stays open regardless
 - [ ] Add provenance and review fields for releasable questions
 - [ ] Normalize the image-manifest schema so candidate records use explicit
   unknown values

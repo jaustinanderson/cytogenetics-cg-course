@@ -1626,7 +1626,7 @@ checks, not rectangle math alone.
 **Merged as commit `6a8e42f69e971a7831fd73defc690d13771b4583` (PR #20,
 squash-merged 2026-08-03).** This risk is resolved.
 
-### Analytics semantics — draft PR open 2026-08-03, not yet merged
+### Analytics semantics — resolved, merged 2026-08-04
 
 ~~Headline analytics represent last-attempt mastery. They do not
 represent total-attempt accuracy. Do not change this silently; define
@@ -1645,23 +1645,58 @@ from a 1-of-3-attempts-correct history that both end on a correct
 attempt, so total-attempt accuracy is documented as NOT implemented and
 not derivable from existing data, rather than silently claimed.
 `SCHEMA_V` stays `2`; no historical record is rewritten or fabricated.
-See `docs/QUALITY_LOG.md` QL-027, `docs/ARCHITECTURE.md` "Analytics
-semantics: last-attempt mastery," and `docs/VALIDATION.md` for the full
-record. **Draft PR titled "Define last-attempt mastery analytics
-semantics (Issue 2)" is open against `main`, CI green, awaiting
+See `docs/QUALITY_LOG.md` QL-027 (and its addendum), `docs/ARCHITECTURE.md`
+"Analytics semantics: last-attempt mastery," and `docs/VALIDATION.md`
+for the full record. **Merged as commit
+`e70cf6cf9057c4289920d06a7016e3679e796843` (PR #21, squash-merged
+2026-08-04).** This risk is resolved.
+
+### Runtime question persistence — draft PR open 2026-08-04, not yet merged
+
+~~`addQuestions()` injection is session-only. Reload loses injected
+questions, and `exportJSON()` exports progress/statistics rather than a
+content pack. Choose either a build-time, reviewed question-pack
+workflow committed to source, or a versioned content-pack import/export
+format with persistence and governance. Do not describe adaptation as
+automatic until that exists.~~ Addressed on branch
+`claude/issue-2-runtime-content-policy` (Issue #2): adopted and enforced
+a deliberate SPLIT lifecycle rather than choosing either alternative
+above for this release — a question definition remains session-only
+(never written to `localStorage`, `state`, `exportJSON()`, or accepted
+back in by `importJSON()`), but its answer OUTCOME, once recorded, is
+durable in existing v2 progress by stable id, exactly like an authored
+question's outcome; reintroducing the same id later revives the
+preserved outcome via the existing stale-ID policy (QL-024), with no
+injection-specific code. The caller owns semantic id stability — the
+app cannot detect reuse of an id for materially different content
+across sessions (a v2 outcome carries no definition/fingerprint to
+compare against), stated honestly rather than assumed away. New
+`CytoCourse.getRuntimeContentPolicy()` exposes this contract
+machine-readably. Also fixed a real, independently reproduced defect:
+`addQuestions()` previously stored the caller's own object reference,
+so mutating the source object (or its options array) after a successful
+call changed the live, accepted question; it now commits a fresh,
+canonical, fully detached snapshot, with validation strengthened to the
+same cross-realm-safe standard already used for progress import. Does
+NOT build a persistent/versioned content-pack format — only documents
+its prerequisites (`docs/ARCHITECTURE.md` "Future content-pack
+prerequisites") for a later, separately scoped design. `SCHEMA_V` stays
+`2`. See `docs/QUALITY_LOG.md` QL-028 and `docs/ARCHITECTURE.md`
+"Runtime-injected content lifecycle" for the full record.
+
+A second round of independent review (same day, before merge) then
+found one further real defect: a question with an explicitly present
+own property `w: undefined` passed optional-field validation — which
+conflated "absent" with "present but undefined" — then crashed
+`addQuestions()` with an uncaught `TypeError` instead of the documented
+structured rejection. Corrected on the same branch by deciding
+absent-vs-present once, explicitly, via `hasOwn.call(q, 'w')`, with two
+new tests (one dependency-free, one Playwright) and a mutation test
+confirming the correction is load-bearing. See `docs/QUALITY_LOG.md`
+QL-029 for the full record. **Draft PR titled "Define runtime-injected
+content lifecycle (Issue 2)" is open against `main`, CI green, awaiting
 independent review — not yet merged.** Treat this risk as still open
 until that PR lands.
-
-### Runtime question persistence
-
-`addQuestions()` injection is session-only. Reload loses injected questions,
-and `exportJSON()` exports progress/statistics rather than a content pack.
-Choose either:
-
-- a build-time, reviewed question-pack workflow committed to source, or
-- a versioned content-pack import/export format with persistence and governance
-
-Do not describe adaptation as automatic until that exists.
 
 ### Accessibility
 

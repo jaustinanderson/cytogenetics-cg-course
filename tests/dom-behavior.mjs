@@ -3008,6 +3008,377 @@ test("a runtime-injected question participates in analytics only while currently
   assert.equal(second.api.getUnmastered().every((e) => e.id !== "analytics-injected-1"), true, "an unrecognized id never appears in current-facing analytics");
 });
 
+/* ============================ runtime-injected content lifecycle (Issue #2) ============================
+   Confirmed by direct execution before any change: a question added via
+   addQuestions() exists only in the current session; reloading without
+   reinjection removes its definition from the live quiz; if answered,
+   its outcome remains an inert stale v2 record (QL-024); exportJSON()
+   includes that outcome but never the definition (prompt/options/
+   answer/rationale); importing that export does not recreate the
+   definition; reintroducing the same id revives the preserved outcome;
+   and -- a real, confirmed defect -- mutating the caller's source
+   object/options array/wrong-answer-feedback object AFTER a successful
+   addQuestions() call changed the live, accepted question, because
+   addQuestions() pushed the caller's own object reference directly into
+   QUIZZES rather than a detached copy.
+
+   Policy adopted (see index.html's RUNTIME-INJECTED CONTENT comment and
+   docs/ARCHITECTURE.md "Runtime-injected content lifecycle" for the
+   full record): a deliberate SPLIT lifecycle. Definitions are
+   session-only (never persisted anywhere). Outcomes, once recorded, are
+   durable in existing v2 progress by stable id -- exactly like an
+   authored question's outcome -- and the existing stale-ID policy
+   (QL-024) is what makes reinjection "just work": staleness is decided
+   by live-index membership at read time, with no injection-specific
+   code. The caller owns semantic id stability; the app cannot detect
+   cross-session semantic reuse (a v2 outcome carries no definition or
+   content fingerprint to compare against) -- that is an unsupported
+   contract violation, not a detected error. Persistent/versioned
+   content packs are explicitly unsupported this release. */
+
+test("getRuntimeContentPolicy() returns the exact frozen shape, and mutating a returned object never affects a later call", () => {
+  const env = boot();
+  const policy = env.api.getRuntimeContentPolicy();
+  assert.equal(JSON.stringify(Object.keys(policy).sort()), JSON.stringify([
+    "callerOwnsIdStability", "contentPacksSupported", "definitionsSessionOnly",
+    "outcomeSchemaVersion", "outcomesPersisted", "policyModel", "reinjectionRevivesOutcome",
+  ]), "no unexpected field is present or missing");
+  assert.equal(policy.policyModel, "runtime-content-lifecycle-v1");
+  assert.equal(policy.definitionsSessionOnly, true);
+  assert.equal(policy.outcomesPersisted, true);
+  assert.equal(policy.outcomeSchemaVersion, 2);
+  assert.equal(policy.reinjectionRevivesOutcome, true);
+  assert.equal(policy.callerOwnsIdStability, true);
+  assert.equal(policy.contentPacksSupported, false);
+
+  policy.policyModel = "TAMPERED";
+  policy.contentPacksSupported = true;
+  const again = env.api.getRuntimeContentPolicy();
+  assert.equal(again.policyModel, "runtime-content-lifecycle-v1", "mutating a returned object cannot affect a later call");
+  assert.equal(again.contentPacksSupported, false);
+});
+
+test("a valid runtime injection renders, records an answer, and fires exactly the existing single content event with its documented payload", () => {
+  const env = boot();
+  let contentEvents = [];
+  env.api.on("content", (payload) => { contentEvents.push(payload); });
+
+  const before = quizMount(env, "m2").querySelectorAll(".qitem").length;
+  const result = env.api.addQuestions("m2", [{
+    id: "lifecycle-valid-1", d: "operations", t: "lab-ops", x: 1,
+    q: "Lifecycle valid question?", o: ["Yes", "No"], a: 0, why: "Because.",
+    w: { 1: "No is incorrect because..." },
+  }]);
+  assert.equal(result.ok, true);
+  assert.equal(result.added, 1);
+  assert.equal(contentEvents.length, 1, "exactly one content event for the batch, unchanged");
+  assert.equal(contentEvents[0].quiz, "m2");
+  assert.equal(contentEvents[0].added, 1);
+
+  const items = quizMount(env, "m2").querySelectorAll(".qitem");
+  assert.equal(items.length, before + 1);
+  const rendered = items[items.length - 1];
+  assert.equal(rendered.querySelector(".qtext").textContent, "Lifecycle valid question?");
+
+  rendered.querySelectorAll(".qopt")[0].click();
+  assert.equal(env.api.getProgress().answers["lifecycle-valid-1"].c, true);
+  assert.equal(contentEvents.length, 1, "answering does not fire another content event");
+});
+
+test("mutating the caller's source object, options array, or wrong-answer-feedback object after a successful addQuestions() call cannot change the live, accepted question or its correctness (QL-028)", () => {
+  const env = boot();
+  const source = {
+    id: "lifecycle-mutate-1", d: "operations", t: "lab-ops", x: 1,
+    q: "Original prompt", o: ["Original A", "Original B"], a: 0, why: "Original rationale",
+    w: { 1: "Original feedback" },
+  };
+  const result = env.api.addQuestions("m2", [source]);
+  assert.equal(result.ok, true);
+
+  // Mutate every mutable part of the caller's own object graph AFTER the
+  // call returns.
+  source.q = "MUTATED PROMPT";
+  source.o[0] = "MUTATED OPTION";
+  source.o.push("INJECTED EXTRA OPTION");
+  source.a = 1; // attempt to flip the correct answer
+  source.why = "MUTATED RATIONALE";
+  source.w[1] = "MUTATED FEEDBACK";
+  source.w[0] = "SMUGGLED FEEDBACK FOR THE CORRECT OPTION";
+
+  const live = env.api.getQuestions("m2").find((q) => q.id === "lifecycle-mutate-1");
+  assert.equal(live.q, "Original prompt");
+  assert.equal(live.o.length, 2, "the extra pushed option never appears");
+  assert.equal(live.o[0], "Original A");
+  assert.equal(live.a, 0, "the correct-answer index is unaffected by the later mutation");
+  assert.equal(live.why, "Original rationale");
+  assert.equal(live.w["1"], "Original feedback");
+  assert.equal(live.w["0"], undefined, "the smuggled post-hoc feedback key never appears");
+
+  // Confirm correctness itself, not just the read-back shape: answering
+  // option 0 (the ORIGINAL correct answer) must still be scored correct,
+  // proving the live question's own `a` was never actually flipped.
+  const mount = quizMount(env, "m2");
+  const item = [...mount.querySelectorAll(".qitem")].find((el) => el.querySelector(".qtext").textContent === "Original prompt");
+  item.querySelectorAll(".qopt")[0].click();
+  assert.equal(env.api.getProgress().answers["lifecycle-mutate-1"].c, true);
+});
+
+test("addQuestions() rejects adversarial inputs atomically -- accessor, inherited, symbol-keyed, non-enumerable, dangerous-key, sparse-array, extra-field, and non-record -- adding nothing, rebuilding nothing, and emitting nothing, without ever invoking a caller getter", () => {
+  const cases = [];
+
+  var accessorGetterInvoked = false;
+  var accessorQuestion = { d: "operations", t: "lab-ops", x: 1, q: "q", o: ["a", "b"], a: 0, why: "w" };
+  Object.defineProperty(accessorQuestion, "id", { get() { accessorGetterInvoked = true; return "accessor-1"; }, enumerable: true });
+  cases.push(["accessor id property", accessorQuestion]);
+
+  cases.push(["symbol-keyed extra property", Object.assign(
+    { id: "symbol-1", d: "operations", t: "lab-ops", x: 1, q: "q", o: ["a", "b"], a: 0, why: "w" },
+    { [Symbol("marker")]: "x" },
+  )]);
+
+  var nonEnumerable = { d: "operations", t: "lab-ops", x: 1, q: "q", o: ["a", "b"], a: 0, why: "w" };
+  Object.defineProperty(nonEnumerable, "id", { value: "nonenum-1", enumerable: false });
+  cases.push(["non-enumerable id property", nonEnumerable]);
+
+  var dangerousKey = { id: "danger-1", d: "operations", t: "lab-ops", x: 1, q: "q", o: ["a", "b"], a: 0, why: "w" };
+  Object.defineProperty(dangerousKey, "__proto__", { value: {}, enumerable: true, configurable: true });
+  cases.push(["dangerous own key (__proto__)", dangerousKey]);
+
+  cases.push(["sparse options array", { id: "sparse-1", d: "operations", t: "lab-ops", x: 1, q: "q", o: [, "b"], a: 0, why: "w" }]);
+  cases.push(["unsupported extra top-level field", { id: "extra-1", d: "operations", t: "lab-ops", x: 1, q: "q", o: ["a", "b"], a: 0, why: "w", bogus: "x" }]);
+  cases.push(["non-record object (Date)", new Date()]);
+  cases.push(["inherited (not own) id via prototype", Object.assign(Object.create({ id: "inherited-1" }), { d: "operations", t: "lab-ops", x: 1, q: "q", o: ["a", "b"], a: 0, why: "w" })]);
+
+  cases.forEach(([label, badQuestion]) => {
+    const env = boot();
+    let contentEvents = 0;
+    env.api.on("content", () => { contentEvents += 1; });
+    const before = env.api.getQuestions("m2").length;
+    const beforeMountItems = quizMount(env, "m2").querySelectorAll(".qitem").length;
+
+    const result = env.api.addQuestions("m2", [badQuestion]);
+    assert.equal(result.ok, false, `${label}: batch must be rejected`);
+    assert.equal(result.added, 0, `${label}: nothing added`);
+    assert.equal(env.api.getQuestions("m2").length, before, `${label}: nothing added to the live bank`);
+    assert.equal(quizMount(env, "m2").querySelectorAll(".qitem").length, beforeMountItems, `${label}: widget not rebuilt`);
+    assert.equal(contentEvents, 0, `${label}: no content event emitted`);
+  });
+
+  assert.equal(accessorGetterInvoked, false, "the adversarial id getter was never invoked while validating or reporting the rejection");
+});
+
+/* ============================ optional-field absent-vs-present correction (Issue #2, QL-029) ============================
+   Independently reproduced before any fix: a question with an explicitly
+   OWN `w` property whose VALUE is `undefined` (`{..., w: undefined}`)
+   passed isValidWrongAnswerFeedback(), because that function treated
+   `w === undefined` as always meaning "the field is absent" -- which is
+   indistinguishable, by simple value comparison, from "the field is
+   present but its value happens to be undefined." validateRuntimeQuestion()
+   then executed `Object.keys(q.w)` while building the canonical
+   snapshot, which threw `TypeError: Cannot convert undefined or null to
+   object` -- an uncaught exception escaping the public addQuestions()
+   API, rather than the documented structured {ok:false, ...} rejection.
+   Confirmed via both the dependency-free harness and a real Chromium
+   page before any fix was written.
+
+   Fixed by deciding absent-vs-present ONCE, explicitly, via
+   `hasOwn.call(q, 'w')` in validateRuntimeQuestion() -- never by
+   checking `q.w === undefined` -- and only calling
+   isValidWrongAnswerFeedback() when `w` is confirmed present, at which
+   point `undefined` is exactly as invalid as `null` or any other
+   non-record value (isPlainObject(undefined) already correctly returns
+   false without throwing). */
+test("the optional w field: absent is valid, and an explicit own w:undefined is rejected atomically without throwing -- distinguished from genuine absence", () => {
+  const base = { id: "w-matrix-1", d: "operations", t: "lab-ops", x: 1, q: "q", o: ["a", "b"], a: 0, why: "w" };
+
+  // Accepted cases.
+  {
+    const env = boot();
+    const result = env.api.addQuestions("m2", [{ ...base }]);
+    assert.equal(result.ok, true, "w absent: accepted");
+  }
+  {
+    const env = boot();
+    const result = env.api.addQuestions("m2", [{ ...base, id: "w-matrix-2", w: {} }]);
+    assert.equal(result.ok, true, "a valid EMPTY w record: accepted");
+  }
+  {
+    const env = boot();
+    const source = { ...base, id: "w-matrix-3", w: { 1: "Original feedback" } };
+    const result = env.api.addQuestions("m2", [source]);
+    assert.equal(result.ok, true, "a valid POPULATED w record: accepted");
+    source.w[1] = "MUTATED";
+    const live = env.api.getQuestions("m2").find((x) => x.id === "w-matrix-3");
+    assert.equal(live.w["1"], "Original feedback", "the accepted question's w is fully detached from the caller's object");
+  }
+
+  // Rejected cases -- must never throw, must return the normal
+  // structured {ok:false, ...} result, and must not add/rebuild/emit.
+  const rejectedCases = [
+    ["own w: undefined (the exact reported counterexample)", { ...base, id: "w-matrix-4", w: undefined }],
+    ["w: null", { ...base, id: "w-matrix-5", w: null }],
+    ["w as an array", { ...base, id: "w-matrix-6", w: ["x"] }],
+    ["w as a primitive number", { ...base, id: "w-matrix-7", w: 5 }],
+    ["w as a primitive string", { ...base, id: "w-matrix-8", w: "x" }],
+    ["w with an out-of-range option index", { ...base, id: "w-matrix-9", w: { 5: "x" } }],
+    ["w with an invalid (empty-string) feedback value", { ...base, id: "w-matrix-10", w: { 1: "" } }],
+    ["w with an invalid (non-string) feedback value", { ...base, id: "w-matrix-11", w: { 1: 5 } }],
+  ];
+  rejectedCases.forEach(([label, badQuestion]) => {
+    const env = boot();
+    let contentEvents = 0;
+    env.api.on("content", () => { contentEvents += 1; });
+    const before = env.api.getQuestions("m2").length;
+    const beforeMountItems = quizMount(env, "m2").querySelectorAll(".qitem").length;
+
+    let result;
+    assert.doesNotThrow(() => { result = env.api.addQuestions("m2", [badQuestion]); }, `${label}: must not throw out of the public API`);
+    assert.equal(result.ok, false, `${label}: batch must be rejected`);
+    assert.equal(result.added, 0, `${label}: nothing added`);
+    assert.equal(env.api.getQuestions("m2").length, before, `${label}: nothing added to the live bank`);
+    assert.equal(quizMount(env, "m2").querySelectorAll(".qitem").length, beforeMountItems, `${label}: widget not rebuilt`);
+    assert.equal(contentEvents, 0, `${label}: no content event emitted`);
+  });
+});
+
+test("a batch with one valid and one invalid question is rejected atomically: neither question is added", () => {
+  const env = boot();
+  let contentEvents = 0;
+  env.api.on("content", () => { contentEvents += 1; });
+  const before = env.api.getQuestions("m2").length;
+
+  const result = env.api.addQuestions("m2", [
+    { id: "batch-valid-1", d: "operations", t: "lab-ops", x: 1, q: "Valid?", o: ["Yes", "No"], a: 0, why: "Because." },
+    { id: "batch-invalid-1", d: "not-a-real-domain", t: "lab-ops", x: 1, q: "Invalid?", o: ["Yes", "No"], a: 0, why: "Because." },
+  ]);
+  assert.equal(result.ok, false);
+  assert.equal(env.api.getQuestions("m2").length, before, "the valid question in the same batch is not partially committed");
+  assert.equal(contentEvents, 0);
+});
+
+test("reload without reinjection restores only authored questions, with the injected definition never appearing in localStorage or exportJSON()", () => {
+  const env = boot();
+  const authoredCount = env.api.getStats().questionsTotal;
+  env.api.addQuestions("m2", [{
+    id: "lifecycle-storage-1", d: "operations", t: "lab-ops", x: 1,
+    q: "SENTINEL PROMPT TEXT", o: ["SENTINEL OPTION A", "SENTINEL OPTION B"], a: 0, why: "SENTINEL RATIONALE TEXT",
+  }]);
+  quizMount(env, "m2").querySelectorAll(".qitem")[quizMount(env, "m2").querySelectorAll(".qitem").length - 1].querySelectorAll(".qopt")[0].click();
+
+  const rawStorage = env.storage.getItem(V2_KEY);
+  assert.ok(rawStorage, "sanity: a save did happen");
+  for (const needle of ["SENTINEL PROMPT TEXT", "SENTINEL OPTION A", "SENTINEL OPTION B", "SENTINEL RATIONALE TEXT"]) {
+    assert.equal(rawStorage.includes(needle), false, `localStorage must never contain the injected definition text ("${needle}")`);
+  }
+  const exported = env.api.exportJSON();
+  for (const needle of ["SENTINEL PROMPT TEXT", "SENTINEL OPTION A", "SENTINEL OPTION B", "SENTINEL RATIONALE TEXT"]) {
+    assert.equal(exported.includes(needle), false, `exportJSON() must never contain the injected definition text ("${needle}")`);
+  }
+  assert.ok(exported.includes("lifecycle-storage-1"), "exportJSON() DOES include the outcome, keyed by id");
+
+  const reloaded = boot({ storage: env.storage._raw });
+  assert.equal(reloaded.api.getStats().questionsTotal, authoredCount, "reload without reinjection restores only authored questions");
+  assert.equal(reloaded.api.getQuestions("m2").some((q) => q.id === "lifecycle-storage-1"), false);
+});
+
+test("that stale outcome contributes nothing to coverage, mastery, weak areas, unmastered results, or rendered UI after reload", () => {
+  const env = boot();
+  env.api.addQuestions("m2", [{
+    id: "lifecycle-stale-analytics-1", d: "operations", t: "lab-ops", x: 1,
+    q: "Stale analytics question?", o: ["Yes", "No"], a: 0, why: "Because.",
+  }]);
+  const mount = quizMount(env, "m2");
+  mount.querySelectorAll(".qitem")[mount.querySelectorAll(".qitem").length - 1].querySelectorAll(".qopt")[0].click();
+
+  const reloaded = boot({ storage: env.storage._raw });
+  const stats = reloaded.api.getStats();
+  assert.equal(stats.questionsAnswered, 0, "coverage excludes the stale outcome");
+  assert.equal(stats.questionsMastered, 0);
+  assert.equal(JSON.stringify(stats.byDomain), "{}", "no domain aggregate is contaminated");
+  assert.equal(reloaded.api.getWeakAreas(1).length, 0, "weak areas excludes it");
+  assert.equal(reloaded.api.getUnmastered().every((e) => e.id !== "lifecycle-stale-analytics-1"), true, "unmastered results never surface a stale id");
+  assert.equal(quizMount(reloaded, "m2").querySelectorAll(".qitem").length, reloaded.api.getQuestions("m2").length, "the rendered widget matches only currently known questions -- no stale item is rendered");
+});
+
+test("importJSON() containing an injected question's outcome does not install its definition", () => {
+  const env = boot();
+  env.api.addQuestions("m2", [{
+    id: "lifecycle-import-1", d: "operations", t: "lab-ops", x: 1,
+    q: "Import boundary question?", o: ["Yes", "No"], a: 0, why: "Because.",
+  }]);
+  const mount = quizMount(env, "m2");
+  mount.querySelectorAll(".qitem")[mount.querySelectorAll(".qitem").length - 1].querySelectorAll(".qopt")[0].click();
+  const exportedState = JSON.parse(env.api.exportJSON()).state;
+
+  const fresh = boot();
+  const importResult = fresh.api.importJSON(exportedState);
+  assert.equal(importResult.ok, true);
+  assert.equal(fresh.api.getQuestions("m2").some((q) => q.id === "lifecycle-import-1"), false, "importJSON() never installs a question definition");
+  assert.equal(fresh.api.getProgress().answers["lifecycle-import-1"].c, true, "the outcome itself IS imported, as an ordinary (currently stale) progress record");
+  assert.equal(fresh.api.getStats().questionsAnswered, 0, "and is correctly excluded from current-facing analytics, since the id is unknown this session");
+});
+
+test("reinjecting the exact same semantic question under the same id revives its preserved outcome, and a subsequent reattempt updates that ONE record without duplicating it", () => {
+  const definition = {
+    id: "lifecycle-revive-1", d: "operations", t: "lab-ops", x: 1,
+    q: "Revive question?", o: ["Yes", "No"], a: 0, why: "Because.",
+  };
+  const first = boot();
+  first.api.addQuestions("m2", [definition]);
+  const mount1 = quizMount(first, "m2");
+  mount1.querySelectorAll(".qitem")[mount1.querySelectorAll(".qitem").length - 1].querySelectorAll(".qopt")[0].click();
+  assert.equal(first.api.getProgress().answers["lifecycle-revive-1"].n, 1);
+
+  const second = boot({ storage: first.storage._raw });
+  assert.equal(second.api.getStats().questionsAnswered, 0, "sanity: stale before reinjection");
+  const revive = second.api.addQuestions("m2", [definition]);
+  assert.equal(revive.ok, true);
+  assert.equal(second.api.getStats().questionsAnswered, 1, "reviving picks the preserved outcome back up, with no special-case code");
+  assert.equal(second.api.getProgress().answers["lifecycle-revive-1"].n, 1, "the revived record is the SAME one, not a fresh n:0/undefined record");
+
+  // Reattempt (opposite answer) after revival, through the real
+  // reload/rebuild path -- this is only reachable across a reload,
+  // matching every other reattempt test in this suite.
+  const third = boot({ storage: second.storage._raw });
+  third.api.addQuestions("m2", [definition]);
+  const mount3 = quizMount(third, "m2");
+  mount3.querySelectorAll(".qitem")[mount3.querySelectorAll(".qitem").length - 1].querySelectorAll(".qopt")[1].click();
+
+  const record = third.api.getProgress().answers["lifecycle-revive-1"];
+  assert.equal(record.n, 2, "the ONE existing record's attempt count grows -- no duplicate record under a different key");
+  assert.equal(record.c, false, "the outcome reflects the latest attempt");
+  assert.equal(Object.keys(third.api.getProgress().answers).length, 1, "still exactly one answer record total");
+});
+
+test("Reset deletes an injected question's durable outcome exactly like any other progress record, and it remains absent after reload", () => {
+  const env = boot();
+  env.api.addQuestions("m2", [{
+    id: "lifecycle-reset-1", d: "operations", t: "lab-ops", x: 1,
+    q: "Reset question?", o: ["Yes", "No"], a: 0, why: "Because.",
+  }]);
+  const mount = quizMount(env, "m2");
+  mount.querySelectorAll(".qitem")[mount.querySelectorAll(".qitem").length - 1].querySelectorAll(".qopt")[0].click();
+  assert.ok(env.api.getProgress().answers["lifecycle-reset-1"], "sanity: the outcome is recorded");
+
+  const resetResult = env.api.reset();
+  assert.equal(resetResult.ok, true);
+  assert.equal(env.api.getProgress().answers["lifecycle-reset-1"], undefined, "Reset removes it immediately, like any current or stale record");
+
+  const reloaded = boot({ storage: env.storage._raw });
+  assert.equal(reloaded.api.getProgress().answers["lifecycle-reset-1"], undefined, "it remains absent after reload -- Reset's removal was durable");
+});
+
+test("ordinary authored course questions are byte-for-byte unchanged by an unrelated addQuestions() call", () => {
+  const env = boot();
+  const before = JSON.stringify(env.api.getQuestions("m1"));
+  env.api.addQuestions("m2", [{
+    id: "lifecycle-unrelated-1", d: "operations", t: "lab-ops", x: 1,
+    q: "Unrelated question?", o: ["Yes", "No"], a: 0, why: "Because.",
+  }]);
+  const after = JSON.stringify(env.api.getQuestions("m1"));
+  assert.equal(after, before, "an authored module's question data is untouched by injecting into a different module");
+});
+
 test("getWeakAreas(): distinct answered questions, latest outcomes, minAnswered as a distinct-question threshold (not an attempt threshold), TWO independently qualifying topics sorted weakest-first, with compatible fields, and the order genuinely reverses after real reload/rebuild reattempts", () => {
   const env = boot();
   // Two independent topics, each with 3 distinct answered questions (the

@@ -823,6 +823,209 @@ so stale records re-entered question analytics; collapsing
 `getWeakAreas()`'s sort comparator. Full record: `docs/QUALITY_LOG.md`
 QL-027 and its addendum.
 
+### Runtime-injected content lifecycle
+
+As of 2026-08-04 (Issue #2, `docs/QUALITY_LOG.md` QL-028), the course
+adopts and enforces a deliberate **split lifecycle** for questions added
+at runtime via `addQuestions()`: the question **definition** is
+session-only, but a recorded **outcome** for it is durable, using the
+existing v2 progress schema, exactly like an authored question's
+outcome. Do not describe injected questions as simply "not persisted"
+without this distinction — the outcome half genuinely is.
+
+**Alternatives considered.** (1) *Make definitions durable* (e.g. write
+them into `state` or `localStorage`) — rejected: this would be a
+`SCHEMA_V`-relevant shape change with no size bound, review gate, or
+governance, and would blur `state` into carrying both progress and
+educational content, which `docs/CONTENT_GOVERNANCE.md` treats as
+separate concerns requiring separate review. (2) *Design a persistent,
+versioned content-pack format now* — rejected for this release: the task
+that would require (collision/replacement/removal/migration policy,
+provenance/review metadata, a trust boundary between shipped and
+externally-supplied content) is substantial enough to need its own
+scoped decision, not a byproduct of closing this checklist item. The
+prerequisites for that future design are recorded below, undecided and
+unimplemented. (3) *Detect and reject semantic id reuse across
+sessions* — rejected as technically impossible with the current schema:
+a v2 outcome record is `{c, n, ts}` — it carries no question definition
+or content fingerprint to compare a reinjected definition against, so
+there is nothing for the application to detect a mismatch with. (4)
+*Leave `addQuestions()` storing the caller's own object reference* — the
+status quo going in, and a confirmed, real defect (see below) — rejected
+outright once reproduced.
+
+**The lifecycle, precisely:**
+
+- A definition added via `addQuestions()` exists only in this
+  document's live `QUIZZES` data for the current session. It is never
+  written to `localStorage`, `state`, `exportJSON()`'s output, or
+  accepted back in by `importJSON()`.
+- Reloading without reinjecting removes the definition from the live
+  quiz entirely — `getQuestions()` no longer lists it, and no widget
+  renders it.
+- If the question was answered before that reload, its outcome remains
+  in v2 progress as an ordinary record, now excluded from every
+  current-facing figure by the existing stale-ID policy (QL-024) — not
+  deleted, not fabricated, simply inert until its id is current again.
+- Reintroducing the *exact same semantic question* under the *same*
+  stable id in a later session makes its preserved outcome current
+  again automatically — no injection-specific revival code exists;
+  this is the general stale-ID reintroduction rule (QL-024) applying
+  identically here.
+- **The caller owns semantic id stability.** Reusing a stable id for
+  materially different question content across sessions is an
+  **unsupported contract violation**, not a detected or rejected error
+  — the application cannot tell the difference, since a v2 outcome
+  record contains no definition or content fingerprint to check against
+  a later reinjection. This limitation is stated honestly here and in
+  the public API (`callerOwnsIdStability`), not silently assumed away.
+- An explicit, confirmed Reset (UI or API) removes a durable outcome
+  belonging to an injected question exactly like any other current or
+  stale progress record — no special-case code.
+- Persistent, versioned content packs are **not supported** in this
+  release (see "Future content-pack prerequisites" below). External
+  tooling MAY separately capture `getQuestions()`'s output for its own
+  purposes, but this is not a supported versioned format:
+  `exportJSON()`/`importJSON()` will not carry a definition through, and
+  re-importing such a capture will not reinstall it.
+
+**Public API — `getRuntimeContentPolicy()`.** A small, machine-readable
+read method exposing this policy so callers do not have to infer it
+from prose. Returns a fresh object literal every call — every field is
+a primitive, so (like `getPersistenceStatus()`) a literal already
+satisfies "mutating the returned object cannot affect a later call";
+there is nothing nested to reach back into. This exact shape is frozen
+by a dedicated test:
+
+```js
+{
+  policyModel: 'runtime-content-lifecycle-v1',
+  definitionsSessionOnly: true,
+  outcomesPersisted: true,
+  outcomeSchemaVersion: 2,      // === SCHEMA_V
+  reinjectionRevivesOutcome: true,
+  callerOwnsIdStability: true,
+  contentPacksSupported: false
+}
+```
+
+`addQuestions()`'s own success-result shape (`{ok, added, total}`) and
+its single `content` event are unchanged by this task — this policy is
+exposed once, separately, rather than duplicated onto every call's
+result.
+
+**The accepted runtime-question schema**, validated by
+`validateRuntimeQuestion()` (reusing the same cross-realm-safe
+primitives already established for progress import —
+`isPlainObject`/`isSafeKey`/`hasOwn`, see their own comments in
+index.html):
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `id` | yes | Non-empty string, globally unique |
+| `d` | yes | One of the recognized domains |
+| `t` | yes | Non-empty topic string |
+| `x` | yes | Difficulty: `1`, `2`, or `3` |
+| `q` | yes | Non-empty prompt string |
+| `o` | yes | A dense array of 2–8 non-empty option strings |
+| `a` | yes | A valid zero-based index into `o` |
+| `why` | yes | Non-empty rationale string |
+| `w` | no | Wrong-answer feedback: a plain object mapping a valid option index to a non-empty feedback string; **preserved and validated**, since its complete safe schema is now defined (see below) — not merely accepted-but-ignored. `w` may be OMITTED entirely; if `w` is an own property of the question at all, its value must satisfy the complete schema — an explicit `w: undefined` is present, not absent, and is rejected exactly like `w: null` (QL-029; see below) |
+
+Rejected outright, with no field ever read via a property access that
+could invoke caller code: any own **accessor** property (checked via
+property descriptors, before any value is read), any own **symbol**
+key, any own **non-enumerable** property, any **dangerous** key
+(`__proto__`/`constructor`/`prototype`), any **sparse** array (a hole
+in `o`, or in the top-level batch array itself) or array carrying extra
+named properties, any **non-record** object (an exotic built-in like
+`Date`/`Map`, detected by prototype-chain *shape*, not same-realm
+identity — so a legitimate VM- or browser-realm input is never wrongly
+rejected), any field only reachable via the **prototype chain** (not
+own), and any **unrecognized top-level field** beyond the table above.
+A rejected batch entry's `id` (for the diagnostic `rejected[]` report
+only) is read via `Object.getOwnPropertyDescriptor`, never `q.id`, so
+an adversarial `id` getter is never invoked merely to explain a
+rejection. All existing rules are preserved unchanged: recognized
+domain, difficulty 1–3, 2–8 options, valid answer index, global id
+uniqueness, and atomic batch validation (a rejected batch adds nothing,
+rebuilds nothing, and emits nothing — verified by a dedicated test that
+mixes one valid and one invalid question in the same call).
+
+**The caller-reference defect and its correction.** Independently
+reproduced before any fix: `addQuestions()` pushed the caller's own
+object (and its `o` array, and its `w` object, if present) directly
+into live `QUIZZES` — `arr.forEach(function(q){ QUIZZES[key].push(q); });`.
+Mutating the caller's source object, its options array, or its
+wrong-answer-feedback object *after* a successful call changed the
+live, accepted, currently-rendered question, including its correct
+answer index. Fixed: on success, `validateRuntimeQuestion()` returns a
+freshly built **canonical, fully detached snapshot** — a new object
+with its own new `o` array (via `.slice()`) and, if present, a new `w`
+object rebuilt key-by-key — and only that snapshot is ever pushed into
+`QUIZZES`. Nothing in the accepted question references the caller's
+original object graph at any depth. See `docs/QUALITY_LOG.md` QL-028
+for the full reproduction and correction record.
+
+**Optional-field absent-vs-present correction (QL-029).** Independently
+reproduced before any fix: a question with an explicitly OWN `w`
+property whose value was `undefined` (`{..., w: undefined}`) passed the
+original `isValidWrongAnswerFeedback()` check, because that function
+treated `w === undefined` as always meaning "absent" — indistinguishable
+by simple value comparison from "present, but its value happens to be
+`undefined`" (reading `q.w` yields `undefined` in both cases).
+`validateRuntimeQuestion()` then executed `Object.keys(q.w)` while
+building the canonical snapshot, throwing `TypeError: Cannot convert
+undefined or null to object` — an uncaught exception escaping the
+public `addQuestions()` API, rather than the documented structured
+`{ok:false, ...}` rejection. Fixed by deciding absent-vs-present ONCE,
+explicitly, via `hasOwn.call(q, 'w')` in `validateRuntimeQuestion()` —
+never by checking `q.w === undefined` — and calling
+`isValidWrongAnswerFeedback()` only when `w` is confirmed present, at
+which point `undefined` is exactly as invalid as `null` or any other
+non-record value (`isPlainObject(undefined)` already correctly returns
+`false` without throwing, via its own `!x` guard). No exception, DOM
+change, or `content` event occurs for any rejected input, including
+this one. See `docs/QUALITY_LOG.md` QL-029 for the full reproduction and
+correction record.
+
+**`SCHEMA_V` remains `2`.** No persisted progress shape changes — an
+outcome record's shape was already exactly what a runtime question's
+answer needs, and definitions were never part of `state` to begin with,
+so there is nothing to migrate.
+
+### Future content-pack prerequisites (documented, not implemented)
+
+Recorded here so a later, separately scoped design does not have to
+rediscover them, and so `addQuestions()`'s current session-only
+behavior is never mistaken for a placeholder implementation of this:
+
+- A versioned envelope, with an explicit pack identity and version.
+- Immutable stable ids **and** a content fingerprint per question, so
+  semantic reuse of an id (this release's known, honestly-stated
+  blind spot) becomes detectable rather than assumed away.
+- Provenance, source, scientific-review status, review date, and
+  rights/license metadata per question — the same fields
+  `docs/CONTENT_GOVERNANCE.md` already requires for release-qualified
+  authored content.
+- Exact atomic validation, a size limit, and dangerous-key protection
+  at the pack level (not just per-question, as today).
+- An explicit collision policy (what happens when an incoming pack's id
+  matches an existing one), replacement policy, removal policy, and a
+  migration policy for packs authored against an older course version.
+- An explicit import/export contract for the pack format itself
+  (distinct from `exportJSON()`/`importJSON()`, which are progress-only
+  and will remain so), and explicit behavior when storage is at or near
+  quota.
+- A clear, enforced trust boundary between shipped, reviewed course
+  content and externally supplied pack content — an externally injected
+  question must never be presented as scientifically reviewed,
+  release-qualified, or ASCP-endorsed merely because `addQuestions()`
+  accepted its technical shape. `docs/CONTENT_GOVERNANCE.md`'s content
+  states (Draft/Source-checked/SME-reviewed/Release-qualified) apply to
+  externally supplied content exactly as they do to authored content —
+  acceptance by the runtime validator is not review.
+
 ## Public API
 
 `window.CytoCourse` provides read, analysis, write, and event methods. Read

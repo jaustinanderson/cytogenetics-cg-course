@@ -5039,19 +5039,150 @@
     });
     return seen;
   }
-  function questionError(q){
-    var domains = ['orientation','specimen','analysis','molecular','operations'];
-    if(!q || typeof q !== 'object'){ return 'question must be an object'; }
-    if(typeof q.id !== 'string' || !q.id.trim()){ return 'id must be a non-empty string'; }
-    if(domains.indexOf(q.d) === -1){ return 'd must be a recognized domain'; }
-    if(typeof q.t !== 'string' || !q.t.trim()){ return 't must be a non-empty topic'; }
-    if([1,2,3].indexOf(q.x) === -1){ return 'x must be difficulty 1, 2, or 3'; }
-    if(typeof q.q !== 'string' || !q.q.trim()){ return 'q must be a non-empty prompt'; }
-    if(!Array.isArray(q.o) || q.o.length < 2 || q.o.length > KEYS.length){ return 'o must contain 2 to 8 options'; }
-    if(q.o.some(function(o){ return typeof o !== 'string' || !o.trim(); })){ return 'every option must be a non-empty string'; }
-    if(typeof q.a !== 'number' || q.a % 1 !== 0 || q.a < 0 || q.a >= q.o.length){ return 'a must be a valid option index'; }
-    if(typeof q.why !== 'string' || !q.why.trim()){ return 'why must be a non-empty rationale'; }
-    return null;
+  /* ============================ RUNTIME-INJECTED CONTENT (Issue #2) ============================
+     See docs/ARCHITECTURE.md "Runtime-injected content lifecycle" for the
+     full policy this implements; this comment summarizes only the
+     validation mechanics.
+
+     Reuses the same cross-realm-safe primitives already established for
+     progress import (isPlainObject/isSafeKey/hasOwn -- see their own
+     comments above): no same-realm prototype-identity check (which would
+     wrongly reject a legitimate object from a different realm, e.g. a VM
+     sandbox or an iframe), own-data-properties-only (rejects accessors,
+     symbol keys, and non-enumerable properties before any value is ever
+     read), and an exact allowed-key whitelist (rejects unsupported extra
+     fields). A rejected batch entry's `id` (for the diagnostic report
+     only) is read via a property DESCRIPTOR, never `q.id`, specifically
+     so an adversarial `id` getter is never invoked even for a question
+     that fails validation. */
+  var RUNTIME_QUESTION_DOMAINS = ['orientation','specimen','analysis','molecular','operations'];
+  var RUNTIME_QUESTION_REQUIRED_KEYS = ['id','d','t','x','q','o','a','why'];
+  var RUNTIME_QUESTION_ALLOWED_KEYS = {id:true, d:true, t:true, x:true, q:true, o:true, a:true, why:true, w:true};
+
+  /* True only for a genuine, dense array: every index in [0, length) is an
+     own, enumerable DATA property (never a hole, never an accessor), and
+     no other own property exists beyond those indices and `length` --
+     rejects a sparse array and an array with extra named properties
+     smuggled onto it (e.g. `arr.foo = 'x'`), either of which could
+     otherwise let an unvalidated value slip through unread. */
+  function isDenseArray(arr){
+    if(!Array.isArray(arr)){ return false; }
+    if(Object.getOwnPropertySymbols(arr).length > 0){ return false; }
+    if(Object.getOwnPropertyNames(arr).length !== arr.length + 1){ return false; }
+    for(var i=0;i<arr.length;i++){
+      var d = Object.getOwnPropertyDescriptor(arr, i);
+      if(!d || !d.enumerable || !hasOwn.call(d, 'value')){ return false; }
+    }
+    return true;
+  }
+  function isSafeStringArray(arr, minLen, maxLen){
+    if(!isDenseArray(arr)){ return false; }
+    if(arr.length < minLen || arr.length > maxLen){ return false; }
+    for(var i=0;i<arr.length;i++){
+      if(typeof arr[i] !== 'string' || !arr[i].trim()){ return false; }
+    }
+    return true;
+  }
+  /* `w` (optional): a map of option-index -> wrong-answer feedback string,
+     read at render time as `data.w[chosen]` (see buildQuiz()). `chosen`
+     is always a render-generated index, 0..o.length-1 -- never
+     caller-supplied -- so validation only needs to guarantee every KEY
+     that could legally be looked up maps to a safe string; keys outside
+     that range are rejected outright rather than silently ignored, since
+     a canonical snapshot must not carry unvalidated caller data forward.
+
+     Corrected 2026-08-04 (Issue #2, docs/QUALITY_LOG.md QL-029): this
+     function is now called ONLY when the caller has already confirmed
+     `w` is a genuine OWN property of the question (see
+     validateRuntimeQuestion() below) -- it no longer decides
+     absent-vs-present itself. An "optional field" has exactly two valid
+     states: genuinely ABSENT (no own `w` key at all -- validated by
+     never calling this function in that case), or PRESENT with a value
+     that satisfies the complete schema below. A property that IS own
+     but whose VALUE happens to be `undefined` (`{..., w: undefined}`)
+     is the present-but-invalid case, and must be rejected exactly like
+     `w: null` or `w: 5` -- isPlainObject(undefined) already correctly
+     returns false (its own `!x` guard), so no special-casing of
+     `undefined` belongs in this function at all. The previous version
+     treated `w === undefined` as ALWAYS meaning "absent," which could
+     not distinguish that from "present but undefined" (reading `q.w`
+     yields `undefined` in both cases) -- letting a `{w: undefined}`
+     question pass this check, then crash immediately afterward when
+     the canonical-snapshot step called `Object.keys(q.w)` on
+     `undefined`. See QL-029 for the full reproduction. */
+  function isValidWrongAnswerFeedback(w, optionCount){
+    if(!isPlainObject(w)){ return false; }
+    var keys = Object.keys(w);
+    for(var i=0;i<keys.length;i++){
+      var k = keys[i];
+      if(!isSafeKey(k) || !/^(0|[1-9][0-9]*)$/.test(k)){ return false; }
+      var idx = Number(k);
+      if(idx >= optionCount){ return false; }
+      if(typeof w[k] !== 'string' || !w[k].trim()){ return false; }
+    }
+    return true;
+  }
+  /* Reads a possibly-invalid caller object's `id` for a REJECTION
+     diagnostic only, via a property descriptor -- never `q.id` -- so an
+     adversarial accessor is never invoked merely to report why its
+     batch entry was rejected. */
+  function safeReadId(q){
+    if(!q || typeof q !== 'object' || Array.isArray(q) || !hasOwn.call(q, 'id')){ return null; }
+    var d = Object.getOwnPropertyDescriptor(q, 'id');
+    return (d && hasOwn.call(d, 'value') && typeof d.value === 'string') ? d.value : null;
+  }
+  /* Validates one runtime question and, only on success, returns a fresh
+     CANONICAL, fully DETACHED snapshot -- a new object with a new `o`
+     array (and a new `w` object, if present) -- built entirely from
+     already-confirmed-safe own-data-property reads. Nothing in the
+     returned `question` ever references the caller's original object,
+     array, or nested objects, so a caller mutating any of them after a
+     successful addQuestions() call cannot alter the live, accepted
+     question (the defect this corrects -- see docs/QUALITY_LOG.md for
+     the reproduction). Returns {ok:false, error} otherwise. */
+  function validateRuntimeQuestion(q){
+    if(!isPlainObject(q)){ return {ok:false, error:'question must be a plain, record-shaped object'}; }
+    var keys = Object.keys(q);
+    for(var i=0;i<keys.length;i++){
+      if(!isSafeKey(keys[i])){ return {ok:false, error:'question contains a disallowed key: ' + keys[i]}; }
+      if(!hasOwn.call(RUNTIME_QUESTION_ALLOWED_KEYS, keys[i])){
+        return {ok:false, error:'unrecognized field in question: ' + keys[i]};
+      }
+    }
+    for(var j=0;j<RUNTIME_QUESTION_REQUIRED_KEYS.length;j++){
+      if(!hasOwn.call(q, RUNTIME_QUESTION_REQUIRED_KEYS[j])){
+        return {ok:false, error:'question is missing required own field: ' + RUNTIME_QUESTION_REQUIRED_KEYS[j]};
+      }
+    }
+    if(typeof q.id !== 'string' || !q.id.trim()){ return {ok:false, error:'id must be a non-empty string'}; }
+    if(RUNTIME_QUESTION_DOMAINS.indexOf(q.d) === -1){ return {ok:false, error:'d must be a recognized domain'}; }
+    if(typeof q.t !== 'string' || !q.t.trim()){ return {ok:false, error:'t must be a non-empty topic'}; }
+    if([1,2,3].indexOf(q.x) === -1){ return {ok:false, error:'x must be difficulty 1, 2, or 3'}; }
+    if(typeof q.q !== 'string' || !q.q.trim()){ return {ok:false, error:'q must be a non-empty prompt'}; }
+    if(!isSafeStringArray(q.o, 2, KEYS.length)){
+      return {ok:false, error:'o must be a plain array of 2 to ' + KEYS.length + ' non-empty option strings'};
+    }
+    if(typeof q.a !== 'number' || q.a % 1 !== 0 || q.a < 0 || q.a >= q.o.length){
+      return {ok:false, error:'a must be a valid option index'};
+    }
+    if(typeof q.why !== 'string' || !q.why.trim()){ return {ok:false, error:'why must be a non-empty rationale'}; }
+    // Decide absent-vs-present explicitly, once, via hasOwn -- never by
+    // checking `q.w === undefined`, which is true in BOTH the genuinely
+    // absent case and the present-but-`undefined`-valued case (QL-029).
+    // When absent, `w` is valid by omission and isValidWrongAnswerFeedback()
+    // is not called at all; when present, its value must satisfy the
+    // complete schema, with no exception for `undefined`.
+    var wPresent = hasOwn.call(q, 'w');
+    if(wPresent && !isValidWrongAnswerFeedback(q.w, q.o.length)){
+      return {ok:false, error:'w, if present, must map valid option indexes to non-empty feedback strings'};
+    }
+    var canonical = {id:q.id, d:q.d, t:q.t, x:q.x, q:q.q, o:q.o.slice(), a:q.a, why:q.why};
+    if(wPresent){
+      var w = {};
+      Object.keys(q.w).forEach(function(k){ w[k] = q.w[k]; });
+      canonical.w = w;
+    }
+    return {ok:true, question:canonical};
   }
 
   window.CytoCourse = {
@@ -5090,6 +5221,60 @@
        strings, never a raw browser exception (message/name/stack), so
        this contract stays stable across browsers and versions. */
     getPersistenceStatus: function(){ return {persistent:persistState.persistent, reason:persistState.reason}; },
+
+    /* --- runtime-injected content lifecycle (Issue #2) --- */
+    /* A fresh, detached plain object literal every call -- every field is
+       a primitive (string/boolean), so, like getPersistenceStatus()
+       above, a literal already satisfies "mutating the returned object
+       cannot affect later calls or application behavior"; there is
+       nothing nested for a caller to reach back into. This exact field
+       set is frozen by a dedicated test -- see
+       docs/ARCHITECTURE.md "Runtime-injected content lifecycle" for the
+       full policy record:
+         policyModel               -- a versioned identifier for this
+           policy, so a future, different policy can be told apart from
+           this one at runtime without parsing prose.
+         definitionsSessionOnly    -- true: a question definition added
+           via addQuestions() (prompt/options/answer/rationale) is never
+           written to localStorage, `state`, exportJSON(), or accepted
+           back in by importJSON(). It exists only in this document's
+           live QUIZZES data for the current session.
+         outcomesPersisted         -- true: once a runtime question is
+           answered, that OUTCOME (not the definition) is durable, using
+           the existing v2 progress schema, exactly like any authored
+           question's outcome.
+         outcomeSchemaVersion      -- which schema version those outcomes
+           use (always the live SCHEMA_V) -- distinct from whether the
+           definition itself is persisted, which it is not.
+         reinjectionRevivesOutcome -- true: reintroducing the SAME
+           semantic question under the SAME stable id in a later session
+           makes its preserved outcome current again, via the existing
+           stale-ID policy (QL-024) -- no special-case code, since
+           staleness is decided by live-index membership at read time.
+         callerOwnsIdStability     -- true: the caller is solely
+           responsible for never reusing a stable id for materially
+           different question content across sessions. The application
+           cannot detect that reuse -- a v2 outcome record contains no
+           question definition or content fingerprint to compare
+           against -- so doing so is an unsupported contract violation,
+           not a detected/rejected error.
+         contentPacksSupported     -- false: there is no persistent,
+           versioned content-pack import/export format in this release.
+           External tooling MAY separately capture getQuestions() output,
+           but exportJSON()/importJSON() will not carry a definition
+           through, and re-importing that capture is not a supported
+           operation. */
+    getRuntimeContentPolicy: function(){
+      return {
+        policyModel: 'runtime-content-lifecycle-v1',
+        definitionsSessionOnly: true,
+        outcomesPersisted: true,
+        outcomeSchemaVersion: SCHEMA_V,
+        reinjectionRevivesOutcome: true,
+        callerOwnsIdStability: true,
+        contentPacksSupported: false
+      };
+    },
 
     /* --- write --- */
     /* Validates the ENTIRE import before anything observable changes -- see
@@ -5173,26 +5358,41 @@
         return {ok:true};
       }catch(e){ return {ok:false, error:String(e)}; }
     },
-    /* Inject new questions at runtime. Each must supply id/d/t/x/q/o/a/why.
-       The batch is validated atomically and IDs must be globally unique.
-       Valid questions are session-only unless exported by external tooling. */
+    /* Inject new questions at runtime. Each must supply id/d/t/x/q/o/a/why
+       (w optional; see validateRuntimeQuestion()'s own comment). The batch
+       is validated atomically and IDs must be globally unique -- a
+       rejected batch adds nothing, rebuilds nothing, and emits nothing.
+       Definitions are intentionally SESSION-ONLY (never written to
+       localStorage, `state`, exportJSON(), or importJSON()); a valid
+       question's ANSWER OUTCOME, once recorded, is durable in v2 progress
+       by stable id, independent of whether the definition itself survives
+       the session -- see getRuntimeContentPolicy() and
+       docs/ARCHITECTURE.md "Runtime-injected content lifecycle" for the
+       full split-lifecycle policy this implements, and the caller-owned
+       semantic-id-stability contract that follows from it. Every accepted
+       question is committed as a fresh, fully detached canonical
+       snapshot (see validateRuntimeQuestion()) -- mutating the caller's
+       original object, array, or nested `w` object after this call
+       returns cannot alter the live, accepted question. */
     addQuestions: function(key, arr){
-      if(!key || !Array.isArray(arr)){ return {ok:false, error:'usage: addQuestions(key, [question,...])'}; }
+      if(!key || !isDenseArray(arr)){ return {ok:false, error:'usage: addQuestions(key, [question,...])'}; }
       if(!Object.prototype.hasOwnProperty.call(QUIZZES, key)){ return {ok:false, error:'unknown quiz key: ' + key}; }
-      var seen = allQuestionIds(), batchSeen = {}, rejected = [];
+      var seen = allQuestionIds(), batchSeen = {}, rejected = [], canonicalBatch = [];
       arr.forEach(function(q, index){
-        var error = questionError(q);
-        if(!error && seen[q.id]){ error = 'duplicate id already exists in course'; }
-        if(!error && batchSeen[q.id]){ error = 'duplicate id appears in incoming batch'; }
-        if(error){ rejected.push({index:index, id:q && q.id ? q.id : null, error:error}); }
-        else { batchSeen[q.id] = true; }
+        var result = validateRuntimeQuestion(q);
+        var error = result.ok ? null : result.error;
+        var id = result.ok ? result.question.id : safeReadId(q);
+        if(!error && seen[id]){ error = 'duplicate id already exists in course'; }
+        if(!error && batchSeen[id]){ error = 'duplicate id appears in incoming batch'; }
+        if(error){ rejected.push({index:index, id:id, error:error}); }
+        else { batchSeen[id] = true; canonicalBatch.push(result.question); }
       });
       if(rejected.length){ return {ok:false, added:0, rejected:rejected, total:QUIZZES[key].length}; }
-      arr.forEach(function(q){ QUIZZES[key].push(q); });
+      canonicalBatch.forEach(function(q){ QUIZZES[key].push(q); });
       var mount = document.querySelector('.quiz-mount[data-quiz="' + key + '"]');
       if(mount){ buildQuiz(mount); }
-      emit('content', {quiz:key, added:arr.length});
-      return {ok:true, added:arr.length, total:QUIZZES[key].length};
+      emit('content', {quiz:key, added:canonicalBatch.length});
+      return {ok:true, added:canonicalBatch.length, total:QUIZZES[key].length};
     },
     markModule: function(id, done){
       if(!moduleExists(id)){ return {ok:false, error:'unknown module id: ' + id}; }
