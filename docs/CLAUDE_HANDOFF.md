@@ -1682,10 +1682,21 @@ NOT build a persistent/versioned content-pack format — only documents
 its prerequisites (`docs/ARCHITECTURE.md` "Future content-pack
 prerequisites") for a later, separately scoped design. `SCHEMA_V` stays
 `2`. See `docs/QUALITY_LOG.md` QL-028 and `docs/ARCHITECTURE.md`
-"Runtime-injected content lifecycle" for the full record. **Draft PR
-titled "Define runtime-injected content lifecycle (Issue 2)" is open
-against `main`, CI green, awaiting independent review — not yet
-merged.** Treat this risk as still open until that PR lands.
+"Runtime-injected content lifecycle" for the full record.
+
+A second round of independent review (same day, before merge) then
+found one further real defect: a question with an explicitly present
+own property `w: undefined` passed optional-field validation — which
+conflated "absent" with "present but undefined" — then crashed
+`addQuestions()` with an uncaught `TypeError` instead of the documented
+structured rejection. Corrected on the same branch by deciding
+absent-vs-present once, explicitly, via `hasOwn.call(q, 'w')`, with two
+new tests (one dependency-free, one Playwright) and a mutation test
+confirming the correction is load-bearing. See `docs/QUALITY_LOG.md`
+QL-029 for the full record. **Draft PR titled "Define runtime-injected
+content lifecycle (Issue 2)" is open against `main`, CI green, awaiting
+independent review — not yet merged.** Treat this risk as still open
+until that PR lands.
 
 ### Accessibility
 

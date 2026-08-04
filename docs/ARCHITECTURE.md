@@ -930,7 +930,7 @@ index.html):
 | `o` | yes | A dense array of 2–8 non-empty option strings |
 | `a` | yes | A valid zero-based index into `o` |
 | `why` | yes | Non-empty rationale string |
-| `w` | no | Wrong-answer feedback: a plain object mapping a valid option index to a non-empty feedback string; **preserved and validated**, since its complete safe schema is now defined (see below) — not merely accepted-but-ignored |
+| `w` | no | Wrong-answer feedback: a plain object mapping a valid option index to a non-empty feedback string; **preserved and validated**, since its complete safe schema is now defined (see below) — not merely accepted-but-ignored. `w` may be OMITTED entirely; if `w` is an own property of the question at all, its value must satisfy the complete schema — an explicit `w: undefined` is present, not absent, and is rejected exactly like `w: null` (QL-029; see below) |
 
 Rejected outright, with no field ever read via a property access that
 could invoke caller code: any own **accessor** property (checked via
@@ -966,6 +966,28 @@ object rebuilt key-by-key — and only that snapshot is ever pushed into
 `QUIZZES`. Nothing in the accepted question references the caller's
 original object graph at any depth. See `docs/QUALITY_LOG.md` QL-028
 for the full reproduction and correction record.
+
+**Optional-field absent-vs-present correction (QL-029).** Independently
+reproduced before any fix: a question with an explicitly OWN `w`
+property whose value was `undefined` (`{..., w: undefined}`) passed the
+original `isValidWrongAnswerFeedback()` check, because that function
+treated `w === undefined` as always meaning "absent" — indistinguishable
+by simple value comparison from "present, but its value happens to be
+`undefined`" (reading `q.w` yields `undefined` in both cases).
+`validateRuntimeQuestion()` then executed `Object.keys(q.w)` while
+building the canonical snapshot, throwing `TypeError: Cannot convert
+undefined or null to object` — an uncaught exception escaping the
+public `addQuestions()` API, rather than the documented structured
+`{ok:false, ...}` rejection. Fixed by deciding absent-vs-present ONCE,
+explicitly, via `hasOwn.call(q, 'w')` in `validateRuntimeQuestion()` —
+never by checking `q.w === undefined` — and calling
+`isValidWrongAnswerFeedback()` only when `w` is confirmed present, at
+which point `undefined` is exactly as invalid as `null` or any other
+non-record value (`isPlainObject(undefined)` already correctly returns
+`false` without throwing, via its own `!x` guard). No exception, DOM
+change, or `content` event occurs for any rejected input, including
+this one. See `docs/QUALITY_LOG.md` QL-029 for the full reproduction and
+correction record.
 
 **`SCHEMA_V` remains `2`.** No persisted progress shape changes — an
 outcome record's shape was already exactly what a runtime question's

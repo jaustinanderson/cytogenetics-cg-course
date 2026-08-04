@@ -5089,9 +5089,28 @@
      caller-supplied -- so validation only needs to guarantee every KEY
      that could legally be looked up maps to a safe string; keys outside
      that range are rejected outright rather than silently ignored, since
-     a canonical snapshot must not carry unvalidated caller data forward. */
+     a canonical snapshot must not carry unvalidated caller data forward.
+
+     Corrected 2026-08-04 (Issue #2, docs/QUALITY_LOG.md QL-029): this
+     function is now called ONLY when the caller has already confirmed
+     `w` is a genuine OWN property of the question (see
+     validateRuntimeQuestion() below) -- it no longer decides
+     absent-vs-present itself. An "optional field" has exactly two valid
+     states: genuinely ABSENT (no own `w` key at all -- validated by
+     never calling this function in that case), or PRESENT with a value
+     that satisfies the complete schema below. A property that IS own
+     but whose VALUE happens to be `undefined` (`{..., w: undefined}`)
+     is the present-but-invalid case, and must be rejected exactly like
+     `w: null` or `w: 5` -- isPlainObject(undefined) already correctly
+     returns false (its own `!x` guard), so no special-casing of
+     `undefined` belongs in this function at all. The previous version
+     treated `w === undefined` as ALWAYS meaning "absent," which could
+     not distinguish that from "present but undefined" (reading `q.w`
+     yields `undefined` in both cases) -- letting a `{w: undefined}`
+     question pass this check, then crash immediately afterward when
+     the canonical-snapshot step called `Object.keys(q.w)` on
+     `undefined`. See QL-029 for the full reproduction. */
   function isValidWrongAnswerFeedback(w, optionCount){
-    if(w === undefined){ return true; }
     if(!isPlainObject(w)){ return false; }
     var keys = Object.keys(w);
     for(var i=0;i<keys.length;i++){
@@ -5147,11 +5166,18 @@
       return {ok:false, error:'a must be a valid option index'};
     }
     if(typeof q.why !== 'string' || !q.why.trim()){ return {ok:false, error:'why must be a non-empty rationale'}; }
-    if(!isValidWrongAnswerFeedback(q.w, q.o.length)){
+    // Decide absent-vs-present explicitly, once, via hasOwn -- never by
+    // checking `q.w === undefined`, which is true in BOTH the genuinely
+    // absent case and the present-but-`undefined`-valued case (QL-029).
+    // When absent, `w` is valid by omission and isValidWrongAnswerFeedback()
+    // is not called at all; when present, its value must satisfy the
+    // complete schema, with no exception for `undefined`.
+    var wPresent = hasOwn.call(q, 'w');
+    if(wPresent && !isValidWrongAnswerFeedback(q.w, q.o.length)){
       return {ok:false, error:'w, if present, must map valid option indexes to non-empty feedback strings'};
     }
     var canonical = {id:q.id, d:q.d, t:q.t, x:q.x, q:q.q, o:q.o.slice(), a:q.a, why:q.why};
-    if(hasOwn.call(q, 'w')){
+    if(wPresent){
       var w = {};
       Object.keys(q.w).forEach(function(k){ w[k] = q.w[k]; });
       canonical.w = w;

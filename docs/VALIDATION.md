@@ -2194,6 +2194,65 @@ storage-failure behavior, Reset behavior, and existing
 `progress`/`answer`/`exercise`/`content`/`persistence` event semantics
 are unchanged. No persistent content-pack format was built.
 
+### Correction — an explicit own `w: undefined` crashed `addQuestions()` instead of returning a structured rejection, added 2026-08-04
+
+Independent review of draft PR #22 (head `c78761c`) confirmed the split
+lifecycle, detached canonical snapshots, public policy API,
+documentation, and general adversarial validation sound, but found one
+further real defect: a question with an explicitly present own property
+`w: undefined` passed `isValidWrongAnswerFeedback()` (which conflated
+"absent" with "present but undefined," both of which read as `undefined`
+from a bare value check), then crashed `validateRuntimeQuestion()`'s
+canonical-snapshot step with `TypeError: Cannot convert undefined or
+null to object` when it executed `Object.keys(q.w)` — an uncaught
+exception escaping the public `addQuestions()` API, reproduced through
+both the dependency-free harness and a real Chromium page before any fix
+was written. Fixed by deciding absent-vs-present once, explicitly, via
+`hasOwn.call(q, 'w')`, and only calling the value-validity check once
+presence is confirmed — see `docs/QUALITY_LOG.md` QL-029 for the full
+record.
+
+**1 new dependency-free test** in `tests/dom-behavior.mjs` (145 → 172
+total for this task's tests, one new focused validation matrix) covers:
+`w` absent (accepted), a valid empty `w` record (accepted), a valid
+populated `w` record (accepted, with a detachment proof — mutating the
+caller's `w` object after the call does not affect the live question),
+and eight distinct rejected-without-throwing cases, each proven via
+`assert.doesNotThrow` and confirmed to leave nothing added, no widget
+rebuild, and no `content` event: an explicit own `w: undefined` (the
+exact reported counterexample), `w: null`, `w` as an array, `w` as a
+number primitive, `w` as a string primitive, an out-of-range option
+index inside `w`, an empty-string feedback value, and a non-string
+feedback value.
+
+**1 new real-browser Playwright test** in
+`tests/e2e/runtime-content-lifecycle.spec.mjs` (12 → 14) reproduces the
+exact `w: undefined` counterexample inside `page.evaluate()` with a
+try/catch boundary, confirms `addQuestions()` does not throw and returns
+a structured `{ok:false, added:0, ...}` result, confirms the quiz
+widget's item count is unchanged, and then proves the page remains
+fully operational afterward: a genuinely valid question is successfully
+injected and answered in the SAME page context, with no reload, scoring
+correctly.
+
+**Mutation-tested:** restored the original conflated
+`if(w === undefined){ return true; }` check inside
+`isValidWrongAnswerFeedback()` — failed exactly the new focused
+validation-matrix test, for the precise original reason (`TypeError:
+Cannot convert undefined or null to object`, confirmed by inspecting the
+thrown message directly), and no others. Reverted and confirmed
+`index.html` byte-identical via `diff` before committing.
+
+Full local validation after this correction: `npm test` (172/172),
+`npx playwright test tests/e2e/runtime-content-lifecycle.spec.mjs`
+(14/14 across both projects), and the complete `npx playwright test`
+suite.
+
+No product behavior changed beyond this specific fix — the split
+lifecycle, canonical-snapshot detachment, public policy API, and every
+other adversarial-input rejection from the original PR are unchanged.
+`SCHEMA_V` stays `2`.
+
 ## Gates still open
 
 ### Browser behavior

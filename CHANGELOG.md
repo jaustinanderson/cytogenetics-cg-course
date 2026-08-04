@@ -44,6 +44,16 @@ All notable repository changes are recorded here.
   built-in export/import never carries a definition through; external
   capture of `getQuestions()`'s output is not a supported versioned
   format.
+  **Corrected (QL-029):** an explicit own `w: undefined` field passed
+  optional-field validation (which conflated "absent" with "present but
+  undefined") and then crashed `addQuestions()` with an uncaught
+  `TypeError` instead of the documented structured `{ok:false, ...}`
+  rejection; fixed by deciding absent-vs-present once, explicitly, via
+  `hasOwn.call(q, 'w')`. 1 new dependency-free test (172 total) and 1
+  new Playwright test (14 total in
+  `tests/e2e/runtime-content-lifecycle.spec.mjs`) cover the full
+  accepted/rejected matrix plus a real-browser recovery proof;
+  mutation-tested. See `docs/QUALITY_LOG.md` QL-029.
 - Named, documented, and tested the course's actual analytics model —
   **last-attempt mastery** — instead of leaving `getStats()`'s field
   names (`questionsCorrect`, `overallPct`) to be mistaken for

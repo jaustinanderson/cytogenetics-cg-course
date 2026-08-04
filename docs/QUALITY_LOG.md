@@ -3496,3 +3496,86 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   harmless gap that becomes a real one the moment its write path is
   ever more permissive than assumed — treat "supported but unvalidated"
   as equivalent to "unsupported" until a schema is defined for it.
+
+## QL-029 — an explicit own `w: undefined` passed optional-field validation, then crashed `addQuestions()` with an uncaught exception instead of a structured rejection
+
+- **Status:** Corrected on the same branch
+  (`claude/issue-2-runtime-content-policy`), before merge. Independent
+  review at head `c78761c0592dbb522e954354a08931615f0ac56c` confirmed
+  QL-028's split lifecycle, detached canonical snapshots, public policy
+  API, documentation, and general adversarial validation sound, but
+  found one further real defect in the optional `w` field's validation.
+- **Finding — confirmed, real defect, reproduced through both the
+  dependency-free harness and a real Chromium page before any fix was
+  written.** An otherwise fully valid question with an explicitly
+  present own property `w: undefined` — i.e. `hasOwn.call(q, 'w') ===
+  true` but `q.w === undefined` — passed `isValidWrongAnswerFeedback()`,
+  because that function's entry check, `if(w === undefined){ return
+  true; }`, could not distinguish "the field is genuinely absent" from
+  "the field is present, but its value happens to be `undefined`" —
+  reading `q.w` produces `undefined` in both cases; only
+  `hasOwn.call(q, 'w')` can tell them apart. `validateRuntimeQuestion()`
+  then reached its canonical-snapshot step and executed
+  `Object.keys(q.w)`, which threw `TypeError: Cannot convert undefined
+  or null to object` — an uncaught exception escaping the public
+  `addQuestions()` API entirely, rather than the documented, structured
+  `{ok:false, error:...}` rejection every other invalid input produces.
+- **Impact:** None shipped — PR #22 remained draft/unmerged throughout;
+  found and fixed before merge.
+- **Cause:** `isValidWrongAnswerFeedback()`'s own value-based `w ===
+  undefined` check conflated two genuinely different conditions
+  (absent vs. present-but-undefined) that are indistinguishable from a
+  bare value read — only a presence check (`hasOwn`) can tell them
+  apart — and the function was written to decide both "is this field
+  present" and "is this field's value valid" in one place, using a
+  method (value comparison) that cannot answer the first question
+  correctly.
+- **Correct action:** For any optional field, decide presence and
+  validity as two separate questions: presence via `hasOwn.call(q,
+  <field>)` (the only reliable test), validity — only once presence is
+  established — via the field's own schema, with no special-casing of
+  `undefined` inside the validity check (since `isPlainObject`/similar
+  schema checks already correctly reject `undefined` as an invalid
+  value on their own, via their existing falsy/type guards).
+- **Correction:** `isValidWrongAnswerFeedback()` no longer contains any
+  `w === undefined` special case at all — it now purely validates a
+  value already confirmed present. `validateRuntimeQuestion()` computes
+  `var wPresent = hasOwn.call(q, 'w');` once, calls
+  `isValidWrongAnswerFeedback()` only `if(wPresent)`, and gates the
+  canonical-snapshot `Object.keys(q.w)` step on the same `wPresent`
+  flag — so that step is never reached unless `w` is both present and
+  already confirmed valid. An absent `w` remains valid (the function is
+  simply never called); a present `w: undefined` is now correctly
+  rejected, atomically, with no exception, exactly like `w: null` or
+  any other invalid value. No descriptor-based, cross-realm, exact-key,
+  or canonical-snapshot protection from QL-028 was weakened — this
+  correction only changes how presence is decided.
+- **1 new dependency-free test** in `tests/dom-behavior.mjs` (a focused
+  validation matrix: `w` absent, valid empty record, valid populated
+  record with detachment proof, and eight distinct rejected-without-
+  throwing cases including the exact `w: undefined` counterexample) and
+  **1 new real-browser Playwright test** in
+  `tests/e2e/runtime-content-lifecycle.spec.mjs` (the exact
+  counterexample, proven not to throw via a try/catch boundary in
+  `page.evaluate()`, plus a recovery proof: a genuinely valid question
+  is successfully injected and answered in the same page context
+  immediately afterward, with no reload).
+- **Mutation-tested:** restored the original conflated check
+  (`if(w === undefined){ return true; }`) inside
+  `isValidWrongAnswerFeedback()` — failed exactly the new focused
+  validation-matrix test, and for the precise original reason
+  (`TypeError: Cannot convert undefined or null to object`, confirmed
+  by inspecting the thrown message directly), and no others. Reverted
+  and confirmed `index.html` byte-identical via `diff` before
+  committing.
+- **Full local validation:** `npm test` (172/172),
+  `npx playwright test tests/e2e/runtime-content-lifecycle.spec.mjs`
+  (14/14 across both projects), and the complete `npx playwright test`
+  suite.
+- **Prevention:** Never use a bare value comparison (`x === undefined`)
+  to answer "is this optional property present" for an object whose
+  properties might legitimately be assigned the literal value
+  `undefined` — `hasOwn.call(obj, key)` is the only construct that
+  distinguishes "absent" from "present with an undefined value," and
+  any validator for an optional field should use it explicitly rather
+  than inferring presence from a value read.

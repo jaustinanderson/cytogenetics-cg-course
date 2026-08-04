@@ -3167,6 +3167,80 @@ test("addQuestions() rejects adversarial inputs atomically -- accessor, inherite
   assert.equal(accessorGetterInvoked, false, "the adversarial id getter was never invoked while validating or reporting the rejection");
 });
 
+/* ============================ optional-field absent-vs-present correction (Issue #2, QL-029) ============================
+   Independently reproduced before any fix: a question with an explicitly
+   OWN `w` property whose VALUE is `undefined` (`{..., w: undefined}`)
+   passed isValidWrongAnswerFeedback(), because that function treated
+   `w === undefined` as always meaning "the field is absent" -- which is
+   indistinguishable, by simple value comparison, from "the field is
+   present but its value happens to be undefined." validateRuntimeQuestion()
+   then executed `Object.keys(q.w)` while building the canonical
+   snapshot, which threw `TypeError: Cannot convert undefined or null to
+   object` -- an uncaught exception escaping the public addQuestions()
+   API, rather than the documented structured {ok:false, ...} rejection.
+   Confirmed via both the dependency-free harness and a real Chromium
+   page before any fix was written.
+
+   Fixed by deciding absent-vs-present ONCE, explicitly, via
+   `hasOwn.call(q, 'w')` in validateRuntimeQuestion() -- never by
+   checking `q.w === undefined` -- and only calling
+   isValidWrongAnswerFeedback() when `w` is confirmed present, at which
+   point `undefined` is exactly as invalid as `null` or any other
+   non-record value (isPlainObject(undefined) already correctly returns
+   false without throwing). */
+test("the optional w field: absent is valid, and an explicit own w:undefined is rejected atomically without throwing -- distinguished from genuine absence", () => {
+  const base = { id: "w-matrix-1", d: "operations", t: "lab-ops", x: 1, q: "q", o: ["a", "b"], a: 0, why: "w" };
+
+  // Accepted cases.
+  {
+    const env = boot();
+    const result = env.api.addQuestions("m2", [{ ...base }]);
+    assert.equal(result.ok, true, "w absent: accepted");
+  }
+  {
+    const env = boot();
+    const result = env.api.addQuestions("m2", [{ ...base, id: "w-matrix-2", w: {} }]);
+    assert.equal(result.ok, true, "a valid EMPTY w record: accepted");
+  }
+  {
+    const env = boot();
+    const source = { ...base, id: "w-matrix-3", w: { 1: "Original feedback" } };
+    const result = env.api.addQuestions("m2", [source]);
+    assert.equal(result.ok, true, "a valid POPULATED w record: accepted");
+    source.w[1] = "MUTATED";
+    const live = env.api.getQuestions("m2").find((x) => x.id === "w-matrix-3");
+    assert.equal(live.w["1"], "Original feedback", "the accepted question's w is fully detached from the caller's object");
+  }
+
+  // Rejected cases -- must never throw, must return the normal
+  // structured {ok:false, ...} result, and must not add/rebuild/emit.
+  const rejectedCases = [
+    ["own w: undefined (the exact reported counterexample)", { ...base, id: "w-matrix-4", w: undefined }],
+    ["w: null", { ...base, id: "w-matrix-5", w: null }],
+    ["w as an array", { ...base, id: "w-matrix-6", w: ["x"] }],
+    ["w as a primitive number", { ...base, id: "w-matrix-7", w: 5 }],
+    ["w as a primitive string", { ...base, id: "w-matrix-8", w: "x" }],
+    ["w with an out-of-range option index", { ...base, id: "w-matrix-9", w: { 5: "x" } }],
+    ["w with an invalid (empty-string) feedback value", { ...base, id: "w-matrix-10", w: { 1: "" } }],
+    ["w with an invalid (non-string) feedback value", { ...base, id: "w-matrix-11", w: { 1: 5 } }],
+  ];
+  rejectedCases.forEach(([label, badQuestion]) => {
+    const env = boot();
+    let contentEvents = 0;
+    env.api.on("content", () => { contentEvents += 1; });
+    const before = env.api.getQuestions("m2").length;
+    const beforeMountItems = quizMount(env, "m2").querySelectorAll(".qitem").length;
+
+    let result;
+    assert.doesNotThrow(() => { result = env.api.addQuestions("m2", [badQuestion]); }, `${label}: must not throw out of the public API`);
+    assert.equal(result.ok, false, `${label}: batch must be rejected`);
+    assert.equal(result.added, 0, `${label}: nothing added`);
+    assert.equal(env.api.getQuestions("m2").length, before, `${label}: nothing added to the live bank`);
+    assert.equal(quizMount(env, "m2").querySelectorAll(".qitem").length, beforeMountItems, `${label}: widget not rebuilt`);
+    assert.equal(contentEvents, 0, `${label}: no content event emitted`);
+  });
+});
+
 test("a batch with one valid and one invalid question is rejected atomically: neither question is added", () => {
   const env = boot();
   let contentEvents = 0;

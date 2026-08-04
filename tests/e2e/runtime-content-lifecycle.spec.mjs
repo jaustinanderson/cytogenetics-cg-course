@@ -92,6 +92,54 @@ test.describe("runtime-injected content lifecycle", () => {
     expect(consoleIssues, JSON.stringify(consoleIssues, null, 2)).toEqual([]);
   });
 
+  test("addQuestions() rejects an explicit own w:undefined atomically without throwing (QL-029), and the page remains fully operational afterward", async ({
+    page,
+    consoleIssues,
+  }) => {
+    await page.goto("/");
+    const mount = page.locator('.quiz-mount[data-quiz="m2"]');
+    const beforeCount = await mount.locator(".qitem").count();
+
+    // The exact reported counterexample: an otherwise-valid question
+    // with an explicitly present `w: undefined` own property. Before the
+    // fix, this reached `Object.keys(undefined)` inside
+    // validateRuntimeQuestion() and threw a TypeError out of the public
+    // addQuestions() API.
+    const outcome = await page.evaluate(() => {
+      try {
+        const result = window.CytoCourse.addQuestions("m2", [{
+          id: "e2e-w-undefined-1", d: "operations", t: "lab-ops", x: 1,
+          q: "q", o: ["a", "b"], a: 0, why: "w",
+          w: undefined,
+        }]);
+        return { threw: false, result };
+      } catch (e) {
+        return { threw: true, name: e.constructor.name, message: e.message };
+      }
+    });
+    expect(outcome.threw, `addQuestions() must not throw; got ${JSON.stringify(outcome)}`).toBe(false);
+    expect(outcome.result.ok).toBe(false);
+    expect(outcome.result.added).toBe(0);
+    await expect(mount.locator(".qitem")).toHaveCount(beforeCount);
+
+    // Recovery proof: the page itself remains fully operational after
+    // the rejected call -- inject and answer a genuinely valid question
+    // in the SAME page context, with no reload.
+    const validResult = await page.evaluate(() => window.CytoCourse.addQuestions("m2", [{
+      id: "e2e-w-undefined-recovery-1", d: "operations", t: "lab-ops", x: 1,
+      q: "Recovery question?", o: ["Yes", "No"], a: 0, why: "Because.",
+    }]));
+    expect(validResult.ok).toBe(true);
+    await openDisclosure(mount.locator(".quiz"));
+    const rendered = mount.locator(".qitem").last();
+    await expect(rendered.locator(".qtext")).toHaveText("Recovery question?");
+    await rendered.locator(".qopt").first().click();
+    const record = await page.evaluate(() => window.CytoCourse.getProgress().answers["e2e-w-undefined-recovery-1"]);
+    expect(record.c).toBe(true);
+
+    expect(consoleIssues, JSON.stringify(consoleIssues, null, 2)).toEqual([]);
+  });
+
   test("reload without reinjection restores only authored questions, and the injected definition never appears in localStorage or exportJSON()", async ({
     page,
     consoleIssues,
