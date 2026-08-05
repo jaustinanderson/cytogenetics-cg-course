@@ -435,8 +435,16 @@ review status stable before adding 46 questions.
   an identity and a date satisfied release-qualified) — corrected with a
   separate approved-independent-reviewer registry (deliberately empty for
   the current pack), a separately recorded scope and checklist, and an
-  explicit no-conflict declaration. See `docs/QUALITY_LOG.md` QL-030
-  through QL-032 and QL-034, and `docs/ARCHITECTURE.md` "Question
+  explicit no-conflict declaration. A FIFTH round found that fix still let
+  `independentReviewDocumented:true` be set with the new scope/checklist/
+  conflict-declaration fields left unpopulated — corrected so `true` now
+  requires the complete record (identity, date, scope, full checklist, an
+  actual boolean conflict declaration) or the record is rejected at load,
+  and so that a complete-but-unapproved or complete-but-conflicted record
+  reports a distinct blocker (`unapproved-independent-reviewer` /
+  `independent-review-conflict-declared`) rather than being conflated with
+  "nothing documented." See `docs/QUALITY_LOG.md` QL-030 through QL-032
+  and QL-034 through QL-035, and `docs/ARCHITECTURE.md` "Question
   provenance and scientific-review governance" for the full record. Left
   unchecked pending independent review and merge; image-manifest
   normalization, broader API contract tests, and the assessment-bank

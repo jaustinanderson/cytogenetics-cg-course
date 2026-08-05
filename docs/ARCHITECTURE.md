@@ -1206,96 +1206,108 @@ contradictory record (a promoted label without its prerequisites) fails
 validation and makes the script throw at load — see
 `assertGovernanceRegistryIntegrity()`.
 
-**Independent-review evidence model (corrected 2026-08-04, tightened
+**Independent-review evidence model — `independentReviewDocumented` means
+COMPLETE (corrected 2026-08-04, tightened 2026-08-05, FINALIZED
 2026-08-05).** `independentReviewDocumented:false` REQUIRES every
 independent-review field (`independentReviewer`, `independentReviewDate`,
 `independentReviewScope`, `independentReviewChecks` (`[]`),
-`independentReviewNoConflictDeclared`) to be in its blank state
-(previously unchecked in this direction for several of these fields — a
-caller could set evidence-looking fields while leaving the flag `false`,
-confirmed by direct reproduction). `:true` requires `independentReviewer`
-and `independentReviewDate` both non-`null`, requires `drafter` to be
-known (independence is defined, per `docs/SCIENTIFIC_REVIEW.md`, relative
-to authorship — "no authorship stake in the specific content" —
-unverifiable against an unknown drafter), and requires the independent
-reviewer's normalized identity to differ from both `drafter` and
-`reviewer` — a person cannot be their own independent second-person
-reviewer, confirmed rejected even for case/whitespace-variant
-self-matches against EITHER the drafter or the primary SME reviewer.
+`independentReviewNoConflictDeclared`) to be in its blank state.
+`:true` now means a COMPLETE review record exists — REQUIRES ALL of:
+non-empty `independentReviewer`; a valid `independentReviewDate`; a
+non-empty `independentReviewScope` (a SEPARATE recorded instance from the
+SME reviewer's own `reviewScope` — it can never stand in as evidence of
+what a different person independently reviewed); a COMPLETE
+`independentReviewChecks` set against the same versioned
+`GOVERNANCE_REVIEW_CHECKS_V1` enum, recorded as its OWN separate array
+instance (reusing or aliasing the SME reviewer's `reviewChecks` does not
+satisfy this); an actual recorded `independentReviewNoConflictDeclared`
+boolean (`true` or `false` — `null`, "not yet assessed," fails this gate,
+since an unassessed conflict status is not a completed declaration); a
+known `drafter`; and the independent reviewer's normalized identity
+distinct from both `drafter` and the primary SME `reviewer` (confirmed
+rejected even for case/whitespace-variant self-matches against either).
+A record claiming `independentReviewDocumented:true` while ANY of this
+is missing is REJECTED AT LOAD TIME, as a contradictory record — not
+merely flagged with a blocker.
+
+**Corrected again 2026-08-05 (this was itself a defect in the prior
+correction).** An earlier version of this check let `true` mean only
+"identity and date present" — independent review confirmed a committed
+test explicitly expected exactly that incomplete state
+(`independentReviewScope:null`, `independentReviewChecks:[]`,
+`independentReviewNoConflictDeclared:null`) to load successfully as a
+"bare-but-structurally-valid documented independent review." That
+contradicted the field's own name, the human policy in
+`docs/CONTENT_GOVERNANCE.md` (identity, date, AND scope/checklist), and
+the stated goal of preventing content from being described as
+independently reviewed without its required evidence. This file
+deliberately does not introduce a partial/in-progress review state to
+work around it — a future workflow needing to represent "review started
+but not finished" would need its own, separately reviewed status field.
 
 **Independent review IS a `release-qualified` prerequisite**
 (`meetsIndependentReview()`, folded into `meetsReleaseQualified()`) — the
 safer explicit policy for a public, potentially commercial scientific
 learning product: Austin's own SME review satisfies `sme-reviewed`, but
 `release-qualified` additionally requires a distinct second person's
-documented review. **Corrected 2026-08-05**: the first version of this
-requirement checked only `independentReviewDocumented === true` — a bare
-flag plus a distinct name and a date — confirmed by direct reproduction
-that `independentReviewer: "A Distinct Reviewer"` (an arbitrary,
-unqualified, unapproved name, with no recorded scope, checklist, or
-conflict declaration) satisfied `release-qualified` with zero blockers.
-`meetsIndependentReview()` now additionally requires ALL of:
-  - `independentReviewer` is an APPROVED independent-reviewer identity
-    (`isApprovedIndependentReviewer()`, checked against
-    `APPROVED_INDEPENDENT_REVIEWERS_BY_PACK` — the same
-    `GOVERNANCE_SUBJECT_PACK`-keyed structure used for
-    `APPROVED_SME_REVIEWERS_BY_PACK`, but a SEPARATE registry, since being
-    an approved SME reviewer and an approved independent reviewer are
-    different roles by definition. **Deliberately EMPTY for the current
-    production pack** — no real independent reviewer, credential, or
-    approval record exists yet, and none is invented here; this means no
-    record can currently reach `release-qualified` via independent review
-    at all, matching all 153 current questions remaining Draft. Never
-    exposed by any public API.)
-  - `independentReviewScope` is a genuine, non-empty narrative, recorded
-    SEPARATELY from the SME `reviewScope` — the SME reviewer's own scope
-    can never stand in as evidence of what a different person
-    independently reviewed.
-  - `independentReviewChecks` is COMPLETE against the same versioned
-    `GOVERNANCE_REVIEW_CHECKS_V1` enum used for the SME `reviewChecks`,
-    but recorded as its OWN separate array instance — reusing or aliasing
-    the SME reviewer's `reviewChecks` does not satisfy this.
-  - `independentReviewNoConflictDeclared === true` — an explicit
-    per-question declaration that this specific reviewer had no
-    authorship stake or other relevant conflict in THIS content. `null`
-    (not yet assessed, the only valid value while
-    `independentReviewDocumented` is `false`) and `false` (a conflict WAS
-    declared to exist — a legitimate, structurally valid, auditable
-    "considered and disqualified" record) both fail this gate; only an
-    explicit `true` satisfies it.
+documented review. Because `independentReviewDocumented:true` now always
+means COMPLETE, `meetsIndependentReview()` no longer re-checks
+completeness — it only asks whether the (already-complete) review
+additionally QUALIFIES: an APPROVED reviewer identity
+(`isApprovedIndependentReviewer()`, checked against
+`APPROVED_INDEPENDENT_REVIEWERS_BY_PACK` — the same
+`GOVERNANCE_SUBJECT_PACK`-keyed structure used for
+`APPROVED_SME_REVIEWERS_BY_PACK`, but a SEPARATE registry, since being an
+approved SME reviewer and an approved independent reviewer are different
+roles by definition. **Deliberately EMPTY for the current production
+pack** — no real independent reviewer, credential, or approval record
+exists yet, and none is invented here; no record can currently reach
+`release-qualified` via independent review at all, matching all 153
+current questions remaining Draft. Never exposed by any public API), AND
+no declared conflict (`independentReviewNoConflictDeclared === true`, not
+`false` — a complete record where the reviewer declared an actual
+conflict is honest and valid, just correctly disqualifying).
 
-**Deterministic release blockers.** `computeGovernanceBlockers()` returns
-zero or more of these exact, stable reason codes, always computed fresh
-from the record, independent of its declared lifecycle: `missing-drafter`,
-`missing-sources`, `missing-source-check`, `missing-reviewer`,
-`missing-review-date`, `incomplete-review-checks`,
-`unresolved-edition-sensitivity`, `release-approval-pending`, and, for
-independent review — **corrected 2026-08-05**: a single aggregate
-`missing-independent-review` code is used when
-`independentReviewDocumented` is `false` (nothing at all has been
-documented, so an aggregate signal is most useful); once `true`, GRANULAR
-codes name exactly which piece of evidence is still insufficient —
-`missing-independent-reviewer`, `missing-independent-review-scope`,
-`incomplete-independent-review-checks`,
-`missing-independent-review-conflict-declaration` — deliberately matching
-the granular style already used for the primary SME review's
-`missing-reviewer` / `missing-review-date` / `incomplete-review-checks`
-(never one aggregate "missing-sme-review" code), rather than introducing
-a different aggregation style for the same kind of evidence. The
-invariant `blockers.length === 0` **if and only if**
-`releaseQualified === true` (see "Lifecycle is stored and approved, not
-computed" above) is proven by a dedicated test that compares both
-predicates across a matrix of valid and adversarial fixtures, including
-an unapproved-but-otherwise-complete independent reviewer, not merely
-asserted informally.
+**Deterministic release blockers, distinguishing MISSING evidence from
+COMPLETE-but-disqualified evidence (corrected 2026-08-05).**
+`computeGovernanceBlockers()` returns zero or more of these exact, stable
+reason codes: `missing-drafter`, `missing-sources`,
+`missing-source-check`, `missing-reviewer`, `missing-review-date`,
+`incomplete-review-checks`, `unresolved-edition-sensitivity`,
+`release-approval-pending`, and, for independent review:
+`missing-independent-review` (aggregate — `independentReviewDocumented`
+is `false`, nothing at all documented). An EARLIER version of this
+correction added GRANULAR "missing-*" codes for the case where
+`independentReviewDocumented` was `true` but individual fields were still
+absent; that entire case is now IMPOSSIBLE (see above — `true` always
+means complete), so those four codes were dead and have been REMOVED
+rather than retained as unreachable public-contract codes. What a
+COMPLETE, documented review can still fail on is QUALIFICATION, with
+codes that reflect a complete-but-disqualified record, never "missing":
+`unapproved-independent-reviewer` (the reviewer identity is present, just
+not approved — never called `missing-independent-reviewer`, which would
+misdescribe a present identity as absent) and
+`independent-review-conflict-declared` (the conflict declaration is
+present and says `false` — never called
+`missing-independent-review-conflict-declaration`, which would misdescribe
+a completed, honest declaration as absent). The invariant
+`blockers.length === 0` **if and only if** `releaseQualified === true`
+(see "Lifecycle is stored and approved, not computed" above) is proven by
+a dedicated test that compares both predicates across a matrix of valid
+and adversarial fixtures, including an unapproved-but-otherwise-complete
+independent reviewer and a complete-but-conflicted one, not merely
+asserted informally. Two additional tests confirm `meetsReleaseQualified()`
+itself — not merely `computeGovernanceBlockers()`'s display logic —
+rejects a `release-qualified` label backed by a complete-but-unapproved
+or complete-but-conflicted independent review at load time.
 
 **Current data.** All 153 authored questions are `'draft'`, with every
 field `null`/`[]`/`false`, `releaseQualified:false`, and the same 8
-evidence-stage blockers present as before this correction (`missing-independent-review`,
-the aggregate form, since nothing is documented — never the granular
-forms, and never `release-approval-pending`, since the other blockers are
-present too) — nothing is asserted without evidence. See
-`docs/SCIENTIFIC_REVIEW.md` for the full record.
+blockers present as before this correction (`missing-independent-review`,
+the aggregate form, since nothing is documented — never
+`release-approval-pending`, since the other blockers are present too) —
+nothing is asserted without evidence. See `docs/SCIENTIFIC_REVIEW.md` for
+the full record.
 
 **Runtime-injected questions stay outside this registry.** `addQuestions()`
 never reads or writes `QUESTION_GOVERNANCE`; a runtime-injected question's

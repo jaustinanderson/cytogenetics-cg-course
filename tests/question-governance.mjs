@@ -561,6 +561,26 @@ test("invalid release-qualified (missing drafter) is rejected at load time -- a 
   assert.equal(result.ok, false, "release-qualified with no drafter must be rejected");
 });
 
+test("invalid release-qualified (complete but UNAPPROVED independent reviewer) is rejected at load time -- meetsReleaseQualified() must itself require approval, not only computeGovernanceBlockers()", () => {
+  const fields = completeReleaseQualifiedFields();
+  const result = bootWithApprovedTestReviewerAndPatchedRecord(FIXTURE_ID, blankRecord({
+    lifecycle: "release-qualified",
+    ...fields,
+    independentReviewer: "A Distinct But Unapproved Reviewer",
+  }));
+  assert.equal(result.ok, false, "release-qualified with a complete but unapproved independent reviewer must be rejected -- approval is a release-qualified prerequisite, not merely a blocker-display concern");
+});
+
+test("invalid release-qualified (complete independent review with a DECLARED CONFLICT) is rejected at load time -- meetsReleaseQualified() must itself require no-conflict, not only computeGovernanceBlockers()", () => {
+  const fields = completeReleaseQualifiedFields();
+  const result = bootWithApprovedTestReviewerAndPatchedRecord(FIXTURE_ID, blankRecord({
+    lifecycle: "release-qualified",
+    ...fields,
+    independentReviewNoConflictDeclared: false,
+  }));
+  assert.equal(result.ok, false, "release-qualified with a declared conflict must be rejected -- a declared conflict is a release-qualified prerequisite failure, not merely a blocker-display concern");
+});
+
 test("blocker ordering and stable names are exact and deterministic", () => {
   const rec = baselineApi.getQuestionGovernance("m1-q1");
   assert.deepEqual(rec.blockers, [
@@ -584,6 +604,10 @@ test("zero blockers and releaseQualified never drift apart, across a matrix of v
     ["sme-reviewed with an UNAPPROVED independent reviewer (documented, distinct, dated -- but not on the approved list)", blankRecord({
       lifecycle: "sme-reviewed", ...completeReleaseQualifiedFields(),
       independentReviewer: "A Distinct But Unapproved Reviewer",
+    })],
+    ["sme-reviewed with a COMPLETE independent review but a DECLARED CONFLICT", blankRecord({
+      lifecycle: "sme-reviewed", ...completeReleaseQualifiedFields(),
+      independentReviewNoConflictDeclared: false,
     })],
     ["valid release-qualified", blankRecord({ lifecycle: "release-qualified", ...completeReleaseQualifiedFields() })],
   ];
@@ -710,77 +734,68 @@ test("THE CONFIRMED LOOPHOLE: an arbitrary, unapproved, unqualified independent-
   assert.equal(result.ok, false, "an arbitrary distinct name with no approval/scope/checklist/conflict-declaration must be rejected -- this is the exact reported loophole");
 });
 
-test("an arbitrary distinct but UNAPPROVED reviewer name is rejected even with a complete scope, checklist, and conflict declaration", () => {
-  const fields = completeReleaseQualifiedFields();
-  const result = bootWithApprovedTestReviewerAndPatchedRecord(FIXTURE_ID, blankRecord({
-    lifecycle: "release-qualified",
-    ...fields,
-    independentReviewer: "Someone Else Entirely, Not On The Approved List",
-  }));
-  assert.equal(result.ok, false, "approval is required independent of how complete the rest of the evidence is");
-});
+/* --- true means COMPLETE (corrected 2026-08-05): every one of these must fail AT LOAD TIME, not merely report a blocker --- */
 
-test("an APPROVED test reviewer missing the independent review scope is rejected", () => {
+test("independentReviewDocumented:true with a MISSING independentReviewScope fails at load", () => {
   const fields = completeReleaseQualifiedFields();
   const result = bootWithApprovedTestReviewerAndPatchedRecord(FIXTURE_ID, blankRecord({
     lifecycle: "release-qualified",
     ...fields,
     independentReviewScope: null,
   }));
-  assert.equal(result.ok, false, "an approved reviewer with no recorded independent scope must be rejected");
+  assert.equal(result.ok, false, "documented:true with no recorded independent scope must fail at load -- 'documented' means complete");
 });
 
-test("an APPROVED test reviewer with an EMPTY independent checklist is rejected", () => {
+test("independentReviewDocumented:true with an EMPTY independentReviewChecks fails at load", () => {
   const fields = completeReleaseQualifiedFields();
   const result = bootWithApprovedTestReviewerAndPatchedRecord(FIXTURE_ID, blankRecord({
     lifecycle: "release-qualified",
     ...fields,
     independentReviewChecks: [],
   }));
-  assert.equal(result.ok, false, "an approved reviewer with an empty independent checklist must be rejected");
+  assert.equal(result.ok, false, "documented:true with an empty independent checklist must fail at load");
 });
 
-test("an APPROVED test reviewer with a PARTIALLY complete independent checklist is rejected", () => {
+test("independentReviewDocumented:true with a PARTIAL independentReviewChecks fails at load", () => {
   const fields = completeReleaseQualifiedFields();
   const result = bootWithApprovedTestReviewerAndPatchedRecord(FIXTURE_ID, blankRecord({
     lifecycle: "release-qualified",
     ...fields,
     independentReviewChecks: ["rationale-accuracy", "distractor-quality"],
   }));
-  assert.equal(result.ok, false, "an approved reviewer with a partial independent checklist must be rejected");
+  assert.equal(result.ok, false, "documented:true with a partial independent checklist must fail at load");
 });
 
-test("the SME review's OWN checklist cannot substitute for a separately recorded independent checklist -- reusing reviewChecks for independentReviewChecks by omission still fails", () => {
+test("the SME review's OWN complete checklist cannot substitute for a separately recorded independent checklist -- an empty independentReviewChecks still fails at load even though reviewChecks is complete", () => {
   const fields = completeReleaseQualifiedFields();
   const result = bootWithApprovedTestReviewerAndPatchedRecord(FIXTURE_ID, blankRecord({
     lifecycle: "release-qualified",
     ...fields,
-    independentReviewChecks: [], // the SME reviewChecks field is separately complete, but that must not count
+    independentReviewChecks: [],
   }));
-  assert.equal(result.ok, false, "an empty independentReviewChecks must be rejected even though reviewChecks (the SME's own) is complete");
+  assert.equal(result.ok, false, "an empty independentReviewChecks must fail at load even though reviewChecks (the SME's own) is complete");
 });
 
-test("an APPROVED test reviewer with no independence/no-authorship-stake declaration (null) is rejected", () => {
+test("independentReviewDocumented:true with a NULL independentReviewNoConflictDeclared fails at load", () => {
+  // Deliberately lifecycle:'sme-reviewed', not 'release-qualified': at
+  // 'release-qualified', meetsIndependentReview()'s own
+  // `independentReviewNoConflictDeclared === true` check would ALSO
+  // reject a null value via the lifecycle-prerequisite path, masking
+  // whether the STRUCTURAL bidirectional check (the thing this test
+  // exists to isolate) is actually doing its job. At 'sme-reviewed',
+  // meetsSmeReviewed() never looks at independent-review fields at all,
+  // so the ONLY thing that can reject this record is the structural
+  // check itself.
   const fields = completeReleaseQualifiedFields();
   const result = bootWithApprovedTestReviewerAndPatchedRecord(FIXTURE_ID, blankRecord({
-    lifecycle: "release-qualified",
+    lifecycle: "sme-reviewed",
     ...fields,
     independentReviewNoConflictDeclared: null,
   }));
-  assert.equal(result.ok, false, "a null (not yet assessed) conflict declaration must be rejected");
+  assert.equal(result.ok, false, "documented:true with a null (not yet assessed) conflict declaration must fail at load -- an unassessed conflict is not a completed declaration");
 });
 
-test("an APPROVED test reviewer with an EXPLICIT conflict declared (false) is rejected -- false is a valid, structurally recorded, but disqualifying value", () => {
-  const fields = completeReleaseQualifiedFields();
-  const result = bootWithApprovedTestReviewerAndPatchedRecord(FIXTURE_ID, blankRecord({
-    lifecycle: "release-qualified",
-    ...fields,
-    independentReviewNoConflictDeclared: false,
-  }));
-  assert.equal(result.ok, false, "an explicitly declared conflict (false) must never satisfy release-qualified");
-});
-
-test("independentReviewDocumented:true with a malformed (non-boolean) independentReviewNoConflictDeclared is rejected", () => {
+test("independentReviewDocumented:true with a malformed (non-boolean, non-null) independentReviewNoConflictDeclared fails at load", () => {
   const result = bootWithPatchedRecord(FIXTURE_ID, blankRecord({
     drafter: APPROVED_REVIEWER,
     independentReviewDocumented: true,
@@ -788,10 +803,42 @@ test("independentReviewDocumented:true with a malformed (non-boolean) independen
     independentReviewDate: "2026-08-04",
     independentReviewNoConflictDeclared: "yes",
   }));
-  assert.equal(result.ok, false, "a non-boolean, non-null independentReviewNoConflictDeclared must be rejected");
+  assert.equal(result.ok, false, "a non-boolean, non-null independentReviewNoConflictDeclared must fail at load");
 });
 
-test("a FULLY POPULATED, test-only approved independent-review fixture satisfies release-qualified, and the public result remains fully detached", () => {
+/* --- a COMPLETE documented review can still be legitimately disqualified -- these load successfully, are honestly "documented," and report a specific, non-"missing" blocker --- */
+
+test("a COMPLETE documented independent review with an UNAPPROVED reviewer loads successfully, remains releaseQualified:false, and reports exactly 'unapproved-independent-reviewer' -- the identity is present, not missing", () => {
+  const fields = completeReleaseQualifiedFields();
+  const result = bootWithApprovedTestReviewerAndPatchedRecord(FIXTURE_ID, blankRecord({
+    lifecycle: "sme-reviewed",
+    ...fields,
+    independentReviewer: "Someone Else Entirely, Not On The Approved List",
+  }));
+  assert.equal(result.ok, true, `expected a complete-but-unapproved independent review to load as a valid, documented record: ${result.error}`);
+  const rec = result.api.getQuestionGovernance(FIXTURE_ID);
+  assert.equal(rec.independentReviewDocumented, true, "the review must still read as documented -- it IS complete, just unapproved");
+  assert.equal(rec.independentReviewer, "Someone Else Entirely, Not On The Approved List");
+  assert.equal(rec.releaseQualified, false);
+  assert.deepEqual(rec.blockers, ["unapproved-independent-reviewer"]);
+});
+
+test("a COMPLETE documented independent review with a DECLARED CONFLICT (false) loads successfully, remains releaseQualified:false, and reports exactly 'independent-review-conflict-declared' -- the declaration is present, not missing", () => {
+  const fields = completeReleaseQualifiedFields();
+  const result = bootWithApprovedTestReviewerAndPatchedRecord(FIXTURE_ID, blankRecord({
+    lifecycle: "sme-reviewed",
+    ...fields,
+    independentReviewNoConflictDeclared: false,
+  }));
+  assert.equal(result.ok, true, `expected a complete review with a declared conflict to load as a valid, documented record: ${result.error}`);
+  const rec = result.api.getQuestionGovernance(FIXTURE_ID);
+  assert.equal(rec.independentReviewDocumented, true, "the review must still read as documented -- it IS complete, the reviewer just declared a conflict");
+  assert.equal(rec.independentReviewNoConflictDeclared, false);
+  assert.equal(rec.releaseQualified, false);
+  assert.deepEqual(rec.blockers, ["independent-review-conflict-declared"]);
+});
+
+test("a FULLY POPULATED, test-only approved, conflict-free independent-review fixture satisfies release-qualified with zero blockers, and the public result remains fully detached", () => {
   const fields = completeReleaseQualifiedFields();
   const result = bootWithApprovedTestReviewerAndPatchedRecord(FIXTURE_ID, blankRecord({
     lifecycle: "release-qualified",
@@ -806,12 +853,19 @@ test("a FULLY POPULATED, test-only approved independent-review fixture satisfies
   assert.deepEqual(rec.blockers, []);
 
   // Detachment: mutating the returned independent-review evidence must
-  // not reach the live registry.
+  // not reach the live registry. Since an incomplete `true` record can
+  // never be COMMITTED to the registry at all (load-time gate), the only
+  // detachment risk is a caller-side mutation of an already-complete
+  // record's returned view -- confirmed here it cannot corrupt the live
+  // (complete) record into an incomplete one on a later read.
   rec.independentReviewChecks.push("fabricated-check");
   rec.independentReviewScope = "MUTATED";
+  rec.independentReviewNoConflictDeclared = false;
   const recAgain = result.api.getQuestionGovernance(FIXTURE_ID);
   assert.deepEqual(recAgain.independentReviewChecks, fields.independentReviewChecks);
   assert.equal(recAgain.independentReviewScope, fields.independentReviewScope);
+  assert.equal(recAgain.independentReviewNoConflictDeclared, true);
+  assert.equal(recAgain.releaseQualified, true, "a caller mutating the returned view can never downgrade the live record's actual release-qualified status");
 });
 
 test("release-qualified WITHOUT a documented independent review is rejected -- independent review is now a hard release-qualified prerequisite", () => {
@@ -847,23 +901,28 @@ test("an sme-reviewed record with complete release evidence but no independent r
   assert.deepEqual(rec.blockers, ["missing-independent-review"]);
 });
 
-test("an sme-reviewed record with an independent review DOCUMENTED but missing scope/checklist/conflict-declaration reports the exact granular blockers, not the aggregate code", () => {
-  const result = bootWithPatchedRecord(FIXTURE_ID, blankRecord({
-    lifecycle: "sme-reviewed",
-    ...completeSmeReviewedFields(),
-    drafter: APPROVED_REVIEWER,
-    editionSensitive: false,
-    independentReviewDocumented: true,
-    independentReviewer: "Some Distinct, Unapproved, Otherwise-Bare Reviewer",
-    independentReviewDate: "2026-08-04",
-  }));
-  assert.equal(result.ok, true, `expected a bare-but-structurally-valid documented independent review to load: ${result.error}`);
-  const rec = result.api.getQuestionGovernance(FIXTURE_ID);
-  assert.equal(rec.releaseQualified, false);
-  assert.deepEqual(rec.blockers.sort(), [
-    "missing-independent-reviewer", "missing-independent-review-scope",
-    "incomplete-independent-review-checks", "missing-independent-review-conflict-declaration",
-  ].sort());
+test("the public API cannot expose an incomplete independentReviewDocumented:true record -- the complete-registry read is scanned for any such contradiction", () => {
+  // Structural guarantee, not merely a spot check: EVERY record in the
+  // live, committed registry passed isValidGovernanceRecord() at load
+  // time, so none can have independentReviewDocumented:true while any
+  // evidence field is still blank. Confirmed directly against the full
+  // 153-question registry.
+  const all = baselineApi.getQuestionGovernance();
+  for (const [id, rec] of Object.entries(all)) {
+    if (rec.independentReviewDocumented) {
+      assert.ok(rec.independentReviewer, `${id}: documented:true but no independentReviewer`);
+      assert.ok(rec.independentReviewDate, `${id}: documented:true but no independentReviewDate`);
+      assert.ok(rec.independentReviewScope, `${id}: documented:true but no independentReviewScope`);
+      assert.equal(rec.independentReviewChecks.length, ALL_REVIEW_CHECKS.length, `${id}: documented:true but incomplete independentReviewChecks`);
+      assert.equal(typeof rec.independentReviewNoConflictDeclared, "boolean", `${id}: documented:true but no recorded conflict declaration`);
+    } else {
+      assert.equal(rec.independentReviewer, null);
+      assert.equal(rec.independentReviewDate, null);
+      assert.equal(rec.independentReviewScope, null);
+      assert.deepEqual(rec.independentReviewChecks, []);
+      assert.equal(rec.independentReviewNoConflictDeclared, null);
+    }
+  }
 });
 
 /* ============================ public API tests ============================ */

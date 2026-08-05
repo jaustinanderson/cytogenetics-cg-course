@@ -4065,6 +4065,14 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
     `missing-independent-review-conflict-declaration` — matching the
     granular style already used for the primary SME review's own
     blockers, decided and documented explicitly (`docs/ARCHITECTURE.md`).
+    **SUPERSEDED by QL-035 (2026-08-05):** these four granular codes
+    described a state — `independentReviewDocumented: true` with some
+    fields still missing — that QL-035 determined should never be
+    reachable at all; `true` now requires the complete record or the
+    record is rejected at load, so these four codes are dead and were
+    removed. This bullet is left as-is because it accurately describes
+    what this correction actually shipped at the time; it no longer
+    describes the current design. See QL-035 below.
   - Corrected a stale comment inside `isValidGovernanceRecord()` that
     claimed "Independent review is intentionally NOT required for any
     lifecycle state" — true when originally written, false the moment
@@ -4117,3 +4125,139 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   already have a field to hold them — a partial implementation that
   satisfies some sub-clauses can look complete without a clause-by-clause
   comparison against the source policy text.
+
+## QL-035 — `independentReviewDocumented:true` still permitted an incomplete record; blocker codes conflated "missing" with "complete but disqualified" (Issue #3, Milestone 1)
+
+- **Status:** Corrected on the same branch
+  (`claude/milestone-1-question-provenance`), draft PR open for
+  independent review, not yet merged. A fifth independent review at head
+  `92732b5df97f893bd8771b0d47b810d3880dbb9e` (the QL-034 correction)
+  found one remaining defect in the field the prior correction had just
+  added.
+- **Finding — confirmed by direct reproduction.** QL-034 added
+  `independentReviewScope`, `independentReviewChecks`, and
+  `independentReviewNoConflictDeclared`, but `isValidGovernanceRecord()`
+  never required them to be populated when
+  `independentReviewDocumented` was set `true` — only `meetsIndependentReview()`
+  (a `release-qualified`-only qualification check) looked at them.
+  Reproduced: a fixture with `independentReviewDocumented: true`, a
+  present `independentReviewer` and `independentReviewDate`, but
+  `independentReviewScope: null`, `independentReviewChecks: []`, and
+  `independentReviewNoConflictDeclared: null` loaded successfully as a
+  structurally valid record. A committed test in
+  `tests/question-governance.mjs` explicitly expected exactly this
+  "documented but missing scope/checklist/conflict-declaration reports
+  granular blockers" record to load — that test's own expectation was
+  the bug: it let a question be described as having a "documented"
+  independent review when almost none of the required evidence existed,
+  contradicting the field's own name and the "bidirectionally exact"
+  claim made in the PR body and `docs/ARCHITECTURE.md`.
+- **Impact:** None shipped — PR #23 remained draft/unmerged throughout;
+  found and fixed before merge.
+- **Cause:** The three fields added in QL-034 were wired into the
+  qualification check (`meetsIndependentReview()`) but never into the
+  structural validity check (`isValidGovernanceRecord()`)'s existing
+  bidirectional `independentReviewDocumented` block, which still only
+  checked the two ORIGINAL fields (`independentReviewer`,
+  `independentReviewDate`) present at the time that block was first
+  written (QL-032) — the block was never revisited when the three new
+  fields were added alongside it in the same correction.
+- **Correction:**
+  - `isValidGovernanceRecord()`'s independent-review block now enforces
+    `independentReviewDocumented` as a true all-or-nothing package.
+    `false` still requires every independent-review field blank. `true`
+    now REQUIRES, in the same record: non-empty `independentReviewer`; a
+    valid `independentReviewDate`; a non-empty `independentReviewScope`;
+    a COMPLETE `independentReviewChecks` (exact-set match via
+    `hasAllRequiredReviewChecks()`, not the structural-only
+    `isValidReviewChecksArray()`); an actual boolean
+    `independentReviewNoConflictDeclared` (never `null`); a known
+    `drafter`; and normalized-distinct identity from both drafter and
+    SME reviewer. Any `true` record missing any of this now fails at
+    script load, not merely a reported blocker. No partial/in-progress
+    review state was introduced; a future "review started but not
+    finished" workflow needs its own, separately reviewed status field.
+  - Because an incomplete `true` record can no longer exist in any
+    successfully loaded registry, the four granular "missing-*" blocker
+    codes QL-034 added became dead code and were removed (see the
+    SUPERSEDED marker on QL-034 above) rather than retained for
+    contract stability. Two new codes describe what a *complete*
+    documented review can still fail on — qualification, not
+    completeness: `unapproved-independent-reviewer` (present identity,
+    not on the approved list — never called "missing," since the
+    identity is present) and `independent-review-conflict-declared`
+    (present declaration, value `false` — never called "missing," since
+    the declaration is present and says a conflict exists).
+  - `meetsIndependentReview()` and `computeGovernanceBlockers()`
+    simplified accordingly: they no longer re-check scope/checklist
+    completeness, since it is now load-time-guaranteed whenever
+    `documented:true`; `meetsIndependentReview()` now checks only
+    approval and no-declared-conflict.
+  - Reconciled `docs/CONTENT_GOVERNANCE.md`, `docs/SCIENTIFIC_REVIEW.md`,
+    `docs/ARCHITECTURE.md`, and the PR #23 body's "bidirectionally exact"
+    paragraph (which previously said `true` requires only reviewer/date
+    and distinctness) with the final schema. Corrected the main
+    in-source `GOVERNANCE_RECORD_KEYS` schema comment, which still said
+    "EXACTLY these 14 own properties" and did not document the three
+    QL-034 fields at all (17 properties, documented field-by-field).
+- **Tests:** `tests/question-governance.mjs`, 68 → 70 (net, after
+  removing the one obsolete test whose expectation was the bug and
+  adding several new ones): missing-scope, empty-checklist, and
+  partial-checklist rejected at load; a proof the SME reviewer's own
+  complete checklist cannot substitute for an empty independent one;
+  null-conflict-declaration and malformed-conflict-declaration rejected
+  at load (the null case deliberately exercised at
+  `lifecycle: 'sme-reviewed'`, not `'release-qualified'`, to isolate the
+  structural check under test from a separate, qualification-level check
+  that would otherwise also reject a `null` value for an unrelated
+  reason and mask whether the structural gate itself was load-bearing —
+  a masking issue caught during this round's own mutation testing); a
+  complete-but-unapproved fixture that loads, stays
+  `releaseQualified:false`, and reports exactly
+  `unapproved-independent-reviewer`; a complete-but-conflicted fixture
+  that loads, stays `releaseQualified:false`, and reports exactly
+  `independent-review-conflict-declared`; a complete, approved,
+  conflict-free fixture reaching `releaseQualified:true` with zero
+  blockers, with a detachment proof extended to cover the conflict
+  field; a full-registry scan asserting no `documented:true` record in
+  `getQuestionGovernance()`'s output can ever be incomplete; and two new
+  tests proving `meetsReleaseQualified()` itself, not only
+  `computeGovernanceBlockers()`'s display logic, rejects a
+  `release-qualified` label backed by a complete-but-unapproved or
+  complete-but-conflicted independent review.
+- **Mutation-tested:** 7 targeted reversions — allowing `true` without
+  scope, allowing `true` without a complete checklist, allowing `true`
+  with a `null` conflict declaration, treating an unapproved reviewer as
+  approved, treating a declared conflict as conflict-free, and reverting
+  each of the two new blocker codes' string values — each failed exactly
+  its intended test(s) and no others, reverted to byte-identical via
+  `diff` before committing. Two mutations (unapproved-as-approved,
+  declared-conflict-as-conflict-free) initially showed ZERO failures
+  against the pre-existing suite — a genuine, previously-uncovered test
+  gap (no test asserted rejection at load time for a
+  `release-qualified`-labeled record built on complete-but-disqualified
+  independent review, only that the correct blocker was reported at a
+  lower lifecycle), not a masking artifact; the two new tests above were
+  added specifically to close it, after which both mutations failed
+  exactly those tests.
+- **Full local validation:** `npm test` (172 dependency-free
+  DOM-behavior checks + 70 governance checks), targeted
+  `npx playwright test tests/e2e/review-disclosure.spec.mjs` (10/10
+  across both projects, unaffected by this round's code changes), and
+  the complete `npx playwright test` suite (237/238 passing; the one
+  failure was GitHub's own transient 429 rate-limit on the live
+  link-reachability check in that same file, confirmed transient by an
+  isolated re-run passing cleanly).
+- **Scope:** No question, answer, rationale, image, or scientific claim
+  changed. No source, drafter, reviewer, or independent reviewer was
+  fabricated; the production `APPROVED_INDEPENDENT_REVIEWERS_BY_PACK`
+  list stays empty. `SCHEMA_V` stays `2`. All 153 questions remain
+  Draft with every governance field blank.
+- **Prevention:** When a correction adds new fields alongside an
+  existing bidirectional validity check, verify the EXISTING check was
+  actually extended to cover the new fields, not just that a DIFFERENT,
+  later-stage check (here, the qualification check) happens to reference
+  them — two checks referencing the same fields for different purposes
+  (structural completeness vs. qualification) can create the illusion of
+  coverage where only one of them is load-bearing at the point that
+  matters (record validity at load, not just release-gate qualification).

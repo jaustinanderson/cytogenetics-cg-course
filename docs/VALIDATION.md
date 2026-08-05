@@ -2632,6 +2632,110 @@ No question, answer, rationale, image, or scientific claim changed. No
 independent reviewer, credential, or approval record was fabricated.
 `SCHEMA_V` stays `2`.
 
+### Correction — `independentReviewDocumented:true` still permitted an incomplete record; blocker codes conflated "missing" with "complete but disqualified", added 2026-08-05
+
+A fifth-round independent review of the same head (`92732b5`, itself the
+QL-034 correction) found the just-added evidence fields were checked for
+release-qualification but not enforced as a package at the point where a
+record is marked `documented`. Reproduced before any fix: a fixture with
+`independentReviewDocumented: true`, a present `independentReviewer` and
+`independentReviewDate`, but `independentReviewScope: null`,
+`independentReviewChecks: []`, and
+`independentReviewNoConflictDeclared: null` loaded successfully — the
+committed test suite's own "documented but missing scope/checklist/
+conflict-declaration reports granular blockers" test explicitly expected
+this. That expectation was itself the defect: it let a question be
+described as having a "documented" independent review when almost none
+of the required evidence existed, contradicting the field's own name and
+`docs/CONTENT_GOVERNANCE.md`'s policy.
+
+**Correction:** `isValidGovernanceRecord()`'s independent-review block
+now enforces `independentReviewDocumented` bidirectionally as an
+all-or-nothing package. `false` still requires every independent-review
+field blank. `true` now REQUIRES, in the same record, all of: non-empty
+`independentReviewer`; a valid `independentReviewDate`; a non-empty
+`independentReviewScope`; a COMPLETE `independentReviewChecks` (exact-set
+match against `GOVERNANCE_REVIEW_CHECKS_V1`, via `hasAllRequiredReviewChecks()`
+rather than the structural-only `isValidReviewChecksArray()`); an actual
+boolean `independentReviewNoConflictDeclared` (`true` or `false`, never
+`null`); a known `drafter`; and normalized-distinct identity from both
+drafter and SME reviewer. Any `true` record missing any of this now fails
+at script load, the same as any other structurally invalid record — not
+merely a reported blocker. No partial/in-progress review state was
+introduced to soften this; a future workflow needing to represent
+"review started but not finished" needs its own, separately reviewed
+status field.
+
+Because an incomplete `true` record is now impossible for any record that
+successfully loads, the four granular "missing-*" blocker codes added in
+the QL-034 correction (`missing-independent-reviewer`,
+`missing-independent-review-scope`, `incomplete-independent-review-checks`,
+`missing-independent-review-conflict-declaration`) became unreachable dead
+code and were removed rather than kept for contract stability. What a
+*complete* documented review can still fail on is qualification, not
+completeness, so two new codes describe that distinctly from "missing":
+`unapproved-independent-reviewer` (present identity, not on the approved
+list) and `independent-review-conflict-declared` (present declaration,
+value `false`). `meetsIndependentReview()` and
+`computeGovernanceBlockers()` were simplified accordingly — they no
+longer re-check scope/checklist completeness, since it is now
+load-time-guaranteed whenever `documented:true`.
+
+**New dependency-free tests** (`tests/question-governance.mjs`,
+68 → 70, after removing the one obsolete test whose premise was the bug):
+missing-scope, empty-checklist, partial-checklist, and the SME checklist
+substituting for the independent one, each rejected at load;
+null-conflict-declaration and malformed-conflict-declaration rejected at
+load (the null case deliberately exercised at `lifecycle: 'sme-reviewed'`
+to isolate the structural check from the separate,
+`release-qualified`-only qualification check that would otherwise also
+reject a `null` value for an unrelated reason and mask whether the
+structural gate itself was load-bearing); a complete-but-unapproved
+fixture that loads, stays `releaseQualified:false`, and reports exactly
+`unapproved-independent-reviewer`; a complete-but-conflicted fixture that
+loads, stays `releaseQualified:false`, and reports exactly
+`independent-review-conflict-declared`; a complete, approved,
+conflict-free fixture reaching `releaseQualified:true` with zero
+blockers, including a detachment proof that also covers the new conflict
+field; a full-registry scan asserting no `documented:true` record in the
+public API can ever be incomplete; and two new tests proving
+`meetsReleaseQualified()` itself — not only `computeGovernanceBlockers()`'s
+display logic — rejects a `release-qualified` label backed by a
+complete-but-unapproved or complete-but-conflicted independent review
+(added after mutation testing below found this was a genuine,
+previously-uncovered gap, not just a masking artifact).
+
+**Mutation-tested:** 7 targeted reversions — allowing `true` without
+scope, allowing `true` without a complete checklist, allowing `true` with
+a `null` conflict declaration, treating an unapproved reviewer as
+approved, treating a declared conflict as conflict-free, and reverting
+each of the two new blocker codes' string values back toward the old
+naming — each failed exactly its intended test(s) and no others, reverted
+to byte-identical via `diff` before committing. Two of these mutations
+(unapproved-as-approved, declared-conflict-as-conflict-free) initially
+showed zero failures against the pre-existing test suite; investigation
+found this was a genuine coverage gap — no existing test asserted
+rejection *at load time* for a `release-qualified`-labeled record built
+on a complete-but-disqualified independent review, only that the blocker
+was reported correctly for a lower lifecycle. The two new tests described
+above close that gap; both mutations then failed exactly the new tests
+and were reverted.
+
+Full local validation: `npm test` (172 dependency-free DOM-behavior
+checks + 70 governance checks), targeted
+`npx playwright test tests/e2e/review-disclosure.spec.mjs` (10/10 across
+both projects, unaffected by this round's code changes), and the complete
+`npx playwright test` suite (237/238 passing; the one failure was
+GitHub's own transient 429 rate-limit on the live link-reachability
+check in that same file, caused by this session's repeated live requests
+against the same URL, confirmed transient by an isolated re-run passing
+cleanly).
+
+No question, answer, rationale, image, or scientific claim changed. No
+independent reviewer, credential, or approval record was fabricated.
+`SCHEMA_V` stays `2`. See `docs/QUALITY_LOG.md` QL-035 for the full
+record.
+
 ## Gates still open
 
 ### Browser behavior

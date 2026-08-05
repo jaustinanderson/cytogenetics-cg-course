@@ -44,6 +44,19 @@ own complete structured checklist, and an explicit declaration that the
 reviewer had no authorship stake or other conflict in that specific
 question. See `docs/QUALITY_LOG.md` QL-034 for the full record.
 
+**Corrected again 2026-08-05** (a further independent-review pass, same
+day): the prior correction still let "documented" mean partial evidence
+— a record could set the flag `true` with a reviewer name and a date but
+leave scope, checklist, and conflict-declaration unset, and it would
+still load. That is now rejected outright: recording an independent
+review as documented requires the complete record (identity, date,
+scope, full checklist, and an actual true/false conflict declaration) in
+the same step, or the record fails to load. A complete record can still
+correctly fail Release-qualified for two honest reasons — an unapproved
+reviewer, or a reviewer who declared an actual conflict — and those are
+now reported distinctly from "nothing documented." See
+`docs/QUALITY_LOG.md` QL-035 for the full record.
+
 ## Source hierarchy
 
 Prefer:

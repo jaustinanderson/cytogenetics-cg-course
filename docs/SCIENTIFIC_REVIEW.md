@@ -112,6 +112,18 @@ to anyone outside this repository:
   complete structured checklist (separate from the SME reviewer's), and
   an explicit declaration of no authorship stake or conflict in that
   specific question.
+  **Corrected again 2026-08-05**: that fix still let a record mark
+  independent review "documented" while leaving scope, checklist, or the
+  conflict declaration unset — confirmed by direct reproduction that a
+  reviewer name and a date alone still satisfied "documented." Marking a
+  review documented now requires the complete record in one step (name,
+  date, scope, full checklist, and an actual true/false conflict
+  declaration); anything less is rejected at load, not merely flagged. A
+  complete record can still correctly miss Release-qualified for two
+  distinct, non-"missing" reasons — the reviewer is not on the approved
+  list, or the reviewer declared an actual conflict — and this document's
+  and the registry's language now distinguishes those from "nothing was
+  documented."
 
 This record uses **"Not yet independently reviewed"** as its plain-language
 synonym for **Draft**, deliberately, to flag that even a future Austin

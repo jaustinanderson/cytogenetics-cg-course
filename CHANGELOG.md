@@ -96,6 +96,33 @@ All notable repository changes are recorded here.
   "intentionally NOT required for any lifecycle state." Test coverage
   updated to 68 dependency-free tests, mutation-tested across 5 further
   reversions.
+  **Corrected again (QL-035):** a fifth round of independent review found
+  the QL-034 fields were checked for release-qualification but never
+  required by the load-time structural validity check — a record could
+  set `independentReviewDocumented: true` with only a reviewer name and
+  date, leaving scope, checklist, and conflict-declaration unset, and it
+  still loaded. Corrected: `independentReviewDocumented: true` now
+  requires the COMPLETE record (identity, date, non-empty scope, a
+  complete checklist, and an actual boolean conflict declaration) in the
+  same step, or the record is rejected at script load, not merely
+  flagged. The four QL-034 granular "missing-*" blocker codes are now
+  unreachable dead code and were removed; two new codes distinguish a
+  complete-but-disqualified record from a missing one:
+  `unapproved-independent-reviewer` (identity present, not approved) and
+  `independent-review-conflict-declared` (declaration present, value
+  `false`) — replacing `missing-independent-reviewer`,
+  `missing-independent-review-scope`,
+  `incomplete-independent-review-checks`, and
+  `missing-independent-review-conflict-declaration`. `meetsIndependentReview()`
+  and `computeGovernanceBlockers()` simplified accordingly; the main
+  in-source schema comment corrected from "14" to "17" own properties
+  with full field-by-field documentation. Test coverage updated to 70
+  dependency-free tests (net, after removing one obsolete test whose
+  expectation was itself the defect), mutation-tested across 7 further
+  reversions, two of which surfaced and closed a genuine coverage gap
+  (no prior test proved `meetsReleaseQualified()` itself, not only the
+  blocker-display logic, rejects an unapproved or conflicted-but-complete
+  independent review at load time).
 - Defined and enforced the runtime-injected-question lifecycle
   (`index.html`, Issue #2, **merged**): adopted a
   deliberate **split lifecycle** — a question definition added via

@@ -3247,11 +3247,14 @@
        'release-qualified' <-> Release-qualified
 
      RECORD SCHEMA. Every governance record is a plain object with
-     EXACTLY these 14 own properties (GOVERNANCE_RECORD_KEYS below) --
-     no more, no fewer -- using `null` (never an empty string, and never
-     a truthy placeholder) for "not yet recorded," and `[]` for "nothing
-     yet cited/checked," so an unrecorded field can never be misread as a
-     recorded-but-empty one:
+     EXACTLY these 17 own properties (GOVERNANCE_RECORD_KEYS below;
+     corrected 2026-08-05 -- this comment previously said 14 and did not
+     document independentReviewScope/independentReviewChecks/
+     independentReviewNoConflictDeclared at all, a documentation drift
+     independent review caught) -- no more, no fewer -- using `null`
+     (never an empty string, and never a truthy placeholder) for "not yet
+     recorded," and `[]` for "nothing yet cited/checked," so an
+     unrecorded field can never be misread as a recorded-but-empty one:
        lifecycle                     -- one of the four states above
        drafter                       -- string name, or null if unrecorded
        sources                       -- array of structured source
@@ -3304,45 +3307,146 @@
                                          checked.
        independentReviewDocumented   -- boolean, default false. Corrected
                                          2026-08-04 (point 6): the
-                                         invariant is now BIDIRECTIONAL --
-                                         false REQUIRES
-                                         independentReviewer/
-                                         independentReviewDate to both be
-                                         null (previously unchecked, so a
-                                         caller could set evidence-looking
-                                         fields while leaving the flag
-                                         false); true requires them both
-                                         present AND requires the
-                                         independent reviewer's identity
-                                         to be genuinely distinct (under
-                                         normalized comparison) from both
-                                         `drafter` and `reviewer`, and
-                                         requires `drafter` itself to be
-                                         known (independence is defined,
-                                         per docs/SCIENTIFIC_REVIEW.md,
-                                         relative to authorship -- "no
-                                         authorship stake in the specific
-                                         content" -- which cannot be
-                                         verified against an unknown
-                                         drafter). Corrected again
+                                         invariant is BIDIRECTIONAL --
+                                         false REQUIRES every
+                                         independent-review field
+                                         (independentReviewer/Date/Scope/
+                                         Checks/NoConflictDeclared) to be
+                                         in its blank state (null/null/
+                                         null/[]/null). Corrected again
                                          2026-08-04 (second pass, point
-                                         5): independent review IS now a
+                                         5): independent review IS a
                                          Release-qualified prerequisite --
-                                         CONTENT_GOVERNANCE.md's
-                                         Release-qualified definition was
-                                         updated to require a documented,
-                                         genuinely distinct second-person
-                                         review, for a public, potentially
-                                         commercial scientific learning
-                                         product, not merely Austin's own
-                                         SME review. Still never inferred
-                                         from `reviewer` or authorship --
-                                         only an explicit `true` flag with
-                                         its own distinct-identity
-                                         evidence satisfies it (see
-                                         meetsIndependentReview() below).
-       independentReviewer           -- string name, or null
-       independentReviewDate         -- 'YYYY-MM-DD' string, or null
+                                         Austin's own SME review is not,
+                                         by itself, sufficient.
+
+                                         CORRECTED AGAIN 2026-08-05 (final
+                                         semantics): `true` previously
+                                         required only independentReviewer/
+                                         independentReviewDate to be
+                                         present -- letting a record claim
+                                         `independentReviewDocumented:true`
+                                         while independentReviewScope was
+                                         still null, independentReviewChecks
+                                         was still [], and
+                                         independentReviewNoConflictDeclared
+                                         was still null. That is NOT what
+                                         "documented" means -- confirmed
+                                         directly by the field's own name
+                                         and by a committed test that
+                                         explicitly expected exactly this
+                                         "bare-but-structurally-valid
+                                         documented independent review" to
+                                         load. `true` now REQUIRES ALL of
+                                         the following, or the record is
+                                         REJECTED AT LOAD TIME (not merely
+                                         flagged with blockers -- a
+                                         genuinely incomplete "documented"
+                                         claim is a contradictory record,
+                                         same as any other lifecycle label
+                                         without its prerequisites):
+                                           - independentReviewer: a
+                                             non-empty string
+                                           - independentReviewDate: a
+                                             valid date
+                                           - independentReviewScope: a
+                                             non-empty string (this
+                                             course's own recorded scope,
+                                             never the SME reviewer's)
+                                           - independentReviewChecks: the
+                                             COMPLETE versioned checklist
+                                             (hasAllRequiredReviewChecks()
+                                             -- not merely a valid,
+                                             possibly-partial array; a
+                                             review that only partially
+                                             happened is not "documented")
+                                           - independentReviewNoConflictDeclared:
+                                             an actual recorded boolean
+                                             (`true` OR `false` -- `null`,
+                                             "not yet assessed," is NOT a
+                                             completed declaration and
+                                             fails this gate; a genuinely
+                                             conflicted reviewer
+                                             (`false`) is still a fully
+                                             DOCUMENTED review, just one
+                                             that correctly cannot reach
+                                             Release-qualified -- see
+                                             meetsIndependentReview() and
+                                             computeGovernanceBlockers()
+                                             below for how `false` is
+                                             distinguished from missing
+                                             evidence)
+                                           - drafter known, and the
+                                             independent reviewer's
+                                             normalized identity distinct
+                                             from both drafter and the
+                                             primary SME reviewer
+                                         This file deliberately does NOT
+                                         introduce a partial/in-progress
+                                         review state -- `true` means a
+                                         complete review record exists,
+                                         full stop; a future workflow
+                                         needing to represent "review
+                                         started but not finished" would
+                                         need its own, separately
+                                         reviewed status field, not an
+                                         overloaded meaning for this
+                                         boolean.
+       independentReviewer           -- string name, or null (see
+                                         independentReviewDocumented above
+                                         for the exact bidirectional rule)
+       independentReviewDate         -- 'YYYY-MM-DD' string, or null (see
+                                         independentReviewDocumented above)
+       independentReviewScope        -- NEW 2026-08-05: a narrative
+                                         string documenting what the
+                                         INDEPENDENT reviewer specifically
+                                         checked, or null. A SEPARATE
+                                         recorded instance from the
+                                         primary SME `reviewScope` -- the
+                                         SME reviewer's own scope can
+                                         never stand in as evidence of
+                                         what a different person
+                                         independently reviewed. Required
+                                         non-empty whenever
+                                         independentReviewDocumented is
+                                         true (see above).
+       independentReviewChecks       -- NEW 2026-08-05: array of the same
+                                         versioned GOVERNANCE_REVIEW_CHECKS_V1
+                                         enum used by `reviewChecks`, but
+                                         a SEPARATE recorded instance --
+                                         reusing or aliasing the SME
+                                         reviewer's own `reviewChecks`
+                                         does not satisfy this. Required
+                                         to equal the complete set
+                                         whenever independentReviewDocumented
+                                         is true (see above) -- an empty
+                                         or partial checklist means the
+                                         review is not actually
+                                         documented as complete.
+       independentReviewNoConflictDeclared -- NEW 2026-08-05: null / true
+                                         / false. null means genuinely not
+                                         yet assessed -- the only valid
+                                         value while
+                                         independentReviewDocumented is
+                                         false. Once
+                                         independentReviewDocumented is
+                                         true, this MUST be an actual
+                                         recorded boolean (true or false,
+                                         never null) -- an explicit
+                                         per-question declaration of
+                                         whether the reviewer had any
+                                         authorship stake or other
+                                         relevant conflict in THIS
+                                         content. true (no conflict) is
+                                         the only value that can satisfy
+                                         Release-qualified; false (a
+                                         conflict WAS declared to exist)
+                                         is still a complete, honestly
+                                         DOCUMENTED review record -- see
+                                         computeGovernanceBlockers() below
+                                         for how this is distinguished
+                                         from a record that never recorded
+                                         a declaration at all.
        editionSensitive              -- boolean once assessed, or null
                                          if genuinely not yet assessed
                                          (explicit unknown, never assumed
@@ -3448,22 +3552,43 @@
   // for a public, potentially commercial scientific learning product,
   // 'release-qualified' now REQUIRES a documented, genuinely distinct
   // second-person independent review, not merely Austin's own SME
-  // review -- see meetsReleaseQualified() below. Used specifically when
+  // review -- see meetsReleaseQualified() below. Used when
   // `independentReviewDocumented` is `false` -- nothing at all has been
-  // documented, so a single aggregate code is the most useful signal.
+  // documented.
   //
-  // NEW 2026-08-05 (independent-review evidence correction): once
-  // `independentReviewDocumented` IS `true`, a caller needs to know
-  // exactly WHICH piece of independent-review evidence is still
-  // insufficient -- an aggregate code could not distinguish "documented,
-  // but not an approved reviewer" from "documented, but no scope
-  // recorded." Chosen: GRANULAR codes for this branch, one per missing
-  // piece of evidence, matching the existing granular style already used
-  // for the primary SME review (missing-reviewer / missing-review-date /
-  // incomplete-review-checks are already separate codes, not one
-  // aggregate "missing-sme-review") -- consistent with that precedent
-  // rather than introducing a different aggregation style for the same
-  // kind of evidence.
+  // CORRECTED 2026-08-05 (final semantics). An earlier version of this
+  // block added GRANULAR "missing-*" codes (missing-independent-reviewer,
+  // missing-independent-review-scope, incomplete-independent-review-checks,
+  // missing-independent-review-conflict-declaration) for the case where
+  // `independentReviewDocumented` was `true` but individual evidence
+  // fields were still absent. That entire case is now IMPOSSIBLE for any
+  // record that passes isValidGovernanceRecord() -- `true` now requires
+  // ALL independent-review evidence to be present and complete (see the
+  // RECORD SCHEMA comment above and the bidirectional check below), so a
+  // record can never be BOTH `independentReviewDocumented:true` AND
+  // missing its scope/checklist/conflict-declaration. Those four codes
+  // were therefore dead: unreachable for any validly committed record,
+  // kept only by an earlier draft of this same correction that had not
+  // yet closed the "documented but incomplete" loophole. Removed rather
+  // than retained as unreachable public-contract codes.
+  //
+  // What CAN still legitimately happen for a fully documented,
+  // structurally complete independent review is that it does not qualify
+  // for RELEASE -- for two distinct, non-"missing" reasons, each with its
+  // own exact code:
+  //   UNAPPROVED_INDEPENDENT_REVIEWER -- the recorded reviewer identity
+  //     is present and complete, but is not on the approved list
+  //     (isApprovedIndependentReviewer()). The identity is NOT missing;
+  //     calling this "missing-independent-reviewer" would misdescribe a
+  //     present-but-unapproved identity as absent.
+  //   INDEPENDENT_REVIEW_CONFLICT_DECLARED -- independentReviewNoConflictDeclared
+  //     is recorded as `false`: the reviewer explicitly declared a
+  //     conflict. This is a complete, honest, DOCUMENTED record -- not a
+  //     missing declaration -- that correctly cannot satisfy
+  //     Release-qualified.
+  // Both reflect a genuinely COMPLETE record that is disqualified on its
+  // merits, distinct in kind from every other "missing-*" code, which all
+  // mean evidence was never recorded at all.
   var GOVERNANCE_BLOCKERS = {
     MISSING_DRAFTER: 'missing-drafter',
     MISSING_SOURCES: 'missing-sources',
@@ -3473,10 +3598,8 @@
     INCOMPLETE_REVIEW_CHECKS: 'incomplete-review-checks',
     UNRESOLVED_EDITION_SENSITIVITY: 'unresolved-edition-sensitivity',
     MISSING_INDEPENDENT_REVIEW: 'missing-independent-review',
-    MISSING_INDEPENDENT_REVIEWER: 'missing-independent-reviewer',
-    MISSING_INDEPENDENT_REVIEW_SCOPE: 'missing-independent-review-scope',
-    INCOMPLETE_INDEPENDENT_REVIEW_CHECKS: 'incomplete-independent-review-checks',
-    MISSING_INDEPENDENT_REVIEW_CONFLICT_DECLARATION: 'missing-independent-review-conflict-declaration',
+    UNAPPROVED_INDEPENDENT_REVIEWER: 'unapproved-independent-reviewer',
+    INDEPENDENT_REVIEW_CONFLICT_DECLARED: 'independent-review-conflict-declared',
     RELEASE_APPROVAL_PENDING: 'release-approval-pending'
   };
   // A source consisting only of a bare organization name/acronym
@@ -5954,47 +6077,27 @@
       isNonEmptyGovernanceString(rec.reviewScope) &&
       hasAllRequiredReviewChecks(rec.reviewChecks);
   }
-  /* Corrected 2026-08-05 (independent-review evidence correction).
-     Previously this function returned true for the bare
-     `independentReviewDocumented === true` flag alone -- confirmed by
-     direct reproduction that `independentReviewer: "A Distinct
-     Reviewer"` (an arbitrary, unapproved, unqualified name, with no
-     recorded scope, checklist, or conflict declaration) satisfied
-     `release-qualified` with zero blockers. `docs/CONTENT_GOVERNANCE.md`
-     requires an independent reviewer to have a stable identity, a
-     recorded date, a defined scope/checklist, and to be distinct from
-     the drafter and SME reviewer -- the prior code checked only
-     distinctness and date-shape, never approval, scope, checklist
-     completeness, or a conflict declaration. Now requires ALL of:
-       - `independentReviewDocumented === true`
-       - `independentReviewer` is an APPROVED independent-reviewer
-         identity (isApprovedIndependentReviewer() -- empty for the
-         current production pack, so this can only be satisfied by a
-         test-only patched fixture, never by real current data)
-       - `independentReviewScope` is a genuine, non-empty narrative,
-         recorded SEPARATELY from the SME `reviewScope` -- the SME
-         reviewer's scope can never stand in as evidence of what a
-         different person independently reviewed
-       - `independentReviewChecks` is COMPLETE against the same versioned
-         `GOVERNANCE_REVIEW_CHECKS_V1` enum, recorded as its OWN separate
-         array -- not inferred from or aliased to the SME `reviewChecks`
-       - `independentReviewNoConflictDeclared === true` -- an explicit
-         per-question declaration that this specific reviewer had no
-         authorship stake or other relevant conflict in THIS content;
-         `null` (not yet assessed) or `false` (a conflict was declared)
-         each fail this gate, deliberately -- only an explicit `true`
-         satisfies it.
-     `isValidGovernanceRecord()` already separately enforces (before this
-     function is ever reached) that `independentReviewDocumented:true` is
-     backed by non-null independentReviewer/independentReviewDate AND
-     that the identity is normalized-distinct from both `drafter` and
-     `reviewer` -- this function does not re-derive those checks, only
-     the additional sufficiency evidence above. */
+  /* Corrected 2026-08-05 (independent-review evidence correction; final
+     semantics tightened the same day -- see the RECORD SCHEMA comment
+     above for the full history). By the time this function runs,
+     `isValidGovernanceRecord()` has ALREADY guaranteed that
+     `independentReviewDocumented:true` means a COMPLETE review record:
+     non-empty `independentReviewer`/`independentReviewScope`, a valid
+     `independentReviewDate`, a COMPLETE `independentReviewChecks` set,
+     an actual recorded `independentReviewNoConflictDeclared` boolean,
+     and normalized-distinct identity from both `drafter` and `reviewer`.
+     This function therefore does NOT re-check completeness -- only
+     whether the (already-complete) record additionally QUALIFIES for
+     release: an APPROVED reviewer identity
+     (isApprovedIndependentReviewer() -- empty for the current production
+     pack, so this can only be satisfied by a test-only patched fixture,
+     never by real current data), AND no declared conflict
+     (`independentReviewNoConflictDeclared === true`, not `false` -- a
+     complete record where the reviewer declared an actual conflict is
+     honest and valid, just correctly disqualifying). */
   function meetsIndependentReview(rec){
     return rec.independentReviewDocumented === true &&
       isApprovedIndependentReviewer(rec.independentReviewer) &&
-      isNonEmptyGovernanceString(rec.independentReviewScope) &&
-      hasAllRequiredReviewChecks(rec.independentReviewChecks) &&
       rec.independentReviewNoConflictDeclared === true;
   }
   /* Corrected 2026-08-04 (second pass, point 5): for a public,
@@ -6058,18 +6161,21 @@
     if(!isValidGovernanceDate(rec.reviewDate)){ blockers.push(GOVERNANCE_BLOCKERS.MISSING_REVIEW_DATE); }
     if(!hasAllRequiredReviewChecks(rec.reviewChecks)){ blockers.push(GOVERNANCE_BLOCKERS.INCOMPLETE_REVIEW_CHECKS); }
     if(rec.editionSensitive === null){ blockers.push(GOVERNANCE_BLOCKERS.UNRESOLVED_EDITION_SENSITIVITY); }
-    // Corrected 2026-08-05 (independent-review evidence correction): a
-    // single aggregate MISSING_INDEPENDENT_REVIEW code could not
-    // distinguish "nothing documented at all" from "documented, but
-    // missing one specific piece of evidence" -- see meetsIndependentReview()
-    // and the GOVERNANCE_BLOCKERS comment above for the full rationale.
+    // Corrected 2026-08-05 (final semantics): once
+    // `independentReviewDocumented` is `true`, isValidGovernanceRecord()
+    // has ALREADY guaranteed the record is COMPLETE (reviewer, date,
+    // scope, full checklist, and an actual recorded conflict-declaration
+    // boolean all present) -- so the only two things that can still be
+    // wrong are QUALIFICATION, not completeness: an unapproved reviewer
+    // identity, or an affirmatively declared conflict. Neither is
+    // "missing" evidence -- both are complete, honest records that
+    // simply do not qualify for release, hence the distinct non-"missing"
+    // code names (see the GOVERNANCE_BLOCKERS comment above).
     if(!rec.independentReviewDocumented){
       blockers.push(GOVERNANCE_BLOCKERS.MISSING_INDEPENDENT_REVIEW);
     } else {
-      if(!isApprovedIndependentReviewer(rec.independentReviewer)){ blockers.push(GOVERNANCE_BLOCKERS.MISSING_INDEPENDENT_REVIEWER); }
-      if(!isNonEmptyGovernanceString(rec.independentReviewScope)){ blockers.push(GOVERNANCE_BLOCKERS.MISSING_INDEPENDENT_REVIEW_SCOPE); }
-      if(!hasAllRequiredReviewChecks(rec.independentReviewChecks)){ blockers.push(GOVERNANCE_BLOCKERS.INCOMPLETE_INDEPENDENT_REVIEW_CHECKS); }
-      if(rec.independentReviewNoConflictDeclared !== true){ blockers.push(GOVERNANCE_BLOCKERS.MISSING_INDEPENDENT_REVIEW_CONFLICT_DECLARATION); }
+      if(!isApprovedIndependentReviewer(rec.independentReviewer)){ blockers.push(GOVERNANCE_BLOCKERS.UNAPPROVED_INDEPENDENT_REVIEWER); }
+      if(rec.independentReviewNoConflictDeclared !== true){ blockers.push(GOVERNANCE_BLOCKERS.INDEPENDENT_REVIEW_CONFLICT_DECLARED); }
     }
     if(blockers.length === 0 && rec.lifecycle !== 'release-qualified'){
       blockers.push(GOVERNANCE_BLOCKERS.RELEASE_APPROVAL_PENDING);
@@ -6116,36 +6222,39 @@
     if(rec.independentReviewScope !== null && !isNonEmptyGovernanceString(rec.independentReviewScope)){ return false; }
     if(!isValidReviewChecksArray(rec.independentReviewChecks)){ return false; }
     if(rec.independentReviewNoConflictDeclared !== null && typeof rec.independentReviewNoConflictDeclared !== 'boolean'){ return false; }
-    // independent-review bidirectional consistency, corrected 2026-08-05
-    // (independent-review evidence correction; supersedes the STALE
-    // comment this replaced, which claimed "Independent review is
-    // intentionally NOT required for any lifecycle state" -- that was
-    // true when originally written but became stale the moment
-    // meetsReleaseQualified() below was changed to require it; a
-    // contradictory in-source claim like that is exactly the kind of
-    // drift this correction pass exists to catch). `false` REQUIRES
-    // every independent-review evidence field to be in its documented
-    // blank state (`independentReviewer`/`independentReviewDate`/
-    // `independentReviewScope`/`independentReviewNoConflictDeclared` all
-    // `null`); `true` REQUIRES `independentReviewer` and
-    // `independentReviewDate` to both be present, AND requires the
-    // independent reviewer to be a genuinely distinct identity from both
-    // the drafter and the primary reviewer under normalized comparison,
-    // AND requires the drafter itself to be known (identity cannot be
-    // compared against an unknown author). `independentReviewScope` and
-    // `independentReviewNoConflictDeclared` are NOT required non-null by
-    // this structural check alone when `true` -- a review can be
-    // genuinely "documented" (someone did it, on some date) before its
-    // scope/conflict-declaration paperwork is fully recorded; MEETING
-    // release-qualified's SUFFICIENCY bar (scope present, checklist
-    // COMPLETE, conflict declaration explicitly `true`, and an APPROVED
-    // reviewer identity) is meetsIndependentReview()'s job, not this
-    // structural gate's -- exactly mirroring how the primary
-    // `reviewChecks`'s structural validity (isValidReviewChecksArray) is
-    // separate from its release-track COMPLETENESS
-    // (hasAllRequiredReviewChecks, only required by meetsSmeReviewed()).
+    // independent-review bidirectional consistency, CORRECTED 2026-08-05
+    // (final semantics -- see the field-by-field RECORD SCHEMA comment
+    // above for the full rationale). `false` REQUIRES every
+    // independent-review evidence field to be in its blank state.
+    // `true` now means a COMPLETE review record exists -- REQUIRES ALL
+    // of: independentReviewer/independentReviewDate present; a
+    // non-empty independentReviewScope (a SEPARATE recorded instance
+    // from the SME reviewer's own reviewScope); a COMPLETE
+    // independentReviewChecks set (hasAllRequiredReviewChecks() -- not
+    // merely a structurally valid, possibly-partial array); an actual
+    // recorded independentReviewNoConflictDeclared boolean (`true` or
+    // `false`, never `null` -- a review whose conflict status was never
+    // assessed is not a "documented" review); a known `drafter`; and the
+    // independent reviewer's normalized identity distinct from both
+    // `drafter` and the primary SME `reviewer`. A record claiming
+    // `independentReviewDocumented:true` while any of this is missing is
+    // CONTRADICTORY and is rejected here, at load time -- the previous
+    // version of this check treated `true` as "some evidence may exist,"
+    // confirmed by a committed test that explicitly expected exactly
+    // that incomplete state to load; that was wrong, and this file
+    // deliberately does not introduce a partial/in-progress review state
+    // to work around it. Whether the (now-guaranteed-complete) review
+    // reaches Release-qualified -- approved reviewer, no conflict
+    // declared -- is meetsIndependentReview()'s job below, not this
+    // structural gate's; a documented review with an unapproved reviewer
+    // or a declared conflict is still a valid, complete, honest record,
+    // just one release-qualified correctly excludes.
     if(rec.independentReviewDocumented){
-      if(!(rec.independentReviewer !== null && rec.independentReviewDate !== null)){ return false; }
+      if(!isNonEmptyGovernanceString(rec.independentReviewer)){ return false; }
+      if(!isValidGovernanceDate(rec.independentReviewDate)){ return false; }
+      if(!isNonEmptyGovernanceString(rec.independentReviewScope)){ return false; }
+      if(!hasAllRequiredReviewChecks(rec.independentReviewChecks)){ return false; }
+      if(typeof rec.independentReviewNoConflictDeclared !== 'boolean'){ return false; }
       if(rec.drafter === null){ return false; }
       var normIndependent = normalizeGovernanceIdentity(rec.independentReviewer);
       var normDrafter = normalizeGovernanceIdentity(rec.drafter);

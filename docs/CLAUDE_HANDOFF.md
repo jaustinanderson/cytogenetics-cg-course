@@ -1772,6 +1772,29 @@ reproduction. Corrected: three new record fields
 the current pack — no real reviewer or credential invented), and granular
 blocker codes for a documented-but-incomplete independent review. See
 `docs/QUALITY_LOG.md` QL-034 for the full record.
+
+A FIFTH round of independent review (same day, before merge) found that
+QL-034's three new fields were checked by the release-qualification logic
+but never by the load-time structural validity check — a record could set
+`independentReviewDocumented: true` with a reviewer name and date but
+leave `independentReviewScope`, `independentReviewChecks`, and
+`independentReviewNoConflictDeclared` unpopulated, and it still loaded; a
+committed test explicitly (and wrongly) expected exactly that. Corrected:
+`independentReviewDocumented: true` now requires the complete record
+(identity, date, non-empty scope, a COMPLETE checklist, and an actual
+boolean conflict declaration) in the same step, or the record is rejected
+at script load — not merely flagged with a blocker. The four QL-034
+granular "missing-*" blocker codes became unreachable dead code once this
+held and were removed; two new codes now distinguish a complete-but-
+disqualified record from a missing one: `unapproved-independent-reviewer`
+and `independent-review-conflict-declared`. `meetsIndependentReview()`
+and `computeGovernanceBlockers()` simplified accordingly. Mutation testing
+this round also surfaced and closed two genuine, previously-uncovered
+test gaps: no test had proven `meetsReleaseQualified()` itself (not only
+the blocker-display logic) rejects a `release-qualified` label backed by
+an unapproved or conflicted-but-complete independent review. See
+`docs/QUALITY_LOG.md` QL-035 for the full record.
+
 **Draft PR titled "Add question provenance and review gates (Milestone
 1)" is open against `main`, linked to Issue #3, awaiting independent
 review — not yet merged.** Treat this as an open risk until that PR
