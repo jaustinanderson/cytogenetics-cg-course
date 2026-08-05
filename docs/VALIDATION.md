@@ -2480,6 +2480,87 @@ source was added to any current question, no drafter or reviewer was
 asserted, and no question was marked release-qualified. `SCHEMA_V` stays
 `2`. The existing `README.md` beta warning is unchanged.
 
+### Correction — a second independent review found remaining evidence-precision gaps and tightened the independent-review policy, added 2026-08-04
+
+A third-round independent review of the same head (`eaf18c9`, itself the
+QL-031 correction) confirmed the overall design sound but found six
+further ways the mechanism could still certify incomplete records, plus
+a deliberate human-policy tightening. Each was independently reproduced
+before any fix:
+
+1. A duplicate AUTHORED question id (in `QUIZZES`, not the governance
+   registry) still went undetected — `assertGovernanceRegistryIntegrity()`
+   built its own `authoredIds` set via the same silently-collapsing
+   object-literal pattern QL-031 had only fixed for the governance
+   registry itself.
+2. The `≥20`-character citation-length floor from QL-031 was itself an
+   arbitrary proxy for source identity, not a structural check of it.
+3. The approved-SME-reviewer set was a flat array, not structured for
+   future extensibility to a different subject pack.
+4. The review-checklist enum had no version identifier.
+5. (Policy decision, not a defect) `release-qualified` should require a
+   documented independent second-person review for a public, potentially
+   commercial product — the prior design left it optional.
+6. `computeGovernanceBlockers()` had no blocker code for missing
+   independent review, a gap that would have become real once (5) took
+   effect.
+
+**Corrections:**
+
+- `assertGovernanceRegistryIntegrity()` now counts the flat authored-
+  question list and separately counts the unique id set, throwing on any
+  disagreement — independent of any keyed set.
+- Source schema gained `publisher` (6 fields:
+  `{citation, publisher, edition, date, locator, url}`).
+  `isSufficientGovernanceSource()` requires both `citation` and
+  `publisher` to be genuine, non-placeholder strings (exact-token
+  denylist, never a substring match), replacing the length heuristic.
+- `APPROVED_SME_REVIEWERS_BY_PACK`, keyed by `GOVERNANCE_SUBJECT_PACK`,
+  replaces the flat reviewer array.
+- `GOVERNANCE_REVIEW_CHECKS_V1` names the checklist's version explicitly.
+- `meetsIndependentReview()` + a new `missing-independent-review`
+  blocker; `release-qualified` now requires it.
+  `docs/CONTENT_GOVERNANCE.md` and `docs/SCIENTIFIC_REVIEW.md` updated to
+  state the policy explicitly.
+
+**8 new dependency-free tests** (`tests/question-governance.mjs`, 46 → 54):
+a dedicated duplicate-authored-question-id test (patching `QUIZZES`
+source text directly); isolated placeholder-citation and
+placeholder-publisher fixtures; a missing-publisher fixture; a genuine-
+title-containing-a-placeholder-word fixture (proving exact-token, not
+substring, matching); release-qualified-without-independent-review
+rejection; an sme-reviewed-with-complete-evidence-but-no-independent-
+review blocker-exactness test; a malformed (non-string) `reviewChecks`
+entry test; and a zero-blockers-vs-`releaseQualified` equivalence matrix
+test across 6 fixtures.
+
+**Mutation-tested:** 7 targeted reversions — removing the duplicate-
+authored-id count check, removing the citation-placeholder check,
+removing the publisher-non-null requirement, removing
+`isApprovedSmeReviewer()` from `meetsSmeReviewed()`, removing
+`meetsIndependentReview()` from `meetsReleaseQualified()`, removing the
+`missing-independent-review` blocker, and weakening the reviewChecks
+type check — each failed exactly its intended test(s) and no others,
+reverted to byte-identical via `diff` before committing.
+
+Also added, as a SEPARATE, bank-level (not per-question) confirmed known
+risk: independently reproduced answer-choice cueing statistics across
+all 153 authored questions — answer index 1/B is correct in 139/153
+(90.8%); the correct choice is the uniquely longest option in 114/153
+(74.5%), longest-or-tied in 133/153 (86.9%). Recorded in
+`docs/QUALITY_LOG.md` QL-033 and `docs/ROADMAP.md` as a tracked,
+unresolved risk — no content was rewritten, shuffled, or rebalanced in
+this PR, and no psychometric pass threshold was invented.
+
+Full local validation: `npm test` (172 dependency-free DOM-behavior
+checks + 54 governance checks), targeted
+`npx playwright test tests/e2e/review-disclosure.spec.mjs` (10/10 across
+both projects, unaffected by this round's code changes), and the
+complete `npx playwright test` suite.
+
+No question, answer, rationale, image, or scientific claim changed.
+`SCHEMA_V` stays `2`.
+
 ## Gates still open
 
 ### Browser behavior

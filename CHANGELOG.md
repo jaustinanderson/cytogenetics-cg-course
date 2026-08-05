@@ -52,9 +52,28 @@ All notable repository changes are recorded here.
   independent-review evidence fields were not bidirectionally consistent
   (now enforced both directions, including same-person rejection). Also
   corrected the disclosure's wording and its link (now the rendered
-  GitHub view, not raw markdown). Test coverage updated to 45 dependency-
+  GitHub view, not raw markdown). Test coverage updated to 46 dependency-
   free tests and 10 real-browser Playwright tests, mutation-tested across
   the 10 required correction scenarios plus the original 6.
+  **Corrected again (QL-032):** a third round of independent review found
+  a duplicate AUTHORED question id (in `QUIZZES`, not the governance
+  registry) still went undetected — fixed by counting the flat authored-
+  question list against the unique id set at load time; the citation-
+  length heuristic was itself an arbitrary proxy — replaced with a
+  required, separate, non-placeholder `publisher` field; the approved-
+  reviewer set is now keyed by an explicit `GOVERNANCE_SUBJECT_PACK` for
+  future extensibility; the review-checklist enum is now versioned
+  (`GOVERNANCE_REVIEW_CHECKS_V1`); and, for a public, potentially
+  commercial product, `release-qualified` now explicitly requires a
+  documented independent second-person review (`docs/CONTENT_GOVERNANCE.md`
+  and `docs/SCIENTIFIC_REVIEW.md` updated accordingly), with a new
+  `missing-independent-review` blocker. Also recorded, as a separate,
+  bank-level (not per-question) confirmed known risk: independently
+  reproduced answer-choice cueing statistics across the 153-question
+  bank (correct answer is index B in 90.8% of questions; the longest
+  option in 74.5%) — tracked in `docs/QUALITY_LOG.md` QL-033 and
+  `docs/ROADMAP.md`, not fixed in this PR. Test coverage updated to 54
+  dependency-free tests, mutation-tested across 7 further reversions.
 - Defined and enforced the runtime-injected-question lifecycle
   (`index.html`, Issue #2, **merged**): adopted a
   deliberate **split lifecycle** — a question definition added via

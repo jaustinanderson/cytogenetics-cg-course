@@ -92,15 +92,25 @@ to anyone outside this repository:
 - **Source-checked** — an identified, dated authoritative source exists
   and is cited, independent of whether anyone has yet reviewed the content
   against that source.
-- **Release-qualified** — source, review, schema, and automated gates all
-  passed together, not any one alone.
+- **Release-qualified** — source, SME review, **and** a documented
+  independent second-person review, plus schema and automated gates, all
+  passed together, not any one alone. **Corrected 2026-08-04**: Austin's
+  SME review alone previously could (in the machine model) satisfy
+  Release-qualified; the policy is now explicit that it cannot — a
+  distinct second person, with no authorship stake in the content and no
+  role as its SME reviewer, must independently review it first. This is
+  the safer policy for a public, potentially commercial scientific
+  learning product; see `docs/CONTENT_GOVERNANCE.md` for the exact
+  requirement and `docs/ARCHITECTURE.md` for how it is machine-enforced.
 
 This record uses **"Not yet independently reviewed"** as its plain-language
 synonym for **Draft**, deliberately, to flag that even a future Austin
 SME-review would not itself be an *independent* review in the
 second-person sense above. That distinction is worth stating explicitly
 rather than letting the single word "reviewed" quietly stand in for both
-meanings.
+meanings — and, as of the correction above, it is no longer only a
+documentation nuance: it is the exact gate between SME-reviewed and
+Release-qualified.
 
 ### This record is now backed by a machine-enforced registry (Issue #3, Milestone 1)
 
@@ -109,18 +119,22 @@ question's state is enforced, not just recorded in prose: `index.html`
 carries a `QUESTION_GOVERNANCE` registry with one record per authored
 question id, and `window.CytoCourse.getQuestionGovernance()` exposes it
 read-only. A question's record cannot claim Source-checked, SME-reviewed,
-or Release-qualified without the evidence that state requires — an exact,
-dated, located source; a reviewer identity matching this document's
-"SME-reviewed" definition (Austin, not an arbitrary name); a complete,
-structured set of the "Review must verify" checks from
-`docs/CONTENT_GOVERNANCE.md`; and, for Release-qualified, a named drafter
-and an explicit edition-sensitivity assessment. The app rejects a
-contradictory record at load time. **Corrected 2026-08-04**: independent
-review found the original mechanism accepted a bare organization name as
-a "source," an arbitrary reviewer string as "SME-reviewed," and a
-free-text review-scope description as proof the full checklist was
-verified — none of which actually implemented the policy stated above.
-See `docs/QUALITY_LOG.md` QL-031 for the full defect-by-defect record.
+or Release-qualified without the evidence that state requires — an
+identifiable, non-placeholder title and publisher, dated, located source;
+a reviewer identity matching this document's "SME-reviewed" definition
+(Austin, not an arbitrary name); a complete, structured set of the
+"Review must verify" checks from `docs/CONTENT_GOVERNANCE.md`; and, for
+Release-qualified, a named drafter, an explicit edition-sensitivity
+assessment, and a documented independent second-person review distinct
+from both the drafter and Austin. The app rejects a contradictory record
+at load time, including a duplicate id among the authored questions
+themselves. **Corrected 2026-08-04**: independent review found the
+original mechanism accepted a bare organization name as a "source," an
+arbitrary reviewer string as "SME-reviewed," a free-text review-scope
+description as proof the full checklist was verified, and
+Release-qualified without any independent review at all — none of which
+actually implemented the policy stated above. See `docs/QUALITY_LOG.md`
+QL-031 and QL-032 for the full defect-by-defect record.
 This document's "all 153 questions are Draft" claim below is the same
 fact the registry itself enforces — see `docs/ARCHITECTURE.md` "Question
 provenance and scientific-review governance" for the exact schema and

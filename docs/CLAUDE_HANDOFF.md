@@ -1733,6 +1733,30 @@ consistency (including same-person rejection). Also corrected the
 disclosure's wording (no longer implies "automated tests confirm...
 behaves correctly") and its link (now the rendered GitHub blob view, not
 raw markdown). See `docs/QUALITY_LOG.md` QL-031 for the full record.
+
+A THIRD round of independent review (same day, before merge) found
+remaining gaps and one deliberate policy tightening: a duplicate
+AUTHORED question id (not a governance-registry id) still went
+undetected, since `assertGovernanceRegistryIntegrity()` built its own
+`authoredIds` set via the same silent-collapse pattern QL-031 had only
+fixed one level down; the citation-length heuristic was itself flagged
+as an arbitrary proxy, replaced by a separate required `publisher`
+field with placeholder-token rejection instead of length; the
+approved-reviewer set was restructured under an explicit
+`GOVERNANCE_SUBJECT_PACK` key for future extensibility; the review-
+checklist enum was versioned (`GOVERNANCE_REVIEW_CHECKS_V1`); and,
+for a public, potentially commercial product, `release-qualified` now
+explicitly requires a documented independent second-person review, not
+merely Austin's own SME review — `docs/CONTENT_GOVERNANCE.md` and
+`docs/SCIENTIFIC_REVIEW.md` were updated to state this policy directly.
+Separately, an independently reproduced answer-choice cueing risk across
+the 153-question bank (answer index B correct in 90.8% of questions; the
+correct choice the longest option in 74.5%) was recorded as a tracked,
+unresolved, bank-level risk (`docs/QUALITY_LOG.md` QL-033,
+`docs/ROADMAP.md`) — explicitly not fixed in this PR, since it requires
+human scientific judgment to correct without introducing new
+inaccuracies. See `docs/QUALITY_LOG.md` QL-032 for the full governance-
+mechanism correction record.
 **Draft PR titled "Add question provenance and review gates (Milestone
 1)" is open against `main`, linked to Issue #3, awaiting independent
 review — not yet merged.** Treat this as an open risk until that PR

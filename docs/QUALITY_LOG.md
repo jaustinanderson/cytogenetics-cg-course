@@ -3815,3 +3815,185 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   itself an untested assertion until a fixture proves it — the
   duplicate-key claim here was wrong and went unnoticed through an entire
   prior review round because nobody had actually tried it.
+
+## QL-032 — a second independent review found the governance mechanism still did not fully implement its stated policy (Issue #3, Milestone 1)
+
+- **Status:** Corrected on the same branch
+  (`claude/milestone-1-question-provenance`), draft PR open for
+  independent review, not yet merged. A second independent review at
+  head `eaf18c9ca9aac300e7cbc9908853f3e2c6373e1c` (itself the QL-031
+  correction) confirmed the separate-registry design, source-sufficiency
+  direction, approved-reviewer direction, structured-checklist direction,
+  and lifecycle/blocker invariant direction all sound, but found six
+  further ways the mechanism could still certify incomplete or
+  contradictory records, plus a distinct human-policy tightening.
+- **Finding 1 — confirmed: `assertGovernanceRegistryIntegrity()` cannot
+  detect a duplicate AUTHORED question id.** QL-031 fixed duplicate
+  GOVERNANCE-registry ids (via `buildGovernanceRegistry()`), but the
+  integrity check itself still builds its `authoredIds` set by iterating
+  `QUIZZES` and writing `authoredIds[q.id] = true` — the exact same
+  object-literal collapse, one level up. Reproduced: renaming one
+  authored question's id to collide with another's, and removing the
+  now-orphaned governance entry so the (miscounted) key sets still lined
+  up, let the script load with no error at all — 153 question objects,
+  only 152 unique ids, entirely undetected.
+- **Finding 2 — confirmed: the citation-length heuristic was itself an
+  arbitrary proxy.** QL-031's `≥20`-character floor on `citation` was
+  flagged as not actually checking source identity. A source needs a
+  separate, genuine `publisher` (responsible author/publisher/
+  organization), not just a longer title string.
+- **Finding 3 — confirmed: the approved-reviewer set was not structured
+  for extensibility.** A single flat array did not name which "subject
+  pack" (this course's authored content) it governed, making a future
+  different subject pack's reviewer set ambiguous to add correctly.
+- **Finding 4 — confirmed: the review-checklist enum was not versioned.**
+  `GOVERNANCE_REVIEW_CHECKS` had no version identifier; a future change
+  to the mandatory categories could silently redefine what past evidence
+  meant.
+- **Finding 5 — a deliberate human-policy tightening, not a defect: for
+  a public, potentially commercial scientific learning product,
+  `release-qualified` should require a documented independent
+  second-person review, not merely Austin's own SME review.** The prior
+  design (QL-030/QL-031) explicitly left independent review optional,
+  per instruction at the time; this instruction reversed that decision.
+  `docs/CONTENT_GOVERNANCE.md` and `docs/SCIENTIFIC_REVIEW.md` were
+  updated to state the new policy explicitly, and the mechanism now
+  enforces it.
+- **Finding 6 — confirmed: `computeGovernanceBlockers()` did not name a
+  `missing-independent-review` blocker**, an omission that would have
+  become a genuine gap once Finding 5's policy took effect.
+- **Impact:** None shipped — PR #23 remained draft/unmerged throughout;
+  found and fixed before merge.
+- **Cause:** Finding 1 is the same root cause as QL-031's Finding 1
+  (silent object-literal key collapse), not yet applied to every place
+  that pattern appeared. Findings 2–4 are refinements of QL-031's
+  corrections that a second review pass caught as still incomplete.
+  Finding 5 is a policy decision communicated after QL-031 shipped.
+- **Correction:**
+  - `assertGovernanceRegistryIntegrity()` now counts the flat authored-
+    question list and separately counts the unique id set, throwing the
+    instant those two counts disagree — independent of any keyed set,
+    and independent of which two ids collided.
+  - Source schema gained `publisher` (6 fields total:
+    `{citation, publisher, edition, date, locator, url}`).
+    `isSufficientGovernanceSource()` requires both `citation` and
+    `publisher` to be genuine, non-placeholder strings (exact-token
+    denylist match, `GOVERNANCE_SOURCE_PLACEHOLDER_TOKENS`), replacing
+    the length heuristic entirely.
+  - `APPROVED_SME_REVIEWERS_BY_PACK`, keyed by `GOVERNANCE_SUBJECT_PACK`
+    (`'cytogenetics-cg-ascp-v1'`), replaces the flat
+    `APPROVED_SME_REVIEWERS` array structure.
+  - `GOVERNANCE_REVIEW_CHECKS_V1` replaces `GOVERNANCE_REVIEW_CHECKS`
+    (kept as an alias for internal use), documenting the versioning
+    discipline for any future checklist change.
+  - `meetsIndependentReview(rec)` + `MISSING_INDEPENDENT_REVIEW` blocker;
+    `meetsReleaseQualified()` now requires it.
+  - `docs/CONTENT_GOVERNANCE.md`'s Release-qualified definition, and
+    `docs/SCIENTIFIC_REVIEW.md`'s corresponding text, updated to state
+    the independent-review requirement explicitly.
+- **Tests:** `tests/question-governance.mjs` extended to 54 dependency-
+  free tests (from 46): a dedicated duplicate-authored-question-id test
+  (patching `QUIZZES` source text directly, not just the governance
+  entries); isolated placeholder-citation and placeholder-publisher
+  fixtures; a missing-publisher fixture; a genuine-title-containing-a-
+  placeholder-word fixture (proving exact-token, not substring, matching);
+  release-qualified-without-independent-review rejection; an sme-reviewed-
+  with-complete-evidence-but-no-independent-review blocker-exactness
+  test; a malformed (non-string) `reviewChecks` entry test; and a
+  zero-blockers-vs-releaseQualified equivalence matrix test across 6
+  fixtures (Draft/source-checked/sme-reviewed with complete evidence,
+  sme-reviewed missing only independent review, and valid
+  release-qualified).
+- **Mutation-tested:** 7 targeted reversions — removing the duplicate-
+  authored-id count check; removing the citation-placeholder check;
+  removing the publisher-non-null requirement; removing
+  `isApprovedSmeReviewer()` from `meetsSmeReviewed()`; removing
+  `meetsIndependentReview()` from `meetsReleaseQualified()`; removing the
+  `missing-independent-review` blocker; and weakening the reviewChecks
+  type check to accept non-string values — each failed exactly its
+  intended test(s) and no others, reverted to byte-identical via `diff`
+  before committing.
+- **Full local validation:** `npm test` (172 dependency-free
+  DOM-behavior checks + 54 governance checks), targeted
+  `npx playwright test tests/e2e/review-disclosure.spec.mjs` (10/10
+  across both projects, unaffected by this round's code changes), and
+  the complete `npx playwright test` suite.
+- **Scope:** No question, answer, rationale, image, or scientific claim
+  changed. No source was added to any current question, no drafter or
+  reviewer was asserted, and no question was marked release-qualified.
+  `SCHEMA_V` stays `2`.
+- **Prevention:** When a fix collapses a duplicate-key risk in ONE place
+  (a governance registry built from a fixed literal), check every OTHER
+  place the same collapsing pattern (`obj[key] = value` inside a loop
+  over externally-authored data) appears before declaring the class of
+  defect closed — the same footgun reappeared one level up, in code that
+  looked unrelated to the first fix.
+
+## QL-033 — confirmed assessment-bank answer-choice cueing risk across the 153-question bank (bank-level, not per-question)
+
+- **Status:** Confirmed known risk, recorded for tracking. Not fixed in
+  this PR (Issue #3, Milestone 1) — this is a bank-level assessment-
+  validity concern, distinct from per-question scientific governance,
+  and rewriting/shuffling/rebalancing questions is explicitly out of
+  scope for PR #23.
+- **Finding — confirmed by direct, independent computation against the
+  live 153-question bank (all `QUIZZES.*` arrays, via
+  `window.CytoCourse.getQuestions()`):**
+  - Answer-index distribution: index 0/A = 11, index 1/B = 139, index
+    2/C = 3, index 3/D = 0.
+  - The correct choice is the UNIQUELY longest option in 114 of 153
+    questions (74.5%).
+  - The correct choice is the longest OR tied-longest option in 133 of
+    153 questions (86.9%).
+  - These exact counts were independently reproduced by iterating every
+    authored question's `o` (options) and `a` (answer index) fields
+    directly, not assumed from the report that prompted this entry.
+- **Impact:** A test-savvy learner (or an automated answer-key
+  extraction) could score well above their actual cytogenetics knowledge
+  by exploiting these cues alone — answer index B is correct roughly
+  91% of the time, and "pick the longest option" alone would score
+  correctly on the majority of questions. This is a genuine psychometric
+  validity defect at the BANK level. It says nothing about whether any
+  individual question's stated facts, rationale, or difficulty tagging
+  are scientifically accurate — that is the separate, per-question
+  concern `QUESTION_GOVERNANCE` (QL-030–QL-032) already tracks.
+- **Cause:** Authoring pattern — questions were apparently drafted
+  without deliberately randomizing/balancing the position of the correct
+  answer, and without controlling for the correct answer's option length
+  relative to distractors.
+- **Correct action (recorded here, not performed in this PR):** A future,
+  separately scoped task must rebalance the answer-index distribution
+  toward a roughly uniform 25/25/25/25 split (or the nearest achievable
+  given fixed 2–4 option counts) and revise distractor lengths so the
+  correct answer is not disproportionately the longest option — without
+  changing which answer is scientifically correct for any question. This
+  requires human/scientific judgment to rewrite distractors credibly, not
+  a mechanical shuffle, since a naive index reassignment alone would
+  leave the length-cueing problem intact, and a naive distractor-padding
+  pass could introduce new scientific inaccuracies.
+- **Explicitly not decided here:** no psychometric pass threshold (e.g.
+  "no domain may exceed 40% at answer position B") is invented in this
+  entry — that is a future, separately scoped measurement-and-policy
+  decision, not assumed or implied by this record.
+- **Relationship to per-question release-qualification:** Per-item
+  release qualification (`QUESTION_GOVERNANCE`, individual questions
+  reaching `release-qualified`) is **necessary but not sufficient** for
+  the question bank, or any exam form drawn from it, to be considered
+  release-qualified as a whole. A bank could have every individual
+  question source-checked, SME-reviewed, and independently reviewed, and
+  still be unsuitable for release due to this bank-level cueing problem.
+  `docs/ARCHITECTURE.md`'s release-gate reconciliation table records this
+  distinction explicitly.
+- **Tests:** No new automated test asserts a specific target
+  distribution (that would require deciding the still-undecided
+  threshold above). The exact counts in this entry were verified by a
+  one-off computation against the live course data before being
+  recorded, and remain independently reproducible via
+  `window.CytoCourse.getQuestions()`.
+- **Full local validation:** N/A — no code changed for this entry; see
+  QL-032 for this PR's code-level validation.
+- **Prevention:** Any future automated or human authoring workflow for
+  new questions should track the running answer-index distribution and
+  relative distractor lengths as it drafts, rather than discovering the
+  imbalance only after 153 questions exist. See `docs/ROADMAP.md` for
+  the tracked follow-up item.

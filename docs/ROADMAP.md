@@ -421,15 +421,39 @@ review status stable before adding 46 questions.
   (duplicate-id detection, source sufficiency, an approved-SME-reviewer
   identity, a structured review-check enum, lifecycle/blocker/
   releaseQualified invariants, and independent-review bidirectional
-  consistency) — corrected on the same branch; see `docs/QUALITY_LOG.md`
-  QL-030 and QL-031 and `docs/ARCHITECTURE.md` "Question provenance and
-  scientific-review governance" for the full record. Left unchecked
-  pending independent review and merge; image-manifest normalization and
-  broader API contract tests below remain separately scoped and out of
-  this PR's scope regardless
+  consistency) — corrected on the same branch. A THIRD round found
+  remaining gaps (a duplicate AUTHORED question id was still
+  undetectable; the source-sufficiency check still used a length
+  heuristic instead of a genuine publisher field; the approved-reviewer
+  set was not structured for future extensibility; the review-checklist
+  enum was not versioned) and a deliberate policy tightening
+  (release-qualified now requires a documented independent second-person
+  review, not merely Austin's own SME review) — also corrected on the
+  same branch. See `docs/QUALITY_LOG.md` QL-030, QL-031, and QL-032, and
+  `docs/ARCHITECTURE.md` "Question provenance and scientific-review
+  governance" for the full record. Left unchecked pending independent
+  review and merge; image-manifest normalization, broader API contract
+  tests, and the assessment-bank cueing item below remain separately
+  scoped and out of this PR's scope regardless
 - [ ] Normalize the image-manifest schema so candidate records use explicit
   unknown values
 - [ ] Add browser contract tests for every public API claim
+- [ ] Correct the confirmed assessment-bank answer-choice cueing defect
+  across the 153-question bank — see `docs/QUALITY_LOG.md` QL-033:
+  independently reproduced counts show the correct answer is index 1/B
+  in 139 of 153 questions (90.8%), and is the uniquely longest option in
+  114 of 153 (74.5%), longest-or-tied in 133 of 153 (86.9%). This is a
+  bank-level psychometric validity problem, distinct from per-question
+  scientific governance (`QUESTION_GOVERNANCE`, Issue #3) — per-item
+  release qualification is necessary but not sufficient for the question
+  bank, or any exam form drawn from it, to be release-qualified. Requires
+  human/scientific judgment to rewrite distractor lengths and rebalance
+  answer-index distribution credibly (not a mechanical shuffle, which
+  would not fix distractor-length cueing, and not naive padding, which
+  could introduce scientific inaccuracies). No psychometric pass
+  threshold is decided yet; that is part of this future task's scope,
+  not assumed here. Preserve the beta disclosure until this is resolved
+  and independently verified.
 
 ### Exit criteria
 

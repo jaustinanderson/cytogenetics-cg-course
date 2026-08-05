@@ -105,9 +105,10 @@ const GOVERNANCE_VIEW_KEYS = [
 const DRAFT_BLOCKERS = [
   "missing-drafter", "missing-sources", "missing-source-check",
   "missing-reviewer", "missing-review-date", "incomplete-review-checks",
-  "unresolved-edition-sensitivity",
+  "unresolved-edition-sensitivity", "missing-independent-review",
 ];
 const APPROVED_REVIEWER = "Jerad Austin Anderson";
+const INDEPENDENT_REVIEWER = "A Distinct Second-Person Reviewer";
 const ALL_REVIEW_CHECKS = [
   "best-answer-defensible", "rationale-accuracy", "distractor-quality",
   "domain-difficulty-correct", "original-wording", "no-recalled-exam-content",
@@ -118,6 +119,7 @@ const ALL_REVIEW_CHECKS = [
 function sufficientSource(overrides = {}) {
   return {
     citation: "ASCP BOC CG(ASCP) and CG(ASCPi) Examination Content Guideline",
+    publisher: "American Society for Clinical Pathology Board of Certification",
     edition: null,
     date: "2025-09-25",
     locator: "Section 3, Table 2",
@@ -160,6 +162,9 @@ function completeReleaseQualifiedFields() {
     ...completeSmeReviewedFields(),
     drafter: APPROVED_REVIEWER,
     editionSensitive: false,
+    independentReviewDocumented: true,
+    independentReviewer: INDEPENDENT_REVIEWER,
+    independentReviewDate: "2026-08-04",
   };
 }
 
@@ -190,6 +195,24 @@ test("a duplicate governance-entry id is rejected at construction, not silently 
 test("buildGovernanceRegistry produces exactly 153 entries with no silent collapse when ids are all unique", () => {
   const all = baselineApi.getQuestionGovernance();
   assert.equal(Object.keys(all).length, 153);
+});
+
+test("a duplicate AUTHORED QUESTION id (in QUIZZES, not the governance registry) is independently detected -- fixing the governance-registry dedup alone left this gap", () => {
+  // Renaming one authored question's id to collide with another's, and
+  // removing the now-orphaned governance entry for the renamed id, makes
+  // the (collapsed) authored-id key set and the governance registry's
+  // key set line up exactly -- confirmed by direct reproduction that,
+  // before this correction, this exact scenario loaded with NO error at
+  // all: 153 question objects, but only 152 unique ids.
+  const idTarget = '{id:"m1-q2",d:"orientation"';
+  const govTarget = '["m1-q2", DRAFT_GOVERNANCE_RECORD()],\n';
+  assert.ok(inlineScript.includes(idTarget), "id patch target not found -- has the source layout changed?");
+  assert.ok(inlineScript.includes(govTarget), "governance patch target not found -- has the source layout changed?");
+  let patched = inlineScript.replace(idTarget, '{id:"m1-q1",d:"orientation"');
+  patched = patched.replace(govTarget, "");
+  const result = bootScript(patched);
+  assert.equal(result.ok, false, "a duplicate authored question id must fail to load, independent of the governance registry's own dedup");
+  assert.match(String(result.error), /duplicate authored question id detected: 153 authored questions but only 152 unique ids/);
 });
 
 /* ============================ per-record structural validation ============================ */
@@ -227,22 +250,49 @@ test("all 153 current questions remain Draft, none is release-qualified, and no 
 
 /* ============================ 2. source-reference sufficiency ============================ */
 
-test("an organization-name-only citation ('ASCP', no date/edition, no locator/url) does not satisfy source-checked", () => {
+test("a placeholder citation ('x'), even with an otherwise-complete publisher/date/locator, does not satisfy source-checked -- isolates the citation-placeholder check specifically", () => {
   const result = bootWithPatchedRecord(FIXTURE_ID, blankRecord({
     lifecycle: "source-checked",
-    sources: [{ citation: "ASCP", edition: null, date: null, locator: null, url: null }],
+    sources: [sufficientSource({ citation: "x" })],
     sourceCheckedBy: APPROVED_REVIEWER, sourceCheckedDate: "2026-08-04",
   }));
-  assert.equal(result.ok, false, "an organization-name-only source must be rejected");
+  assert.equal(result.ok, false, "a placeholder citation must be rejected even with everything else present");
 });
 
-test("a short citation ('ASCP') is insufficient even when an otherwise-complete date and locator are present -- isolates the citation-substantiveness check specifically", () => {
+test("a placeholder publisher ('TBD'), even with an otherwise-complete citation/date/locator, does not satisfy source-checked -- isolates the publisher-placeholder check specifically", () => {
   const result = bootWithPatchedRecord(FIXTURE_ID, blankRecord({
     lifecycle: "source-checked",
-    sources: [{ citation: "ASCP", edition: null, date: "2025-09-25", locator: "Section 3", url: null }],
+    sources: [sufficientSource({ publisher: "TBD" })],
     sourceCheckedBy: APPROVED_REVIEWER, sourceCheckedDate: "2026-08-04",
   }));
-  assert.equal(result.ok, false, "a short citation must be rejected even with a valid date and locator present");
+  assert.equal(result.ok, false, "a placeholder publisher must be rejected even with everything else present");
+});
+
+test("a missing publisher (null), even with a genuine citation/date/locator, does not satisfy source-checked", () => {
+  const result = bootWithPatchedRecord(FIXTURE_ID, blankRecord({
+    lifecycle: "source-checked",
+    sources: [sufficientSource({ publisher: null })],
+    sourceCheckedBy: APPROVED_REVIEWER, sourceCheckedDate: "2026-08-04",
+  }));
+  assert.equal(result.ok, false, "a source with no publisher at all must be rejected");
+});
+
+test("a genuine title that happens to contain a placeholder-adjacent word ('Test') as part of a real name is NOT penalized -- exact-token match only, never a substring match", () => {
+  const result = bootWithPatchedRecord(FIXTURE_ID, blankRecord({
+    lifecycle: "source-checked",
+    sources: [sufficientSource({ citation: "Test Battery for Cytogenetic Proficiency, 3rd Edition" })],
+    sourceCheckedBy: APPROVED_REVIEWER, sourceCheckedDate: "2026-08-04",
+  }));
+  assert.equal(result.ok, true, `a genuine title containing "Test" as a substring must not be rejected: ${result.error}`);
+});
+
+test("an organization-name-only citation with no publisher, date, or locator ({citation:'x', publisher:null, edition:null, date:null, locator:null, url:null}) does not satisfy source-checked -- the exact original counterexample", () => {
+  const result = bootWithPatchedRecord(FIXTURE_ID, blankRecord({
+    lifecycle: "source-checked",
+    sources: [{ citation: "x", publisher: null, edition: null, date: null, locator: null, url: null }],
+    sourceCheckedBy: APPROVED_REVIEWER, sourceCheckedDate: "2026-08-04",
+  }));
+  assert.equal(result.ok, false, "the exact reported counterexample must be rejected");
 });
 
 test("a source missing an exact edition/revision/publication date does not satisfy source-checked", () => {
@@ -311,7 +361,7 @@ test("a complete, well-formed future source satisfies source-checked", () => {
   assert.equal(result.ok, true, `expected a complete source-checked record to load cleanly: ${result.error}`);
   const rec = result.api.getQuestionGovernance(FIXTURE_ID);
   assert.equal(rec.lifecycle, "source-checked");
-  assert.deepEqual(rec.blockers.sort(), ["missing-drafter", "missing-reviewer", "missing-review-date", "incomplete-review-checks", "unresolved-edition-sensitivity"].sort());
+  assert.deepEqual(rec.blockers.sort(), ["missing-drafter", "missing-reviewer", "missing-review-date", "incomplete-review-checks", "unresolved-edition-sensitivity", "missing-independent-review"].sort());
 });
 
 /* ============================ 3. approved-SME-reviewer identity ============================ */
@@ -385,6 +435,14 @@ test("an unknown review-check value is rejected", () => {
     reviewChecks: [...ALL_REVIEW_CHECKS.slice(0, 6), "made-up-check"],
   }));
   assert.equal(result.ok, false, "an unrecognized review-check value must be rejected");
+});
+
+test("a malformed (non-string, e.g. boolean) value in reviewChecks is rejected", () => {
+  const result = bootWithPatchedRecord(FIXTURE_ID, blankRecord({
+    lifecycle: "draft",
+    reviewChecks: [true, "rationale-accuracy"],
+  }));
+  assert.equal(result.ok, false, "a non-string entry in reviewChecks must be rejected, even for an otherwise-Draft record");
 });
 
 test("an empty reviewChecks array is valid for Draft but not for sme-reviewed", () => {
@@ -482,8 +540,31 @@ test("blocker ordering and stable names are exact and deterministic", () => {
   assert.deepEqual(rec.blockers, [
     "missing-drafter", "missing-sources", "missing-source-check",
     "missing-reviewer", "missing-review-date", "incomplete-review-checks",
-    "unresolved-edition-sensitivity",
+    "unresolved-edition-sensitivity", "missing-independent-review",
   ]);
+});
+
+test("zero blockers and releaseQualified never drift apart, across a matrix of valid and adversarial fixtures", () => {
+  const fixtures = [
+    ["current Draft baseline (m1-q1, no patch)", null],
+    ["draft with complete evidence", blankRecord({ lifecycle: "draft", ...completeReleaseQualifiedFields() })],
+    ["source-checked with complete evidence", blankRecord({ lifecycle: "source-checked", ...completeReleaseQualifiedFields() })],
+    ["sme-reviewed with complete evidence", blankRecord({ lifecycle: "sme-reviewed", ...completeReleaseQualifiedFields() })],
+    ["sme-reviewed missing only independent review", blankRecord({
+      lifecycle: "sme-reviewed", ...completeReleaseQualifiedFields(),
+      independentReviewDocumented: false, independentReviewer: null, independentReviewDate: null,
+    })],
+    ["valid release-qualified", blankRecord({ lifecycle: "release-qualified", ...completeReleaseQualifiedFields() })],
+  ];
+  for (const [label, record] of fixtures) {
+    const api = record === null ? baselineApi : bootWithPatchedRecord(FIXTURE_ID, record).api;
+    const id = record === null ? "m1-q1" : FIXTURE_ID;
+    const rec = api.getQuestionGovernance(id);
+    assert.equal(
+      rec.blockers.length === 0, rec.releaseQualified,
+      `${label}: blockers.length===0 (${rec.blockers.length === 0}) must equal releaseQualified (${rec.releaseQualified}) -- got blockers ${JSON.stringify(rec.blockers)}`,
+    );
+  }
 });
 
 /* ============================ 6. independent-review bidirectional consistency ============================ */
@@ -548,18 +629,43 @@ test("independent review cannot be claimed while the drafter is unknown (indepen
   assert.equal(result.ok, false, "independent review with an unknown drafter must be rejected");
 });
 
-test("a valid, genuinely distinct future independent-review fixture is accepted, and is not required for release-qualified", () => {
+test("a valid, genuinely distinct future independent-review fixture, combined with every other prerequisite, satisfies release-qualified", () => {
   const result = bootWithPatchedRecord(FIXTURE_ID, blankRecord({
     lifecycle: "release-qualified",
     ...completeReleaseQualifiedFields(),
-    independentReviewDocumented: true,
-    independentReviewer: "A Distinct Second-Person Reviewer",
-    independentReviewDate: "2026-08-04",
   }));
   assert.equal(result.ok, true, `expected a genuinely distinct independent reviewer to be accepted: ${result.error}`);
   const rec = result.api.getQuestionGovernance(FIXTURE_ID);
-  assert.equal(rec.releaseQualified, true, "independent review is not a release-qualified prerequisite");
+  assert.equal(rec.releaseQualified, true);
   assert.equal(rec.independentReviewDocumented, true);
+  assert.deepEqual(rec.blockers, []);
+});
+
+test("release-qualified WITHOUT a documented independent review is rejected -- independent review is now a hard release-qualified prerequisite", () => {
+  const fields = completeReleaseQualifiedFields();
+  const result = bootWithPatchedRecord(FIXTURE_ID, blankRecord({
+    lifecycle: "release-qualified",
+    ...fields,
+    independentReviewDocumented: false,
+    independentReviewer: null,
+    independentReviewDate: null,
+  }));
+  assert.equal(result.ok, false, "release-qualified without independent review must be rejected at load time");
+});
+
+test("an sme-reviewed record with complete release evidence but no independent review reports exactly missing-independent-review as its sole blocker (release-approval-pending only appears once every evidence gap, including this one, is closed)", () => {
+  const fields = completeReleaseQualifiedFields();
+  const result = bootWithPatchedRecord(FIXTURE_ID, blankRecord({
+    lifecycle: "sme-reviewed",
+    ...fields,
+    independentReviewDocumented: false,
+    independentReviewer: null,
+    independentReviewDate: null,
+  }));
+  assert.equal(result.ok, true, `expected sme-reviewed with no independent review to still load: ${result.error}`);
+  const rec = result.api.getQuestionGovernance(FIXTURE_ID);
+  assert.equal(rec.releaseQualified, false);
+  assert.deepEqual(rec.blockers, ["missing-independent-review"]);
 });
 
 /* ============================ public API tests ============================ */
@@ -593,7 +699,7 @@ test("getQuestionGovernance() returns fully detached data -- mutating a single-i
   const singleAgain = baselineApi.getQuestionGovernance("m1-q1");
   assert.equal(singleAgain.lifecycle, "draft");
   assert.deepEqual(singleAgain.sources, []);
-  assert.equal(singleAgain.blockers.length, 7);
+  assert.equal(singleAgain.blockers.length, 8);
 
   const all = baselineApi.getQuestionGovernance();
   all["m1-q1"].lifecycle = "release-qualified";

@@ -14,10 +14,23 @@ Use these states for substantive educational content:
 2. **Source-checked** — supported by an identified authoritative source
 3. **SME-reviewed** — reviewed by Austin for scientific accuracy and teaching
    suitability
-4. **Release-qualified** — source, review, schema, and automated gates passed
+4. **Release-qualified** — source, SME review, an independent second-person
+   scientific review, schema, and automated gates all passed
 
 AI-generated text is Draft until reviewed. Fluency, model agreement, or passing
 CI does not change that state.
+
+**Corrected 2026-08-04** (a second independent-review pass on Issue #3):
+for a public, potentially commercial scientific learning product, Release-
+qualified now explicitly requires a documented **independent second-person
+review** — Austin's own SME review satisfies SME-reviewed, but is not, by
+itself, sufficient for Release-qualified. The independent reviewer must
+have a stable identity, a recorded date, a defined scope/checklist, and
+must be a different person from both the question's drafter and the
+Austin SME reviewer. See `docs/SCIENTIFIC_REVIEW.md` for the distinction
+between SME-reviewed and independent second-person review, and
+`docs/ARCHITECTURE.md` for how this is machine-enforced. No current
+question has this review; all 153 remain Draft.
 
 ## Source hierarchy
 
@@ -84,6 +97,21 @@ not a free-text scope description; and a source citation must carry an
 exact edition/revision/publication date and a specific locator, not a
 bare organization name. See `docs/ARCHITECTURE.md` for the full
 correction record and `docs/QUALITY_LOG.md` QL-031.
+
+**Corrected again 2026-08-04** (a second independent-review pass, same
+day) after further review found remaining gaps: the load-time integrity
+gate could not detect two *authored questions* sharing the same id (only
+duplicate *governance registry* entries, fixed above); a source's
+citation-length heuristic was replaced with an exact structural
+requirement — an identifiable, non-placeholder title (`citation`) AND a
+separate, non-placeholder responsible publisher/organization
+(`publisher`), plus an edition-or-date and a locator-or-url; the
+approved-SME-reviewer identity is now recorded under an explicit,
+versioned "subject pack" key for future extensibility to other authored
+content; the structured review-checklist enum is now explicitly
+versioned (`GOVERNANCE_REVIEW_CHECKS_V1`); and, as stated above,
+Release-qualified now requires a documented independent second-person
+review. See `docs/QUALITY_LOG.md` QL-032 for the full record.
 
 ## Corrections
 
