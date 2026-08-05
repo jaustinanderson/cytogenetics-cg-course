@@ -1699,7 +1699,7 @@ post-merge CI, Pages deployment, deployed smoke test, and deployed
 lifecycle/rejection/detachment verification passed. Issue #2 is closed as
 completed. This risk is resolved.
 
-### Question provenance and scientific-review governance — draft PR open 2026-08-04, not yet merged
+### Question provenance and scientific-review governance — implemented in PR #23, first opened 2026-08-04
 
 Added a strict, auditable governance model (`QUESTION_GOVERNANCE`
 registry, `assertGovernanceRegistryIntegrity()`, read-only
@@ -1795,11 +1795,17 @@ the blocker-display logic) rejects a `release-qualified` label backed by
 an unapproved or conflicted-but-complete independent review. See
 `docs/QUALITY_LOG.md` QL-035 for the full record.
 
-**Draft PR titled "Add question provenance and review gates (Milestone
-1)" is open against `main`, linked to Issue #3, awaiting independent
-review — not yet merged.** Treat this as an open risk until that PR
-lands. Does not perform scientific review or source attribution — that
-remains separately scoped, future work.
+**The implementation described above is carried by PR #23, "Add question
+provenance and review gates (Milestone 1)," linked to Issue #3, and has
+completed repeated independent review across the QL-030 through QL-035
+correction rounds above.** GitHub is the source of truth for that PR's
+current merge and deployment state — check it directly rather than
+relying on this document. All 153 authored questions remain Draft and no
+scientific-review evidence has been created regardless of that PR's
+state. Image-manifest normalization, broader public-API contract tests,
+and the QL-033 assessment-bank cueing correction remain separately
+scoped, unfinished work. Does not perform scientific review or source
+attribution — that remains separately scoped, future work.
 
 ### Accessibility
 

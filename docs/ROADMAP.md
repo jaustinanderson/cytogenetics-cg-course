@@ -405,9 +405,10 @@ review status stable before adding 46 questions.
   remaining Milestone 1 work below (provenance fields, image-manifest
   normalization, broader API contract tests) was out of scope for this
   item and stays open regardless
-- [ ] Add provenance and review fields for releasable questions — branch
-  `claude/milestone-1-question-provenance` (Issue #3, draft PR open, not
-  yet merged): adds a separate `QUESTION_GOVERNANCE` registry (keyed by
+- [x] Add provenance and review fields for releasable questions — branch
+  `claude/milestone-1-question-provenance` (Issue #3, implemented and
+  independently reviewed, through repeated correction rounds, in PR #23):
+  adds a separate `QUESTION_GOVERNANCE` registry (keyed by
   each question's existing stable id) recording lifecycle, drafter,
   structured sources, source-check identity/date,
   reviewer/date/scope, documented independent review, and edition
@@ -445,11 +446,15 @@ review status stable before adding 46 questions.
   `independent-review-conflict-declared`) rather than being conflated with
   "nothing documented." See `docs/QUALITY_LOG.md` QL-030 through QL-032
   and QL-034 through QL-035, and `docs/ARCHITECTURE.md` "Question
-  provenance and scientific-review governance" for the full record. Left
-  unchecked pending independent review and merge; image-manifest
-  normalization, broader API contract tests, and the assessment-bank
-  cueing item below remain separately scoped and out of this PR's scope
-  regardless
+  provenance and scientific-review governance" for the full record. All
+  153 questions remain Draft; no scientific review or source attribution
+  was performed; the approved independent-reviewer list remains
+  deliberately empty. Checked here because this item's own implementation
+  and independent review are complete in PR #23 — GitHub is the source of
+  truth for that PR's current merge/deployment state; image-manifest
+  normalization, broader public-API contract tests, and the
+  assessment-bank cueing item below remain separately scoped, open work,
+  regardless of this PR's state
 - [ ] Normalize the image-manifest schema so candidate records use explicit
   unknown values
 - [ ] Add browser contract tests for every public API claim

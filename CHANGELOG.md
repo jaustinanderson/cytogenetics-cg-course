@@ -7,14 +7,22 @@ All notable repository changes are recorded here.
 ### Added
 
 - Added a strict, auditable question-provenance and scientific-review
-  governance model (`index.html`, Issue #3, draft PR — not yet merged): a
+  governance model (`index.html`, Issue #3, carried by PR #23): a
   separate `QUESTION_GOVERNANCE` registry, keyed by each authored
-  question's existing stable id, holds a 14-field evidence record
-  (lifecycle, drafter, structured sources, source-check identity/date,
-  reviewer/date/scope, structured `reviewChecks`, documented independent
-  review, edition sensitivity, notes) — kept entirely separate from
-  question content and learner progress (`SCHEMA_V` unchanged). A
-  question's lifecycle label
+  question's existing stable id, holds a 17-field evidence record —
+  `lifecycle`, `drafter`, structured `sources`, source-check identity/date
+  (`sourceCheckedBy`/`sourceCheckedDate`), `reviewer`/`reviewDate`/
+  `reviewScope`, structured `reviewChecks`, and a documented independent
+  review with its own separately recorded evidence
+  (`independentReviewDocumented`, `independentReviewer`,
+  `independentReviewDate`, `independentReviewScope`,
+  `independentReviewChecks`, `independentReviewNoConflictDeclared`),
+  plus `editionSensitive` and `notes` — kept entirely separate from
+  question content and learner progress (`SCHEMA_V` unchanged). An
+  earlier draft of this registry held only 14 fields, omitting the three
+  separately recorded independent-review evidence fields entirely; see
+  the QL-034/QL-035 corrections below for why those fields were added and
+  then tightened. A question's lifecycle label
   (`draft`/`source-checked`/`sme-reviewed`/`release-qualified`, matching
   `docs/CONTENT_GOVERNANCE.md`'s four content states) cannot be promoted
   without its documented prerequisites — enforced at script-load time by
