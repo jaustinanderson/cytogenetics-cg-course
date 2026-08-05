@@ -2561,6 +2561,77 @@ complete `npx playwright test` suite.
 No question, answer, rationale, image, or scientific claim changed.
 `SCHEMA_V` stays `2`.
 
+### Correction — the independent-review requirement did not actually enforce its own documented evidence contract, added 2026-08-05
+
+A fourth-round independent review of the same head (`d4eabb6`, itself the
+QL-032 correction) confirmed the prior corrections present and materially
+improving, but found one remaining release-gate blocker, reproduced
+before any fix:
+
+`docs/CONTENT_GOVERNANCE.md` requires an independent reviewer to have a
+stable identity, a recorded date, a defined scope/checklist, and be
+distinct from the drafter and SME reviewer. The implementation
+(`meetsIndependentReview()`) checked only
+`independentReviewDocumented === true` plus the pre-existing distinct-
+identity checks — a release-qualified fixture with
+`independentReviewer: "A Distinct Reviewer"` (an arbitrary, unqualified,
+unapproved name, only a flag and a date, no scope, no checklist, no
+conflict declaration) loaded cleanly, reported `releaseQualified:true`,
+and had `blockers:[]`. The existing test suite's own "valid, genuinely
+distinct future independent-review fixture" test explicitly blessed this
+exact inadequate record.
+
+**Correction:** three new record fields —
+`independentReviewScope` (narrative, a separate instance from the SME
+`reviewScope`), `independentReviewChecks` (structured array, a separate
+instance of the same versioned `GOVERNANCE_REVIEW_CHECKS_V1` enum),
+`independentReviewNoConflictDeclared` (`null`/`true`/`false`, only `true`
+satisfies release-qualified) — and `APPROVED_INDEPENDENT_REVIEWERS_BY_PACK`,
+a separate approved-identity registry from the SME one, **deliberately
+empty for the current production pack** (no real independent reviewer or
+credential is invented). `meetsIndependentReview()` now requires approval,
+scope, a complete separate checklist, and an explicit no-conflict
+declaration. The bidirectional `false`-requires-blank-state rule was
+extended to the three new fields. Blocker codes: kept
+`missing-independent-review` as the aggregate code for
+`independentReviewDocumented === false`; added four granular codes for
+when `true` but still insufficient, matching the granular style already
+used for the primary SME review. Also corrected a stale in-source comment
+that claimed independent review was "intentionally NOT required for any
+lifecycle state" — true when written, false since QL-032 changed
+`meetsReleaseQualified()`, and never updated to match.
+
+**14 new dependency-free tests** (`tests/question-governance.mjs`,
+54 → 68): a `bootWithApprovedTestReviewerAndPatchedRecord()` helper that
+patches a test-only entry into the approved-independent-reviewer list
+and a governance record in one script mutation; the exact reported
+loophole, now confirmed rejected; unapproved-reviewer,
+missing/empty/partial-checklist, missing/false/malformed-conflict-
+declaration rejections; a proof the SME reviewer's own complete checklist
+cannot substitute for an empty independent one; stray-evidence rejections
+for the three new fields when documented is `false`; a same-person-as-
+primary-reviewer whitespace/case-variant rejection (the drafter case
+already existed); a fully populated approved fixture proven to satisfy
+release-qualified with a dedicated detachment proof; and an exact-
+granular-blocker-set test.
+
+**Mutation-tested:** 5 targeted reversions — removing the approved-
+independent-reviewer gate, reusing the SME checklist instead of the
+independent one, removing the scope requirement, removing the conflict-
+declaration requirement, and weakening the `false`-blank-state rule to
+omit the three new fields — each failed exactly its intended test(s) and
+no others, reverted to byte-identical via `diff` before committing.
+
+Full local validation: `npm test` (172 dependency-free DOM-behavior
+checks + 68 governance checks), targeted
+`npx playwright test tests/e2e/review-disclosure.spec.mjs` (10/10 across
+both projects, unaffected by this round's code changes), and the complete
+`npx playwright test` suite.
+
+No question, answer, rationale, image, or scientific claim changed. No
+independent reviewer, credential, or approval record was fabricated.
+`SCHEMA_V` stays `2`.
+
 ## Gates still open
 
 ### Browser behavior

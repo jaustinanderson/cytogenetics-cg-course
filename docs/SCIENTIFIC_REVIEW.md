@@ -102,6 +102,16 @@ to anyone outside this repository:
   the safer policy for a public, potentially commercial scientific
   learning product; see `docs/CONTENT_GOVERNANCE.md` for the exact
   requirement and `docs/ARCHITECTURE.md` for how it is machine-enforced.
+  **Corrected 2026-08-05**: the first version of that enforcement checked
+  only that the independent reviewer's name was present and distinct —
+  confirmed by direct reproduction that an arbitrary, unqualified name
+  (with no approval, scope, checklist, or conflict declaration) satisfied
+  Release-qualified. The independent reviewer must now additionally be an
+  approved identity (this course's approved list is currently empty — no
+  reviewer is invented here), with their own recorded scope, their own
+  complete structured checklist (separate from the SME reviewer's), and
+  an explicit declaration of no authorship stake or conflict in that
+  specific question.
 
 This record uses **"Not yet independently reviewed"** as its plain-language
 synonym for **Draft**, deliberately, to flag that even a future Austin

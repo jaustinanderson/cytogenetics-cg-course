@@ -3997,3 +3997,123 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   relative distractor lengths as it drafts, rather than discovering the
   imbalance only after 153 questions exist. See `docs/ROADMAP.md` for
   the tracked follow-up item.
+
+## QL-034 — the independent-review requirement (QL-032) did not actually enforce the documented evidence contract (Issue #3, Milestone 1)
+
+- **Status:** Corrected on the same branch
+  (`claude/milestone-1-question-provenance`), draft PR open for
+  independent review, not yet merged. A fourth independent review at
+  head `d4eabb6095f616ba119ec59098f75acd702645b5` confirmed QL-030/
+  QL-031/QL-032's corrections present and materially improving, but
+  found one remaining release-gate blocker.
+- **Finding — confirmed by direct reproduction.**
+  `docs/CONTENT_GOVERNANCE.md` states an independent reviewer must have a
+  stable identity, a recorded date, a defined scope/checklist, and be
+  distinct from the drafter and SME reviewer. The QL-032 implementation
+  enforced only distinctness and date-shape via `meetsIndependentReview()
+  = rec.independentReviewDocumented === true` (plus the pre-existing
+  `isValidGovernanceRecord()` distinct-identity checks). Reproduced: a
+  release-qualified fixture with `independentReviewer: "A Distinct
+  Reviewer"` (an arbitrary, unqualified, unapproved name), only a flag and
+  a date, no recorded scope, no checklist, no conflict declaration,
+  loaded cleanly and reported `releaseQualified:true` with `blockers:[]`.
+  The existing "valid, genuinely distinct future independent-review
+  fixture" test in `tests/question-governance.mjs` explicitly blessed
+  this exact inadequate record.
+- **Impact:** None shipped — PR #23 remained draft/unmerged throughout;
+  found and fixed before merge.
+- **Cause:** `meetsIndependentReview()` checked only the field that was
+  ALREADY present at the time (the boolean flag), not the evidence the
+  human policy actually requires (approval, scope, checklist, conflict
+  declaration) — none of which had fields to hold them yet.
+- **Correction:**
+  - Three new record fields: `independentReviewScope` (narrative,
+    separate from the SME `reviewScope`), `independentReviewChecks`
+    (structured array, separate instance of the same versioned
+    `GOVERNANCE_REVIEW_CHECKS_V1` enum used by the SME `reviewChecks`),
+    `independentReviewNoConflictDeclared` (`null`/`true`/`false` — `null`
+    = not yet assessed, the only valid value while
+    `independentReviewDocumented` is `false`; `true` = explicitly
+    declared no authorship stake/conflict, the ONLY value that can
+    satisfy `release-qualified`; `false` = a conflict was explicitly
+    declared to exist, a legitimate but disqualifying record). Record
+    schema grows from 14 to 17 own properties.
+  - `APPROVED_INDEPENDENT_REVIEWERS_BY_PACK`, keyed by the same
+    `GOVERNANCE_SUBJECT_PACK` used for `APPROVED_SME_REVIEWERS_BY_PACK`
+    but a SEPARATE registry (different role). **Deliberately empty for
+    the current production pack** — no real independent reviewer,
+    credential, or approval evidence is invented; this means no record
+    can currently reach `release-qualified` via independent review at
+    all, matching all 153 current questions remaining Draft.
+    `isApprovedIndependentReviewer()` gates it, mirroring
+    `isApprovedSmeReviewer()`.
+  - `meetsIndependentReview()` now requires: `independentReviewDocumented
+    === true`, an approved reviewer identity, a non-empty
+    `independentReviewScope`, a COMPLETE `independentReviewChecks` set,
+    and `independentReviewNoConflictDeclared === true`.
+  - `isValidGovernanceRecord()`'s bidirectional check extended: `false`
+    requires every independent-review field (including the three new
+    ones) in its blank state; `true` requires reviewer/date present plus
+    the existing distinct-identity checks (unchanged in direction, now
+    also checked against the primary reviewer with a dedicated
+    whitespace/case-variant test, not only the drafter).
+  - Blocker codes: kept `missing-independent-review` as the aggregate
+    code for `independentReviewDocumented === false` (nothing documented
+    at all); added GRANULAR codes for when `true` but still insufficient
+    — `missing-independent-reviewer`, `missing-independent-review-scope`,
+    `incomplete-independent-review-checks`,
+    `missing-independent-review-conflict-declaration` — matching the
+    granular style already used for the primary SME review's own
+    blockers, decided and documented explicitly (`docs/ARCHITECTURE.md`).
+  - Corrected a stale comment inside `isValidGovernanceRecord()` that
+    claimed "Independent review is intentionally NOT required for any
+    lifecycle state" — true when originally written, false the moment
+    `meetsReleaseQualified()` was changed (QL-032) to require it; the
+    comment had not been updated to match, a genuine documentation/code
+    drift this correction also fixes.
+  - Reconciled `docs/CONTENT_GOVERNANCE.md`, `docs/SCIENTIFIC_REVIEW.md`,
+    and `docs/ARCHITECTURE.md` with the final schema.
+- **Tests:** `tests/question-governance.mjs` extended to 68 dependency-
+  free tests (from 54): a new `bootWithApprovedTestReviewerAndPatchedRecord()`
+  helper that patches BOTH a test-only entry into the (otherwise empty)
+  approved-independent-reviewer list AND a governance record in the same
+  script mutation ("test fixtures may patch in a clearly test-only
+  approved reviewer," per instruction); the exact reproduced loophole,
+  now confirmed rejected; an unapproved-but-otherwise-complete reviewer
+  rejection; missing-scope, empty-checklist, and partial-checklist
+  rejections; a proof that the SME reviewer's own complete checklist
+  cannot substitute for an unpopulated independent checklist;
+  null-conflict-declaration and explicit-false-conflict-declaration
+  rejections; a malformed (non-boolean)
+  `independentReviewNoConflictDeclared` rejection; stray-evidence
+  rejections for all three new fields when `independentReviewDocumented`
+  is `false`; a same-person-as-SME-reviewer whitespace/case-variant
+  rejection (the drafter case already existed; the reviewer case was
+  new); a fully populated, test-only approved fixture proven to satisfy
+  `release-qualified` with a dedicated detachment proof on the new
+  fields; and an exact-granular-blocker-set test for a documented-but-
+  incomplete independent review.
+- **Mutation-tested:** 5 targeted reversions — removing the
+  approved-independent-reviewer gate; reusing the SME `reviewChecks`
+  instead of `independentReviewChecks`; removing the independent-scope
+  requirement; removing the conflict/no-authorship-stake requirement;
+  weakening the `false`-requires-blank-state rule to omit the three new
+  fields — each failed exactly its intended test(s) and no others,
+  reverted to byte-identical via `diff` before committing.
+- **Full local validation:** `npm test` (172 dependency-free
+  DOM-behavior checks + 68 governance checks), targeted
+  `npx playwright test tests/e2e/review-disclosure.spec.mjs` (10/10
+  across both projects, unaffected by this round's code changes), and
+  the complete `npx playwright test` suite.
+- **Scope:** No question, answer, rationale, image, or scientific claim
+  changed. No source was added to any current question, no drafter,
+  reviewer, or independent reviewer was asserted, and no question was
+  marked release-qualified. `SCHEMA_V` stays `2` — this registry is not
+  learner progress.
+- **Prevention:** When a human policy document lists MULTIPLE required
+  properties of an evidence type ("stable identity, recorded date,
+  defined scope/checklist, and distinct from X and Y"), verify the code
+  checks EVERY listed property, not just the ones that happened to
+  already have a field to hold them — a partial implementation that
+  satisfies some sub-clauses can look complete without a clause-by-clause
+  comparison against the source policy text.

@@ -1757,6 +1757,21 @@ unresolved, bank-level risk (`docs/QUALITY_LOG.md` QL-033,
 human scientific judgment to correct without introducing new
 inaccuracies. See `docs/QUALITY_LOG.md` QL-032 for the full governance-
 mechanism correction record.
+
+A FOURTH round of independent review (same day, before merge) found the
+independent-review requirement added by QL-032 did not actually enforce
+its own documented evidence contract: `meetsIndependentReview()` checked
+only the bare `independentReviewDocumented` flag plus distinct-identity
+checks, so an arbitrary, unqualified, unapproved name with only an
+identity and a date — no scope, no checklist, no conflict declaration —
+satisfied `release-qualified` with zero blockers, confirmed by direct
+reproduction. Corrected: three new record fields
+(`independentReviewScope`, `independentReviewChecks`,
+`independentReviewNoConflictDeclared`), a separate
+`APPROVED_INDEPENDENT_REVIEWERS_BY_PACK` registry (deliberately EMPTY for
+the current pack — no real reviewer or credential invented), and granular
+blocker codes for a documented-but-incomplete independent review. See
+`docs/QUALITY_LOG.md` QL-034 for the full record.
 **Draft PR titled "Add question provenance and review gates (Milestone
 1)" is open against `main`, linked to Issue #3, awaiting independent
 review — not yet merged.** Treat this as an open risk until that PR

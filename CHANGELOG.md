@@ -74,6 +74,28 @@ All notable repository changes are recorded here.
   option in 74.5%) — tracked in `docs/QUALITY_LOG.md` QL-033 and
   `docs/ROADMAP.md`, not fixed in this PR. Test coverage updated to 54
   dependency-free tests, mutation-tested across 7 further reversions.
+  **Corrected again (QL-034):** a fourth round of independent review
+  found the new independent-review requirement did not actually enforce
+  its own documented evidence contract — an arbitrary, unqualified,
+  unapproved reviewer name with only an identity and a date satisfied
+  `release-qualified` with zero blockers. Corrected: three new record
+  fields (`independentReviewScope`, `independentReviewChecks`,
+  `independentReviewNoConflictDeclared`, separate instances from the SME
+  review's own fields) and a separate `APPROVED_INDEPENDENT_REVIEWERS_BY_PACK`
+  registry, **deliberately empty for the current pack** (no real
+  independent reviewer or credential is invented). `meetsIndependentReview()`
+  now requires approval, a recorded scope, a complete separate checklist,
+  and an explicit `independentReviewNoConflictDeclared === true`
+  declaration. New granular blocker codes
+  (`missing-independent-reviewer`, `missing-independent-review-scope`,
+  `incomplete-independent-review-checks`,
+  `missing-independent-review-conflict-declaration`) apply once
+  `independentReviewDocumented` is `true`; the aggregate
+  `missing-independent-review` code remains for when it is `false`. Also
+  corrected a stale in-source comment claiming independent review was
+  "intentionally NOT required for any lifecycle state." Test coverage
+  updated to 68 dependency-free tests, mutation-tested across 5 further
+  reversions.
 - Defined and enforced the runtime-injected-question lifecycle
   (`index.html`, Issue #2, **merged**): adopted a
   deliberate **split lifecycle** — a question definition added via

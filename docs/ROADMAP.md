@@ -429,12 +429,19 @@ review status stable before adding 46 questions.
   enum was not versioned) and a deliberate policy tightening
   (release-qualified now requires a documented independent second-person
   review, not merely Austin's own SME review) — also corrected on the
-  same branch. See `docs/QUALITY_LOG.md` QL-030, QL-031, and QL-032, and
-  `docs/ARCHITECTURE.md` "Question provenance and scientific-review
-  governance" for the full record. Left unchecked pending independent
-  review and merge; image-manifest normalization, broader API contract
-  tests, and the assessment-bank cueing item below remain separately
-  scoped and out of this PR's scope regardless
+  same branch. A FOURTH round found that the new independent-review
+  requirement did not actually enforce its own documented evidence
+  contract (an arbitrary, unqualified, unapproved reviewer name with only
+  an identity and a date satisfied release-qualified) — corrected with a
+  separate approved-independent-reviewer registry (deliberately empty for
+  the current pack), a separately recorded scope and checklist, and an
+  explicit no-conflict declaration. See `docs/QUALITY_LOG.md` QL-030
+  through QL-032 and QL-034, and `docs/ARCHITECTURE.md` "Question
+  provenance and scientific-review governance" for the full record. Left
+  unchecked pending independent review and merge; image-manifest
+  normalization, broader API contract tests, and the assessment-bank
+  cueing item below remain separately scoped and out of this PR's scope
+  regardless
 - [ ] Normalize the image-manifest schema so candidate records use explicit
   unknown values
 - [ ] Add browser contract tests for every public API claim

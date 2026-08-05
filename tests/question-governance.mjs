@@ -83,15 +83,33 @@ function boot() {
 }
 
 /** Replace one QUESTION_GOVERNANCE_ENTRIES pair's source text with a literal record. */
-function patchGovernanceRecord(id, record) {
+function patchGovernanceRecord(source, id, record) {
   const target = `["${id}", DRAFT_GOVERNANCE_RECORD()]`;
-  assert.ok(inlineScript.includes(target), `patch target not found for id "${id}" -- has the source layout changed?`);
+  assert.ok(source.includes(target), `patch target not found for id "${id}" -- has the source layout changed?`);
   const replacement = `["${id}", ${JSON.stringify(record)}]`;
-  return inlineScript.replace(target, replacement);
+  return source.replace(target, replacement);
 }
 
 function bootWithPatchedRecord(id, record) {
-  return bootScript(patchGovernanceRecord(id, record));
+  return bootScript(patchGovernanceRecord(inlineScript, id, record));
+}
+
+// The production APPROVED_INDEPENDENT_REVIEWERS_BY_PACK entry for this
+// course's subject pack is deliberately EMPTY (no real independent
+// reviewer exists yet) -- see index.html's own comment. Fixture tests
+// that need a record to actually SATISFY release-qualified must patch a
+// clearly test-only name into that approved list, in the SAME script
+// mutation as the governance-record patch, exactly as instructed
+// ("Test fixtures may patch in a clearly test-only approved reviewer").
+const TEST_APPROVED_INDEPENDENT_REVIEWER = "Test-Only Approved Independent Reviewer (fixture, not a real reviewer)";
+function patchApprovedIndependentReviewer(source) {
+  const target = "'cytogenetics-cg-ascp-v1': []";
+  assert.ok(source.includes(target), "approved-independent-reviewer patch target not found -- has the source layout changed?");
+  return source.replace(target, `'cytogenetics-cg-ascp-v1': [${JSON.stringify(TEST_APPROVED_INDEPENDENT_REVIEWER)}]`);
+}
+function bootWithApprovedTestReviewerAndPatchedRecord(id, record) {
+  const source = patchApprovedIndependentReviewer(patchGovernanceRecord(inlineScript, id, record));
+  return bootScript(source);
 }
 
 const baselineApi = boot();
@@ -100,6 +118,7 @@ const GOVERNANCE_VIEW_KEYS = [
   "id", "lifecycle", "drafter", "sources", "sourceCheckedBy", "sourceCheckedDate",
   "reviewer", "reviewDate", "reviewScope", "reviewChecks",
   "independentReviewDocumented", "independentReviewer", "independentReviewDate",
+  "independentReviewScope", "independentReviewChecks", "independentReviewNoConflictDeclared",
   "editionSensitive", "notes", "releaseQualified", "blockers",
 ];
 const DRAFT_BLOCKERS = [
@@ -108,7 +127,6 @@ const DRAFT_BLOCKERS = [
   "unresolved-edition-sensitivity", "missing-independent-review",
 ];
 const APPROVED_REVIEWER = "Jerad Austin Anderson";
-const INDEPENDENT_REVIEWER = "A Distinct Second-Person Reviewer";
 const ALL_REVIEW_CHECKS = [
   "best-answer-defensible", "rationale-accuracy", "distractor-quality",
   "domain-difficulty-correct", "original-wording", "no-recalled-exam-content",
@@ -134,6 +152,7 @@ function blankRecord(overrides = {}) {
     lifecycle: "draft", drafter: null, sources: [], sourceCheckedBy: null, sourceCheckedDate: null,
     reviewer: null, reviewDate: null, reviewScope: null, reviewChecks: [],
     independentReviewDocumented: false, independentReviewer: null, independentReviewDate: null,
+    independentReviewScope: null, independentReviewChecks: [], independentReviewNoConflictDeclared: null,
     editionSensitive: null, notes: null,
     ...overrides,
   };
@@ -157,14 +176,21 @@ function completeSmeReviewedFields() {
   };
 }
 
+// Uses the TEST-ONLY approved independent reviewer -- callers using this
+// fixture MUST boot via bootWithApprovedTestReviewerAndPatchedRecord(),
+// not bootWithPatchedRecord(), or the reviewer will correctly fail the
+// (empty, production) approved-independent-reviewer gate.
 function completeReleaseQualifiedFields() {
   return {
     ...completeSmeReviewedFields(),
     drafter: APPROVED_REVIEWER,
     editionSensitive: false,
     independentReviewDocumented: true,
-    independentReviewer: INDEPENDENT_REVIEWER,
+    independentReviewer: TEST_APPROVED_INDEPENDENT_REVIEWER,
     independentReviewDate: "2026-08-04",
+    independentReviewScope: "independent verification of all mandatory review checks for m2-q1, performed separately from the SME review by a distinct second person",
+    independentReviewChecks: [...ALL_REVIEW_CHECKS],
+    independentReviewNoConflictDeclared: true,
   };
 }
 
@@ -477,7 +503,7 @@ test("a complete, well-formed future record satisfies every mandatory review che
 /* ============================ 5. lifecycle / releaseQualified / blocker invariants ============================ */
 
 test("Draft with complete evidence: releaseQualified is false and the release-approval-pending blocker appears, never a bare empty blockers array", () => {
-  const result = bootWithPatchedRecord(FIXTURE_ID, blankRecord({
+  const result = bootWithApprovedTestReviewerAndPatchedRecord(FIXTURE_ID, blankRecord({
     lifecycle: "draft",
     ...completeReleaseQualifiedFields(),
   }));
@@ -489,7 +515,7 @@ test("Draft with complete evidence: releaseQualified is false and the release-ap
 });
 
 test("source-checked with later-stage (sme-reviewed-worthy) evidence: releaseQualified false, release-approval-pending blocker only", () => {
-  const result = bootWithPatchedRecord(FIXTURE_ID, blankRecord({
+  const result = bootWithApprovedTestReviewerAndPatchedRecord(FIXTURE_ID, blankRecord({
     lifecycle: "source-checked",
     ...completeReleaseQualifiedFields(),
   }));
@@ -501,7 +527,7 @@ test("source-checked with later-stage (sme-reviewed-worthy) evidence: releaseQua
 });
 
 test("sme-reviewed with complete release evidence: releaseQualified false, release-approval-pending blocker only, until explicitly promoted", () => {
-  const result = bootWithPatchedRecord(FIXTURE_ID, blankRecord({
+  const result = bootWithApprovedTestReviewerAndPatchedRecord(FIXTURE_ID, blankRecord({
     lifecycle: "sme-reviewed",
     ...completeReleaseQualifiedFields(),
   }));
@@ -513,7 +539,7 @@ test("sme-reviewed with complete release evidence: releaseQualified false, relea
 });
 
 test("valid release-qualified: releaseQualified true, zero blockers", () => {
-  const result = bootWithPatchedRecord(FIXTURE_ID, blankRecord({
+  const result = bootWithApprovedTestReviewerAndPatchedRecord(FIXTURE_ID, blankRecord({
     lifecycle: "release-qualified",
     ...completeReleaseQualifiedFields(),
   }));
@@ -527,7 +553,7 @@ test("valid release-qualified: releaseQualified true, zero blockers", () => {
 test("invalid release-qualified (missing drafter) is rejected at load time -- a label alone cannot bypass the gate", () => {
   const fields = completeReleaseQualifiedFields();
   delete fields.drafter;
-  const result = bootWithPatchedRecord(FIXTURE_ID, blankRecord({
+  const result = bootWithApprovedTestReviewerAndPatchedRecord(FIXTURE_ID, blankRecord({
     lifecycle: "release-qualified",
     ...fields,
     drafter: null,
@@ -553,11 +579,16 @@ test("zero blockers and releaseQualified never drift apart, across a matrix of v
     ["sme-reviewed missing only independent review", blankRecord({
       lifecycle: "sme-reviewed", ...completeReleaseQualifiedFields(),
       independentReviewDocumented: false, independentReviewer: null, independentReviewDate: null,
+      independentReviewScope: null, independentReviewChecks: [], independentReviewNoConflictDeclared: null,
+    })],
+    ["sme-reviewed with an UNAPPROVED independent reviewer (documented, distinct, dated -- but not on the approved list)", blankRecord({
+      lifecycle: "sme-reviewed", ...completeReleaseQualifiedFields(),
+      independentReviewer: "A Distinct But Unapproved Reviewer",
     })],
     ["valid release-qualified", blankRecord({ lifecycle: "release-qualified", ...completeReleaseQualifiedFields() })],
   ];
   for (const [label, record] of fixtures) {
-    const api = record === null ? baselineApi : bootWithPatchedRecord(FIXTURE_ID, record).api;
+    const api = record === null ? baselineApi : bootWithApprovedTestReviewerAndPatchedRecord(FIXTURE_ID, record).api;
     const id = record === null ? "m1-q1" : FIXTURE_ID;
     const rec = api.getQuestionGovernance(id);
     assert.equal(
@@ -567,18 +598,42 @@ test("zero blockers and releaseQualified never drift apart, across a matrix of v
   }
 });
 
-/* ============================ 6. independent-review bidirectional consistency ============================ */
+/* ============================ 6. independent-review evidence model ============================ */
 
-test("independentReviewDocumented:false with reviewer/date evidence present is rejected (false must require both null)", () => {
+test("independentReviewDocumented:false with reviewer/date evidence present is rejected (false must require every independent-review field blank)", () => {
   const result = bootWithPatchedRecord(FIXTURE_ID, blankRecord({
     independentReviewDocumented: false,
     independentReviewer: "Some Reviewer",
     independentReviewDate: "2026-08-04",
   }));
-  assert.equal(result.ok, false, "false with evidence present must be rejected");
+  assert.equal(result.ok, false, "false with reviewer/date present must be rejected");
 });
 
-test("independentReviewDocumented:true with no supporting evidence is rejected (true must require both non-null)", () => {
+test("independentReviewDocumented:false with a stray independentReviewScope is rejected", () => {
+  const result = bootWithPatchedRecord(FIXTURE_ID, blankRecord({
+    independentReviewDocumented: false,
+    independentReviewScope: "some scope text",
+  }));
+  assert.equal(result.ok, false, "false with a stray independentReviewScope must be rejected");
+});
+
+test("independentReviewDocumented:false with stray independentReviewChecks is rejected", () => {
+  const result = bootWithPatchedRecord(FIXTURE_ID, blankRecord({
+    independentReviewDocumented: false,
+    independentReviewChecks: ["rationale-accuracy"],
+  }));
+  assert.equal(result.ok, false, "false with stray independentReviewChecks must be rejected");
+});
+
+test("independentReviewDocumented:false with a stray independentReviewNoConflictDeclared is rejected", () => {
+  const result = bootWithPatchedRecord(FIXTURE_ID, blankRecord({
+    independentReviewDocumented: false,
+    independentReviewNoConflictDeclared: true,
+  }));
+  assert.equal(result.ok, false, "false with a stray independentReviewNoConflictDeclared must be rejected");
+});
+
+test("independentReviewDocumented:true with no supporting evidence is rejected (true must require identity/date present)", () => {
   const result = bootWithPatchedRecord(FIXTURE_ID, blankRecord({
     drafter: APPROVED_REVIEWER,
     independentReviewDocumented: true,
@@ -619,6 +674,17 @@ test("a whitespace/case variant of the same person as drafter is still recognize
   assert.equal(result.ok, false, "a case/whitespace variant of the drafter must still be recognized as the same person");
 });
 
+test("a whitespace/case variant of the same person as the primary SME reviewer is still recognized as the same identity and rejected", () => {
+  const result = bootWithPatchedRecord(FIXTURE_ID, blankRecord({
+    drafter: "Some Other Drafter",
+    reviewer: "Jerad Austin Anderson",
+    independentReviewDocumented: true,
+    independentReviewer: "jerad   AUSTIN Anderson",
+    independentReviewDate: "2026-08-04",
+  }));
+  assert.equal(result.ok, false, "a case/whitespace variant of the primary reviewer must still be recognized as the same person");
+});
+
 test("independent review cannot be claimed while the drafter is unknown (independence is relative to authorship)", () => {
   const result = bootWithPatchedRecord(FIXTURE_ID, blankRecord({
     drafter: null,
@@ -629,16 +695,123 @@ test("independent review cannot be claimed while the drafter is unknown (indepen
   assert.equal(result.ok, false, "independent review with an unknown drafter must be rejected");
 });
 
-test("a valid, genuinely distinct future independent-review fixture, combined with every other prerequisite, satisfies release-qualified", () => {
-  const result = bootWithPatchedRecord(FIXTURE_ID, blankRecord({
+/* --- the confirmed loophole (independent-review evidence correction) --- */
+
+test("THE CONFIRMED LOOPHOLE: an arbitrary, unapproved, unqualified independent-reviewer name ('A Distinct Reviewer') with only identity+date no longer satisfies release-qualified", () => {
+  const fields = completeReleaseQualifiedFields();
+  const result = bootWithApprovedTestReviewerAndPatchedRecord(FIXTURE_ID, blankRecord({
     lifecycle: "release-qualified",
-    ...completeReleaseQualifiedFields(),
+    ...fields,
+    independentReviewer: "A Distinct Reviewer", // NOT the test-approved identity
+    independentReviewScope: null,
+    independentReviewChecks: [],
+    independentReviewNoConflictDeclared: null,
   }));
-  assert.equal(result.ok, true, `expected a genuinely distinct independent reviewer to be accepted: ${result.error}`);
+  assert.equal(result.ok, false, "an arbitrary distinct name with no approval/scope/checklist/conflict-declaration must be rejected -- this is the exact reported loophole");
+});
+
+test("an arbitrary distinct but UNAPPROVED reviewer name is rejected even with a complete scope, checklist, and conflict declaration", () => {
+  const fields = completeReleaseQualifiedFields();
+  const result = bootWithApprovedTestReviewerAndPatchedRecord(FIXTURE_ID, blankRecord({
+    lifecycle: "release-qualified",
+    ...fields,
+    independentReviewer: "Someone Else Entirely, Not On The Approved List",
+  }));
+  assert.equal(result.ok, false, "approval is required independent of how complete the rest of the evidence is");
+});
+
+test("an APPROVED test reviewer missing the independent review scope is rejected", () => {
+  const fields = completeReleaseQualifiedFields();
+  const result = bootWithApprovedTestReviewerAndPatchedRecord(FIXTURE_ID, blankRecord({
+    lifecycle: "release-qualified",
+    ...fields,
+    independentReviewScope: null,
+  }));
+  assert.equal(result.ok, false, "an approved reviewer with no recorded independent scope must be rejected");
+});
+
+test("an APPROVED test reviewer with an EMPTY independent checklist is rejected", () => {
+  const fields = completeReleaseQualifiedFields();
+  const result = bootWithApprovedTestReviewerAndPatchedRecord(FIXTURE_ID, blankRecord({
+    lifecycle: "release-qualified",
+    ...fields,
+    independentReviewChecks: [],
+  }));
+  assert.equal(result.ok, false, "an approved reviewer with an empty independent checklist must be rejected");
+});
+
+test("an APPROVED test reviewer with a PARTIALLY complete independent checklist is rejected", () => {
+  const fields = completeReleaseQualifiedFields();
+  const result = bootWithApprovedTestReviewerAndPatchedRecord(FIXTURE_ID, blankRecord({
+    lifecycle: "release-qualified",
+    ...fields,
+    independentReviewChecks: ["rationale-accuracy", "distractor-quality"],
+  }));
+  assert.equal(result.ok, false, "an approved reviewer with a partial independent checklist must be rejected");
+});
+
+test("the SME review's OWN checklist cannot substitute for a separately recorded independent checklist -- reusing reviewChecks for independentReviewChecks by omission still fails", () => {
+  const fields = completeReleaseQualifiedFields();
+  const result = bootWithApprovedTestReviewerAndPatchedRecord(FIXTURE_ID, blankRecord({
+    lifecycle: "release-qualified",
+    ...fields,
+    independentReviewChecks: [], // the SME reviewChecks field is separately complete, but that must not count
+  }));
+  assert.equal(result.ok, false, "an empty independentReviewChecks must be rejected even though reviewChecks (the SME's own) is complete");
+});
+
+test("an APPROVED test reviewer with no independence/no-authorship-stake declaration (null) is rejected", () => {
+  const fields = completeReleaseQualifiedFields();
+  const result = bootWithApprovedTestReviewerAndPatchedRecord(FIXTURE_ID, blankRecord({
+    lifecycle: "release-qualified",
+    ...fields,
+    independentReviewNoConflictDeclared: null,
+  }));
+  assert.equal(result.ok, false, "a null (not yet assessed) conflict declaration must be rejected");
+});
+
+test("an APPROVED test reviewer with an EXPLICIT conflict declared (false) is rejected -- false is a valid, structurally recorded, but disqualifying value", () => {
+  const fields = completeReleaseQualifiedFields();
+  const result = bootWithApprovedTestReviewerAndPatchedRecord(FIXTURE_ID, blankRecord({
+    lifecycle: "release-qualified",
+    ...fields,
+    independentReviewNoConflictDeclared: false,
+  }));
+  assert.equal(result.ok, false, "an explicitly declared conflict (false) must never satisfy release-qualified");
+});
+
+test("independentReviewDocumented:true with a malformed (non-boolean) independentReviewNoConflictDeclared is rejected", () => {
+  const result = bootWithPatchedRecord(FIXTURE_ID, blankRecord({
+    drafter: APPROVED_REVIEWER,
+    independentReviewDocumented: true,
+    independentReviewer: "Some Reviewer",
+    independentReviewDate: "2026-08-04",
+    independentReviewNoConflictDeclared: "yes",
+  }));
+  assert.equal(result.ok, false, "a non-boolean, non-null independentReviewNoConflictDeclared must be rejected");
+});
+
+test("a FULLY POPULATED, test-only approved independent-review fixture satisfies release-qualified, and the public result remains fully detached", () => {
+  const fields = completeReleaseQualifiedFields();
+  const result = bootWithApprovedTestReviewerAndPatchedRecord(FIXTURE_ID, blankRecord({
+    lifecycle: "release-qualified",
+    ...fields,
+  }));
+  assert.equal(result.ok, true, `expected the fully populated, approved test fixture to be accepted: ${result.error}`);
   const rec = result.api.getQuestionGovernance(FIXTURE_ID);
   assert.equal(rec.releaseQualified, true);
   assert.equal(rec.independentReviewDocumented, true);
+  assert.equal(rec.independentReviewer, TEST_APPROVED_INDEPENDENT_REVIEWER);
+  assert.equal(rec.independentReviewNoConflictDeclared, true);
   assert.deepEqual(rec.blockers, []);
+
+  // Detachment: mutating the returned independent-review evidence must
+  // not reach the live registry.
+  rec.independentReviewChecks.push("fabricated-check");
+  rec.independentReviewScope = "MUTATED";
+  const recAgain = result.api.getQuestionGovernance(FIXTURE_ID);
+  assert.deepEqual(recAgain.independentReviewChecks, fields.independentReviewChecks);
+  assert.equal(recAgain.independentReviewScope, fields.independentReviewScope);
 });
 
 test("release-qualified WITHOUT a documented independent review is rejected -- independent review is now a hard release-qualified prerequisite", () => {
@@ -649,6 +822,9 @@ test("release-qualified WITHOUT a documented independent review is rejected -- i
     independentReviewDocumented: false,
     independentReviewer: null,
     independentReviewDate: null,
+    independentReviewScope: null,
+    independentReviewChecks: [],
+    independentReviewNoConflictDeclared: null,
   }));
   assert.equal(result.ok, false, "release-qualified without independent review must be rejected at load time");
 });
@@ -661,11 +837,33 @@ test("an sme-reviewed record with complete release evidence but no independent r
     independentReviewDocumented: false,
     independentReviewer: null,
     independentReviewDate: null,
+    independentReviewScope: null,
+    independentReviewChecks: [],
+    independentReviewNoConflictDeclared: null,
   }));
   assert.equal(result.ok, true, `expected sme-reviewed with no independent review to still load: ${result.error}`);
   const rec = result.api.getQuestionGovernance(FIXTURE_ID);
   assert.equal(rec.releaseQualified, false);
   assert.deepEqual(rec.blockers, ["missing-independent-review"]);
+});
+
+test("an sme-reviewed record with an independent review DOCUMENTED but missing scope/checklist/conflict-declaration reports the exact granular blockers, not the aggregate code", () => {
+  const result = bootWithPatchedRecord(FIXTURE_ID, blankRecord({
+    lifecycle: "sme-reviewed",
+    ...completeSmeReviewedFields(),
+    drafter: APPROVED_REVIEWER,
+    editionSensitive: false,
+    independentReviewDocumented: true,
+    independentReviewer: "Some Distinct, Unapproved, Otherwise-Bare Reviewer",
+    independentReviewDate: "2026-08-04",
+  }));
+  assert.equal(result.ok, true, `expected a bare-but-structurally-valid documented independent review to load: ${result.error}`);
+  const rec = result.api.getQuestionGovernance(FIXTURE_ID);
+  assert.equal(rec.releaseQualified, false);
+  assert.deepEqual(rec.blockers.sort(), [
+    "missing-independent-reviewer", "missing-independent-review-scope",
+    "incomplete-independent-review-checks", "missing-independent-review-conflict-declaration",
+  ].sort());
 });
 
 /* ============================ public API tests ============================ */

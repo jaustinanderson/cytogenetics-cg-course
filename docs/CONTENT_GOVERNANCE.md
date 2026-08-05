@@ -32,6 +32,18 @@ between SME-reviewed and independent second-person review, and
 `docs/ARCHITECTURE.md` for how this is machine-enforced. No current
 question has this review; all 153 remain Draft.
 
+**Corrected 2026-08-05**: independent review found the mechanism above
+did not actually enforce this paragraph — an arbitrary, unqualified name
+(with only an identity and a date, no approval, scope, checklist, or
+conflict declaration) satisfied Release-qualified. The registry's
+independent-review evidence now requires, separately from the SME
+review: an identity checked against an explicit approved-independent-
+reviewer list (empty for this course until a real second reviewer is
+documented — no reviewer is invented here), its own recorded scope, its
+own complete structured checklist, and an explicit declaration that the
+reviewer had no authorship stake or other conflict in that specific
+question. See `docs/QUALITY_LOG.md` QL-034 for the full record.
+
 ## Source hierarchy
 
 Prefer:
