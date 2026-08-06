@@ -194,6 +194,17 @@ only to validate the course in development and CI. See
 [Architecture](./docs/ARCHITECTURE.md) for the design rationale and
 reconsideration triggers.
 
+**Long-term direction (planning only, nothing below is implemented):**
+[docs/LEARNING_PLATFORM_ROADMAP.md](./docs/LEARNING_PLATFORM_ROADMAP.md)
+describes a possible future path toward a trustworthy, adaptive,
+subject-independent learning platform — strength/weakness diagnostics,
+spaced retrieval, a concept graph, and eventual portability to other
+subjects (molecular biology first). It is a durable planning document, not
+a schedule or an approval to build; see
+[Issue #24](https://github.com/jaustinanderson/cytogenetics-cg-course/issues/24)
+for tracking. The static, private, account-free course described above
+remains the actual, current product.
+
 ## Validation
 
 Run:
@@ -326,6 +337,7 @@ input, it does not exercise real touch hardware or a mobile OS/browser.
 │   ├── QUALITY_LOG.md
 │   ├── LICENSING.md
 │   ├── SCIENTIFIC_REVIEW.md      # Current scientific-review status record
+│   ├── LEARNING_PLATFORM_ROADMAP.md # Long-term adaptive-learning-platform plan (planning only, not implemented)
 │   ├── CLAUDE_HANDOFF.md
 │   ├── assets/
 │   │   └── course-overview.png   # README screenshot (regenerate via the script above)

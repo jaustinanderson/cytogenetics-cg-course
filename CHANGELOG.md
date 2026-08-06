@@ -6,6 +6,29 @@ All notable repository changes are recorded here.
 
 ### Added
 
+- Added `docs/LEARNING_PLATFORM_ROADMAP.md`, a durable planning document
+  (Issue #24, documentation-only draft PR): a long-term roadmap toward a
+  trustworthy, adaptive, subject-independent learning platform — guiding
+  principles and safeguards, assessment-validity prerequisites (naming the
+  confirmed QL-033 cueing defect as a hard blocker for any diagnostic use
+  of the bank), a subject-independent concept/evidence/learner-state model,
+  seven distinct diagnostic learner experiences, a four-phase adaptive-
+  sequencing progression, a concept graph design, spaced-retention study
+  planning, subject-pack portability prerequisites (cytogenetics as the
+  reference pack, molecular biology as the first portability pilot),
+  candidate commercial paths and their operational requirements (no
+  pricing or market claims made), a privacy/security/ethics section, a
+  full test-and-audit matrix, success metrics with explicit
+  learning-vs-engagement separation, an 11-phase roadmap with exit
+  criteria and rollback plans for each, and a decision log of
+  intentionally open questions. **Nothing described in the document is
+  implemented** — no accounts, telemetry, cloud storage, pricing, adaptive
+  algorithm, framework migration, or content-pack system is authorized by
+  it. `docs/ROADMAP.md` gains a concise "Milestone 5" pointer/summary
+  section; `README.md`, `docs/ARCHITECTURE.md`, and `docs/CLAUDE_HANDOFF.md`
+  gain short discoverability pointers distinguishing current behavior from
+  this future proposal. No product code, scientific content, or existing
+  issue was changed.
 - Added a strict, auditable question-provenance and scientific-review
   governance model (`index.html`, Issue #3, carried by PR #23): a
   separate `QUESTION_GOVERNANCE` registry, keyed by each authored

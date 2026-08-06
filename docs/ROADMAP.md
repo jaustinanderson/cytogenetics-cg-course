@@ -660,6 +660,58 @@ The API provides prerequisites for an adaptive workflow, but adaptation is not
 automatic. Generated content remains external or session-only until it passes
 the same provenance, scientific-review, and release gates as authored content.
 
+## Milestone 5 — Adaptive, subject-independent learning platform (planning only)
+
+**Status: planning document committed, no implementation started.** The full
+long-term plan is `docs/LEARNING_PLATFORM_ROADMAP.md`, added by a
+documentation-only draft PR and tracked by
+[Issue #24](https://github.com/jaustinanderson/cytogenetics-cg-course/issues/24).
+This entry is a pointer and sequencing summary, not a restatement — see that
+document for full detail on every phase's prerequisites, scope, exclusions,
+deliverables, tests, audits, exit criteria, risks, and rollback plan.
+
+**Direction:** grow this course from a static practice quiz into a
+system that can tell a learner what they know, don't know, or lack enough
+evidence to judge; recommend what to study next and why; support spaced,
+interleaved retrieval and delayed-retention checks; and, eventually, do the
+same for other subjects (molecular biology is the intended first
+portability pilot) — without ever overstating what the evidence supports,
+implying certification, or compromising the current static, private,
+account-free product.
+
+**Hard prerequisite, before any diagnostic or mastery feature may use the
+existing bank:** the confirmed QL-033 answer-choice cueing defect
+(`docs/QUALITY_LOG.md`) must be corrected or the affected items quarantined
+from diagnostic use, and questions must clear scientific review
+(`QUESTION_GOVERNANCE`, Issue #3) beyond the current all-Draft baseline. See
+`docs/LEARNING_PLATFORM_ROADMAP.md` section B.
+
+**Phase sequence** (full detail in section N of the linked document):
+
+0. Assessment and scientific-validity prerequisites (QL-033, review status)
+1. Complete remaining Milestone 1 items (image-manifest normalization,
+   public-API contract tests)
+2. Subject-independent concept/objective and item metadata design
+3. Prospective attempt-history and learner-evidence design
+4. Explainable local diagnostic and strength/weakness dashboard MVP
+5. Spaced retrieval, interleaving, and study-plan MVP
+6. Prerequisite and misconception concept graph
+7. Cytogenetics content-pack extraction
+8. Molecular-biology portability pilot
+9. Optional accounts, synchronization, and privacy architecture
+10. Commercial-product readiness and operational controls
+11. Evidence-based adaptive calibration using adequate real-world data
+
+**Explicitly not approved by this milestone entry or by Issue #24:**
+accounts, telemetry, cloud learner-data storage, pricing/commercial
+packaging, selection of any specific adaptive/mastery algorithm, a
+framework migration, or a persistent content-pack system. Each requires its
+own separately scoped, separately reviewed proposal when its phase arrives.
+
+**Recommended next implementation task:** Phase 0 — correcting the QL-033
+assessment-cueing defect, already fully scoped in this roadmap's Milestone 1
+open items above. Not begun by this planning entry.
+
 ## Quality gates
 
 Every release candidate must satisfy the applicable gates:

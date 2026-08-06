@@ -1807,6 +1807,33 @@ and the QL-033 assessment-bank cueing correction remain separately
 scoped, unfinished work. Does not perform scientific review or source
 attribution — that remains separately scoped, future work.
 
+### Adaptive/reusable learning platform roadmap — planning only, draft PR opened 2026-08-06
+
+`docs/LEARNING_PLATFORM_ROADMAP.md` is a new, durable planning document
+describing a long-term direction for this course: a reusable,
+subject-independent learning engine with strength/weakness diagnostics,
+spaced retrieval, a concept graph, and eventual portability beyond
+cytogenetics (molecular biology is the intended first pilot). It is
+committed via a documentation-only draft PR and tracked by
+[Issue #24](https://github.com/jaustinanderson/cytogenetics-cg-course/issues/24).
+**Nothing described in that document is implemented.** It explicitly does
+not authorize accounts, telemetry, cloud learner-data storage, pricing, a
+specific adaptive-model selection, a framework migration, or a persistent
+content-pack system — each remains its own future, separately scoped and
+reviewed proposal.
+
+The plan names a hard prerequisite before any diagnostic/mastery feature
+may use the existing question bank: the confirmed QL-033 answer-choice
+cueing defect (`docs/QUALITY_LOG.md`) must be corrected or the affected
+items quarantined, and questions must clear scientific review
+(`QUESTION_GOVERNANCE`, Issue #3) beyond the current all-Draft baseline.
+The plan's own recommended next implementation task is exactly that QL-033
+correction — already open on `docs/ROADMAP.md` — not begun by this
+planning PR. See `docs/ROADMAP.md` "Milestone 5" for the concise summary
+and phase sequence, and the full document for detail on every phase's
+prerequisites, scope, exclusions, deliverables, tests, audits, exit
+criteria, risks, and rollback plan.
+
 ### Accessibility
 
 The course has a skip link that now moves keyboard focus into `#main`
