@@ -1026,6 +1026,351 @@ behavior is never mistaken for a placeholder implementation of this:
   externally supplied content exactly as they do to authored content —
   acceptance by the runtime validator is not review.
 
+## Question provenance and scientific-review governance (Issue #3, Milestone 1)
+
+Adds a strict, auditable governance model that prevents any question from
+being described as source-checked, SME-reviewed, independently reviewed, or
+release-qualified unless the required evidence is explicitly recorded — see
+`docs/CONTENT_GOVERNANCE.md` for the human-readable policy and
+`docs/SCIENTIFIC_REVIEW.md` for the current, factual review status this
+model enforces.
+
+**Design decision — a separate registry, not fields on the question.** Three
+designs were compared: (1) adding governance fields directly to each
+`QUIZZES` question object, rejected because it mixes two independently
+changing lifecycles (content authored once; review status changed later, by
+a different actor) and would let `addQuestions()` accidentally accept or
+fabricate governance-shaped fields on a caller-supplied runtime question;
+(2) a single flat status string per question, rejected because a bare label
+cannot carry the evidence (source, reviewer, date, scope) prerequisites
+require, which is exactly the "label alone bypasses the gate" failure mode
+this exists to prevent; (3) a **separate registry** (`QUESTION_GOVERNANCE`),
+keyed by the question's existing stable authored id, holding a complete
+evidence record, with the lifecycle state's validity VALIDATED AGAINST —
+not computed from — that evidence (a promotion is a stored, intentional
+decision; see "Lifecycle is stored and approved, not computed" below).
+Chosen: it keeps scientific governance entirely separate from both question
+content and learner progress (`state`/`SCHEMA_V`, unchanged), reuses the
+existing stable-id identity mechanism (no position-derived identity), and
+gives one place to enforce "a label requires its evidence."
+
+**Registry completeness and duplicate-id safety.** `QUESTION_GOVERNANCE`'s
+key set must equal exactly the current authored question id set (every id
+in every `QUIZZES.*` array, including the `final` pool) — no missing id, no
+stale id, no duplicate id. **Corrected 2026-08-04**: the original design
+claimed a duplicate id was "structurally impossible in a JS object
+literal." That was wrong — a repeated key in an object literal silently
+overwrites the earlier value with no error, confirmed by direct
+reproduction against the original implementation (a second `"m1-q1"` entry
+collapsed into the registry while every committed test still passed).
+`QUESTION_GOVERNANCE` is therefore authored as `QUESTION_GOVERNANCE_ENTRIES`
+— an ordered array of `[id, record]` pairs — and built by
+`buildGovernanceRegistry()`, which tracks every id it has placed and throws
+on a repeat before the registry object is ever constructed. Completeness
+(no missing/stale id) is separately enforced by
+`assertGovernanceRegistryIntegrity()` at script-load time, and by a
+committed structural test (`tests/question-governance.mjs`).
+
+**Corrected again 2026-08-04** (a second independent-review pass, same
+day): the fix above protected only the GOVERNANCE registry's own keys. It
+did not protect the separate set of AUTHORED QUESTION ids
+`assertGovernanceRegistryIntegrity()` itself builds by iterating `QUIZZES`
+— if two authored questions shared an `id`, that set-building step
+silently collapsed them into one key, the same object-literal footgun one
+level up. Confirmed by direct reproduction: renaming one authored
+question's id to collide with another's, and removing the now-orphaned
+governance entry so the (miscounted) key sets still lined up, let the
+script load with no error — 153 question objects, only 152 unique ids,
+entirely undetected. The fix does not rely on any keyed set: it counts
+the flat list of authored questions and separately counts the unique id
+set, and throws the instant those two counts disagree, independent of
+which two ids collided. `tests/validate-course.mjs` separately asserts
+global id uniqueness as defense in depth (a committed test); this
+load-time check is the one that fires on every load, including on a
+deployed page a test suite never touches.
+
+**Lifecycle states.** Machine-readable values are the lowercase, hyphenated
+form of `docs/CONTENT_GOVERNANCE.md`'s four content states, reconciled 1:1:
+`'draft'` / `'source-checked'` / `'sme-reviewed'` / `'release-qualified'`.
+
+**Record schema.** Every governance record is a plain object with exactly
+17 own properties (was 14; gained `independentReviewScope`,
+`independentReviewChecks`, `independentReviewNoConflictDeclared` in the
+2026-08-05 independent-review evidence correction — see below):
+`lifecycle`, `drafter` (string or `null`), `sources` (array of structured
+source records, `[]` if none — see "Source-reference sufficiency" below),
+`sourceCheckedBy` / `sourceCheckedDate`, `reviewer` / `reviewDate` /
+`reviewScope` (narrative, see "Structured review checks" below),
+`reviewChecks` (array, see below), `independentReviewDocumented` (boolean,
+default `false`) with its own `independentReviewer` / `independentReviewDate`
+/ `independentReviewScope` / `independentReviewChecks` /
+`independentReviewNoConflictDeclared` evidence (see "Independent-review
+evidence model" below), `editionSensitive` (boolean once assessed, `null`
+if not yet assessed), and `notes`. `null` means "not yet recorded"; `[]`
+means "nothing yet cited/checked" — never an empty string standing in for
+either. See `index.html`'s own `QUESTION_GOVERNANCE` comment for the
+complete field-by-field rationale.
+
+**Source-reference sufficiency (corrected 2026-08-04, revised in a second
+pass the same day).** A source record's structural shape is exactly
+`{citation, publisher, edition, date, locator, url}` — `publisher` (the
+responsible author, publisher, or organization) was added in the second
+pass, separate from `citation` (the identifiable title). Structural
+validity alone (`isValidGovernanceSource()`) is not enough to support
+`source-checked` — `isSufficientGovernanceSource()` additionally requires:
+a genuine, non-placeholder `citation`; a genuine, non-placeholder
+`publisher`; an exact edition, revision, or publication date (`edition` or
+`date` non-`null`); and a question-specific locator or exact webpage
+(`locator` or `url` non-`null`). "Non-placeholder" is an exact-token
+denylist match (`GOVERNANCE_SOURCE_PLACEHOLDER_TOKENS`: `x`, `xxx`, `tbd`,
+`todo`, `n/a`, `na`, `unknown`, `none`, `test`, `placeholder`, `asdf`,
+`example`), never a substring match, so a genuine title that happens to
+contain one of these words is not penalized for it. This deliberately
+replaces the first pass's `≥20`-character length floor on `citation` alone
+— independent review correctly flagged a length threshold as an arbitrary
+proxy for source identity, not a structural check of it.
+`{citation:"x", publisher:null, edition:null, date:null, locator:null,
+url:null}` previously satisfied (an earlier version of) `source-checked`;
+it no longer does, confirmed by direct reproduction before this
+correction. `url`, when present, must be `https://`.
+
+**Approved-SME-reviewer identity (corrected 2026-08-04, restructured in a
+second pass the same day).** Previously any non-empty `reviewer` string —
+including `"Nobody"`, confirmed by direct reproduction — satisfied
+`sme-reviewed`. `docs/CONTENT_GOVERNANCE.md` defines that state
+specifically as review **by Austin**. `reviewer` is now checked against
+`APPROVED_SME_REVIEWERS` via `isApprovedSmeReviewer()`, using
+case/whitespace-normalized comparison (`normalizeGovernanceIdentity()`) so
+display variation can never create a second identity. The approved set is
+keyed by an explicit `GOVERNANCE_SUBJECT_PACK` identifier
+(`'cytogenetics-cg-ascp-v1'`) inside `APPROVED_SME_REVIEWERS_BY_PACK`
+(currently `{'cytogenetics-cg-ascp-v1': ['Jerad Austin Anderson']}`,
+matching `README.md`'s documented author identity exactly) — an explicit,
+extensible structure so a future different subject pack (a different exam,
+a different credentialed author) can define its own approved-reviewer set
+under its own key without touching this course's. This is an
+evidence-backed approved-identity check, not brittle free-text comparison
+against arbitrary input, and is never exposed by any public API — a caller
+cannot discover, read, or extend the approved set.
+
+**Structured review checks (corrected 2026-08-04).** The original
+`reviewScope` completeness gate was a length/vague-phrase heuristic
+(`≥15` characters, not matching a short blacklist) — confirmed by direct
+reproduction that `"rationale checked carefully"` (which omits distractor
+quality, domain/difficulty, originality, exam integrity, and privacy)
+satisfied it. `reviewChecks` (a new array field) replaces this: it must
+equal, exactly, the closed `GOVERNANCE_REVIEW_CHECKS_V1` set —
+`'best-answer-defensible'`, `'rationale-accuracy'`, `'distractor-quality'`,
+`'domain-difficulty-correct'`, `'original-wording'`,
+`'no-recalled-exam-content'`, `'no-phi-or-confidential'` — matching
+`docs/CONTENT_GOVERNANCE.md`'s "Review must verify" list category for
+category, for `sme-reviewed`/`release-qualified` to be valid: no missing,
+duplicate, or unknown entry. The `_V1` suffix is deliberate: if the
+mandatory review categories ever change, the new set ships under a new
+versioned name rather than silently redefining `_V1` out from under any
+future review evidence (no current record carries any populated
+`reviewChecks` yet, so this discipline has not been exercised by real
+data). `reviewScope` remains as required narrative documentation
+(matching `docs/SCIENTIFIC_REVIEW.md`'s review-log "Scope" column) but is
+no longer itself the completeness gate, and `notes` can never substitute
+for `reviewChecks`.
+
+**Lifecycle is stored and approved, not computed (corrected 2026-08-04).**
+The original design comment claimed the lifecycle was "computed from"
+evidence; the code only ever prevented it from *outrunning* its evidence.
+That distinction now has an observable contract: `isReleaseQualified(rec)`
+(exposed as `releaseQualified` on every `getQuestionGovernance()` result)
+is `true` only when the **declared** `lifecycle` is `'release-qualified'`
+**and** every prerequisite passes — evidence being complete does not, by
+itself, promote a record. `computeGovernanceBlockers()` guarantees the
+invariant `blockers.length === 0` **if and only if** `releaseQualified ===
+true`: a record with complete evidence but a lifecycle not yet explicitly
+promoted reports `releaseQualified:false` and carries exactly one blocker,
+`release-approval-pending` — never a bare empty `blockers` array. Confirmed
+by direct reproduction that, before this correction, a `lifecycle:'draft'`
+record with every other field fully populated reported `blockers:[]`,
+falsely implying release-readiness.
+
+**Lifecycle prerequisites, enforced, not trusted.** `isValidGovernanceRecord()`
+rejects any record whose declared `lifecycle` outruns its own evidence:
+`source-checked` requires ≥1 SUFFICIENT source (see above) plus a
+source-checker and date; `sme-reviewed` requires everything
+`source-checked` requires plus an APPROVED reviewer identity, a real review
+date, non-empty `reviewScope`, and a COMPLETE `reviewChecks` set;
+`release-qualified` requires everything `sme-reviewed` requires plus a
+named drafter, an explicitly assessed `editionSensitive`, a documented
+genuinely distinct second-person INDEPENDENT REVIEW (see below —
+**corrected 2026-08-04, second pass**: previously optional, now required),
+**and** the declared `lifecycle` must itself equal `'release-qualified'`. A
+contradictory record (a promoted label without its prerequisites) fails
+validation and makes the script throw at load — see
+`assertGovernanceRegistryIntegrity()`.
+
+**Independent-review evidence model — `independentReviewDocumented` means
+COMPLETE (corrected 2026-08-04, tightened 2026-08-05, FINALIZED
+2026-08-05).** `independentReviewDocumented:false` REQUIRES every
+independent-review field (`independentReviewer`, `independentReviewDate`,
+`independentReviewScope`, `independentReviewChecks` (`[]`),
+`independentReviewNoConflictDeclared`) to be in its blank state.
+`:true` now means a COMPLETE review record exists — REQUIRES ALL of:
+non-empty `independentReviewer`; a valid `independentReviewDate`; a
+non-empty `independentReviewScope` (a SEPARATE recorded instance from the
+SME reviewer's own `reviewScope` — it can never stand in as evidence of
+what a different person independently reviewed); a COMPLETE
+`independentReviewChecks` set against the same versioned
+`GOVERNANCE_REVIEW_CHECKS_V1` enum, recorded as its OWN separate array
+instance (reusing or aliasing the SME reviewer's `reviewChecks` does not
+satisfy this); an actual recorded `independentReviewNoConflictDeclared`
+boolean (`true` or `false` — `null`, "not yet assessed," fails this gate,
+since an unassessed conflict status is not a completed declaration); a
+known `drafter`; and the independent reviewer's normalized identity
+distinct from both `drafter` and the primary SME `reviewer` (confirmed
+rejected even for case/whitespace-variant self-matches against either).
+A record claiming `independentReviewDocumented:true` while ANY of this
+is missing is REJECTED AT LOAD TIME, as a contradictory record — not
+merely flagged with a blocker.
+
+**Corrected again 2026-08-05 (this was itself a defect in the prior
+correction).** An earlier version of this check let `true` mean only
+"identity and date present" — independent review confirmed a committed
+test explicitly expected exactly that incomplete state
+(`independentReviewScope:null`, `independentReviewChecks:[]`,
+`independentReviewNoConflictDeclared:null`) to load successfully as a
+"bare-but-structurally-valid documented independent review." That
+contradicted the field's own name, the human policy in
+`docs/CONTENT_GOVERNANCE.md` (identity, date, AND scope/checklist), and
+the stated goal of preventing content from being described as
+independently reviewed without its required evidence. This file
+deliberately does not introduce a partial/in-progress review state to
+work around it — a future workflow needing to represent "review started
+but not finished" would need its own, separately reviewed status field.
+
+**Independent review IS a `release-qualified` prerequisite**
+(`meetsIndependentReview()`, folded into `meetsReleaseQualified()`) — the
+safer explicit policy for a public, potentially commercial scientific
+learning product: Austin's own SME review satisfies `sme-reviewed`, but
+`release-qualified` additionally requires a distinct second person's
+documented review. Because `independentReviewDocumented:true` now always
+means COMPLETE, `meetsIndependentReview()` no longer re-checks
+completeness — it only asks whether the (already-complete) review
+additionally QUALIFIES: an APPROVED reviewer identity
+(`isApprovedIndependentReviewer()`, checked against
+`APPROVED_INDEPENDENT_REVIEWERS_BY_PACK` — the same
+`GOVERNANCE_SUBJECT_PACK`-keyed structure used for
+`APPROVED_SME_REVIEWERS_BY_PACK`, but a SEPARATE registry, since being an
+approved SME reviewer and an approved independent reviewer are different
+roles by definition. **Deliberately EMPTY for the current production
+pack** — no real independent reviewer, credential, or approval record
+exists yet, and none is invented here; no record can currently reach
+`release-qualified` via independent review at all, matching all 153
+current questions remaining Draft. Never exposed by any public API), AND
+no declared conflict (`independentReviewNoConflictDeclared === true`, not
+`false` — a complete record where the reviewer declared an actual
+conflict is honest and valid, just correctly disqualifying).
+
+**Deterministic release blockers, distinguishing MISSING evidence from
+COMPLETE-but-disqualified evidence (corrected 2026-08-05).**
+`computeGovernanceBlockers()` returns zero or more of these exact, stable
+reason codes: `missing-drafter`, `missing-sources`,
+`missing-source-check`, `missing-reviewer`, `missing-review-date`,
+`incomplete-review-checks`, `unresolved-edition-sensitivity`,
+`release-approval-pending`, and, for independent review:
+`missing-independent-review` (aggregate — `independentReviewDocumented`
+is `false`, nothing at all documented). An EARLIER version of this
+correction added GRANULAR "missing-*" codes for the case where
+`independentReviewDocumented` was `true` but individual fields were still
+absent; that entire case is now IMPOSSIBLE (see above — `true` always
+means complete), so those four codes were dead and have been REMOVED
+rather than retained as unreachable public-contract codes. What a
+COMPLETE, documented review can still fail on is QUALIFICATION, with
+codes that reflect a complete-but-disqualified record, never "missing":
+`unapproved-independent-reviewer` (the reviewer identity is present, just
+not approved — never called `missing-independent-reviewer`, which would
+misdescribe a present identity as absent) and
+`independent-review-conflict-declared` (the conflict declaration is
+present and says `false` — never called
+`missing-independent-review-conflict-declaration`, which would misdescribe
+a completed, honest declaration as absent). The invariant
+`blockers.length === 0` **if and only if** `releaseQualified === true`
+(see "Lifecycle is stored and approved, not computed" above) is proven by
+a dedicated test that compares both predicates across a matrix of valid
+and adversarial fixtures, including an unapproved-but-otherwise-complete
+independent reviewer and a complete-but-conflicted one, not merely
+asserted informally. Two additional tests confirm `meetsReleaseQualified()`
+itself — not merely `computeGovernanceBlockers()`'s display logic —
+rejects a `release-qualified` label backed by a complete-but-unapproved
+or complete-but-conflicted independent review at load time.
+
+**Current data.** All 153 authored questions are `'draft'`, with every
+field `null`/`[]`/`false`, `releaseQualified:false`, and the same 8
+blockers present as before this correction (`missing-independent-review`,
+the aggregate form, since nothing is documented — never
+`release-approval-pending`, since the other blockers are present too) —
+nothing is asserted without evidence. See `docs/SCIENTIFIC_REVIEW.md` for
+the full record.
+
+**Runtime-injected questions stay outside this registry.** `addQuestions()`
+never reads or writes `QUESTION_GOVERNANCE`; a runtime-injected question's
+id is treated exactly like any other unknown id by
+`getQuestionGovernance()` (returns `null`). `RUNTIME_QUESTION_ALLOWED_KEYS`
+does not include any governance-shaped field, so a caller cannot smuggle a
+self-certified review status onto an injected question — it is rejected as
+an unrecognized field, same as any other unsupported key. The
+runtime-injected-content lifecycle itself (session-only definitions,
+durable-by-id outcomes) is unchanged by this work.
+
+**Public API.** `getQuestionGovernance(id?)` is read-only: with a known
+authored id, returns that record plus two freshly computed fields —
+`releaseQualified` (see above) and `blockers` — never stored, possibly
+stale values; with no argument, returns every authored record keyed by id,
+same shape; an unrecognized id (including any runtime-injected question's
+id) returns `null`. Uses the same `clone()` (JSON-roundtrip) detachment as
+every other read method — a caller mutating a returned record cannot reach
+the live registry. Emits no event and does not read or write learner
+progress. `SCHEMA_V` stays `2`; governance metadata is never written to
+`localStorage`, `state`, `exportJSON()`, or accepted by `importJSON()`.
+
+**Public-course disclosure (wording corrected 2026-08-04).** A persistent,
+non-modal, non-dismissible in-flow disclosure (`#reviewDisclosure`) sits
+inside the hero section, immediately after the hero stats — near the
+course introduction on both desktop and mobile (not claimed as guaranteed
+within the initial viewport on every device — real browser chrome, font
+settings, and zoom vary in ways a fixed layout budget cannot promise). It
+states the structural-vs-scientific-review distinction using "Automated
+checks validate documented structural and behavioral contracts — they do
+not establish scientific accuracy" (the prior wording, "Automated tests
+confirm this course is built and behaves correctly," read as a broader
+positive-correctness claim than the evidence warrants), and links to
+GitHub's **rendered** blob view of `docs/SCIENTIFIC_REVIEW.md` — the
+original relative link served raw `text/markdown` on GitHub Pages
+(confirmed by direct request: `content-type: text/markdown`), an
+unrendered, confusing document in a browser, not the rendered `text/html`
+page a learner needs. It is pure static markup with no JS behavior:
+nothing to dismiss, no focus management, and therefore nothing that can
+obstruct or steal focus from course controls. The existing README beta
+warning is unchanged and unaffected.
+
+**Release-gate reconciliation (point 8, 2026-08-04).** Every applicable
+`docs/CONTENT_GOVERNANCE.md` Release-qualified prerequisite is either
+directly validated by this mechanism or explicitly supplied by a named,
+separate repository-level check — never claimed as machine-enforced when
+it exists only as prose:
+
+| Prerequisite | How it is enforced |
+| --- | --- |
+| Stable ID | The question's own `id` field; global uniqueness enforced by `addQuestions()`/`tests/validate-course.mjs`, AND at script-load time by `assertGovernanceRegistryIntegrity()`'s authored-question duplicate-count check |
+| Domain and topic | The question's own `d`/`t` fields; validated by `tests/validate-course.mjs`'s content-contract test |
+| Intended cognitive level | The question's own `x` (difficulty) field; same content-contract test |
+| Source evidence | `QUESTION_GOVERNANCE.sources`, gated by `isSufficientGovernanceSource()` (citation, publisher, edition-or-date, locator-or-url) |
+| Drafter | `QUESTION_GOVERNANCE.drafter`, required non-null for `release-qualified` |
+| Scientific reviewer (SME) | `QUESTION_GOVERNANCE.reviewer`, gated by `isApprovedSmeReviewer()` against `APPROVED_SME_REVIEWERS_BY_PACK` |
+| Independent second-person reviewer | `QUESTION_GOVERNANCE.independentReviewDocumented`/`independentReviewer`/`independentReviewDate`/`independentReviewScope`/`independentReviewChecks`/`independentReviewNoConflictDeclared`, gated by `meetsIndependentReview()` against `isApprovedIndependentReviewer()` (empty for the current production pack), required for `release-qualified` |
+| Review date and status | `QUESTION_GOVERNANCE.reviewDate` / `lifecycle`, gated by `isValidGovernanceDate()` / `lifecycleRequirementsMet()` |
+| Edition/SOP-sensitive assessment | `QUESTION_GOVERNANCE.editionSensitive`, required non-null for `release-qualified` |
+| Mandatory scientific/originality/exam-integrity/privacy checks | `QUESTION_GOVERNANCE.reviewChecks`, gated by `hasAllRequiredReviewChecks()` against the versioned `GOVERNANCE_REVIEW_CHECKS_V1` enum — machine-enforced completeness of the checklist categories; the actual human judgment behind each check is not machine-verifiable and remains a reviewer responsibility, same as any review process |
+| Schema and automated gates | The full CI suite (`npm test`, Playwright) passing, independent of `QUESTION_GOVERNANCE` |
+| Assessment-bank/exam-form validity (answer-choice cueing, distribution balance) | **Not covered by per-question `QUESTION_GOVERNANCE` at all** — a separate, bank-level concern; per-item release qualification is necessary but not sufficient for the question bank or an exam form to be release-qualified. See `docs/QUALITY_LOG.md` QL-032 and `docs/ROADMAP.md` for the tracked, unresolved risk. |
+
 ## Public API
 
 `window.CytoCourse` provides read, analysis, write, and event methods. Read

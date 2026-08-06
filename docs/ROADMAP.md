@@ -369,10 +369,11 @@ review status stable before adding 46 questions.
   work below (content-pack decision, provenance fields, image-manifest
   normalization, broader API contract tests) was out of scope for that
   PR and stays open
-- [ ] Decide whether injected questions are intentionally session-only or
+- [x] Decide whether injected questions are intentionally session-only or
   represented by a versioned content-pack format — branch
-  `claude/issue-2-runtime-content-policy` (Issue #2, **draft PR open,
-  not yet merged**): adopts and enforces a deliberate SPLIT lifecycle —
+  `claude/issue-2-runtime-content-policy` (Issue #2, PR #22, **merged**
+  as commit `03862e5103919f96f9ec165e1d4599d20f85a66c`): adopts and
+  enforces a deliberate SPLIT lifecycle —
   a question definition added via `addQuestions()` is session-only
   (never written to `localStorage`, `state`, `exportJSON()`, or accepted
   back in by `importJSON()`), but its recorded ANSWER OUTCOME, once
@@ -397,14 +398,82 @@ review status stable before adding 46 questions.
   content-pack format — only documents its prerequisites for a later,
   separately scoped design. `SCHEMA_V` stays `2`. See
   `docs/QUALITY_LOG.md` QL-028 for the full decision record and
-  `docs/VALIDATION.md` for test coverage. Left unchecked pending
-  independent review and merge; the remaining Milestone 1 work below
-  (provenance fields, image-manifest normalization, broader API
-  contract tests) is out of scope for that PR and stays open regardless
-- [ ] Add provenance and review fields for releasable questions
+  `docs/VALIDATION.md` for test coverage. A second round of independent
+  review before merge found and fixed one further defect — an explicit
+  own `w: undefined` field crashed `addQuestions()` with an uncaught
+  exception instead of a structured rejection — see QL-029. The
+  remaining Milestone 1 work below (provenance fields, image-manifest
+  normalization, broader API contract tests) was out of scope for this
+  item and stays open regardless
+- [x] Add provenance and review fields for releasable questions — branch
+  `claude/milestone-1-question-provenance` (Issue #3, implemented and
+  independently reviewed, through repeated correction rounds, in PR #23):
+  adds a separate `QUESTION_GOVERNANCE` registry (keyed by
+  each question's existing stable id) recording lifecycle, drafter,
+  structured sources, source-check identity/date,
+  reviewer/date/scope, documented independent review, and edition
+  sensitivity, with prerequisites enforced at load time (a lifecycle
+  label cannot be promoted without its evidence) and a read-only
+  `CytoCourse.getQuestionGovernance()` public API. All 153 current
+  questions remain Draft; nothing is fabricated. Also adds a persistent
+  in-course review disclosure. Does not perform scientific review or
+  source attribution. A second round of independent review before merge
+  found the mechanism did not yet fully implement the stated policy
+  (duplicate-id detection, source sufficiency, an approved-SME-reviewer
+  identity, a structured review-check enum, lifecycle/blocker/
+  releaseQualified invariants, and independent-review bidirectional
+  consistency) — corrected on the same branch. A THIRD round found
+  remaining gaps (a duplicate AUTHORED question id was still
+  undetectable; the source-sufficiency check still used a length
+  heuristic instead of a genuine publisher field; the approved-reviewer
+  set was not structured for future extensibility; the review-checklist
+  enum was not versioned) and a deliberate policy tightening
+  (release-qualified now requires a documented independent second-person
+  review, not merely Austin's own SME review) — also corrected on the
+  same branch. A FOURTH round found that the new independent-review
+  requirement did not actually enforce its own documented evidence
+  contract (an arbitrary, unqualified, unapproved reviewer name with only
+  an identity and a date satisfied release-qualified) — corrected with a
+  separate approved-independent-reviewer registry (deliberately empty for
+  the current pack), a separately recorded scope and checklist, and an
+  explicit no-conflict declaration. A FIFTH round found that fix still let
+  `independentReviewDocumented:true` be set with the new scope/checklist/
+  conflict-declaration fields left unpopulated — corrected so `true` now
+  requires the complete record (identity, date, scope, full checklist, an
+  actual boolean conflict declaration) or the record is rejected at load,
+  and so that a complete-but-unapproved or complete-but-conflicted record
+  reports a distinct blocker (`unapproved-independent-reviewer` /
+  `independent-review-conflict-declared`) rather than being conflated with
+  "nothing documented." See `docs/QUALITY_LOG.md` QL-030 through QL-032
+  and QL-034 through QL-035, and `docs/ARCHITECTURE.md` "Question
+  provenance and scientific-review governance" for the full record. All
+  153 questions remain Draft; no scientific review or source attribution
+  was performed; the approved independent-reviewer list remains
+  deliberately empty. Checked here because this item's own implementation
+  and independent review are complete in PR #23 — GitHub is the source of
+  truth for that PR's current merge/deployment state; image-manifest
+  normalization, broader public-API contract tests, and the
+  assessment-bank cueing item below remain separately scoped, open work,
+  regardless of this PR's state
 - [ ] Normalize the image-manifest schema so candidate records use explicit
   unknown values
 - [ ] Add browser contract tests for every public API claim
+- [ ] Correct the confirmed assessment-bank answer-choice cueing defect
+  across the 153-question bank — see `docs/QUALITY_LOG.md` QL-033:
+  independently reproduced counts show the correct answer is index 1/B
+  in 139 of 153 questions (90.8%), and is the uniquely longest option in
+  114 of 153 (74.5%), longest-or-tied in 133 of 153 (86.9%). This is a
+  bank-level psychometric validity problem, distinct from per-question
+  scientific governance (`QUESTION_GOVERNANCE`, Issue #3) — per-item
+  release qualification is necessary but not sufficient for the question
+  bank, or any exam form drawn from it, to be release-qualified. Requires
+  human/scientific judgment to rewrite distractor lengths and rebalance
+  answer-index distribution credibly (not a mechanical shuffle, which
+  would not fix distractor-length cueing, and not naive padding, which
+  could introduce scientific inaccuracies). No psychometric pass
+  threshold is decided yet; that is part of this future task's scope,
+  not assumed here. Preserve the beta disclosure until this is resolved
+  and independently verified.
 
 ### Exit criteria
 

@@ -12,7 +12,9 @@ local progress tracking, performance analytics, and automated validation.
 > question-by-question scientific review for public release.
 
 See [Scientific Review Status](./docs/SCIENTIFIC_REVIEW.md) for the current,
-itemized record of what has and has not been independently reviewed.
+itemized record of what has and has not been independently reviewed. The
+live course itself also carries this disclosure directly, near its
+introduction, so a learner does not need to find this file first.
 
 **[Open the live course](https://jaustinanderson.github.io/cytogenetics-cg-course/)**
 
@@ -107,6 +109,8 @@ CytoCourse.getWeakAreas(3);
 CytoCourse.getUnmastered();
 CytoCourse.exportJSON();
 CytoCourse.getRuntimeContentPolicy();
+CytoCourse.getQuestionGovernance();       // every authored question's review status
+CytoCourse.getQuestionGovernance("m1-q1"); // one question's status, or null if unknown
 ```
 
 Validated runtime injection is available for an existing quiz:
@@ -145,6 +149,19 @@ definition through, and re-importing such a capture will not reinstall
 it. `CytoCourse.getRuntimeContentPolicy()` states this contract
 explicitly and machine-readably. See `docs/ARCHITECTURE.md`
 "Runtime-injected content lifecycle" for the full policy.
+
+Every authored question's scientific-review status is read-only and
+separate from both content and progress: `CytoCourse.getQuestionGovernance()`
+returns, per question, its lifecycle (`draft` / `source-checked` /
+`sme-reviewed` / `release-qualified`), any recorded source/reviewer/date
+evidence, and a `blockers` array naming exactly what is missing toward
+release-qualification. A question's lifecycle cannot be promoted without
+the evidence that state requires — enforced at load time, not merely
+documented. All 153 current questions are `draft`; a runtime-injected
+question is never entered into this registry and cannot self-certify a
+review status. See `docs/ARCHITECTURE.md` "Question provenance and
+scientific-review governance" and `docs/SCIENTIFIC_REVIEW.md` for the
+full policy and current status.
 
 Current analytics describe **last-attempt mastery**, not total-attempt accuracy.
 That distinction is intentional documentation of the present implementation,

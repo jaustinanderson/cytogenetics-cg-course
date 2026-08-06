@@ -2253,6 +2253,489 @@ lifecycle, canonical-snapshot detachment, public policy API, and every
 other adversarial-input rejection from the original PR are unchanged.
 `SCHEMA_V` stays `2`.
 
+## Question provenance and scientific-review governance — added 2026-08-04
+
+Adds a `QUESTION_GOVERNANCE` registry (`index.html`), a load-time integrity
+gate (`assertGovernanceRegistryIntegrity()`), a read-only
+`CytoCourse.getQuestionGovernance()` public API method, and a persistent
+in-course review disclosure (`#reviewDisclosure`). See
+`docs/ARCHITECTURE.md` "Question provenance and scientific-review
+governance" for the full schema and design decision, and
+`docs/QUALITY_LOG.md` QL-030 for this task's record.
+
+**25 new dependency-free tests** in `tests/question-governance.mjs` (run
+via `npm run test:governance`, included in `npm test`) cover:
+
+1. Registry completeness — the exact 153-id key set matches every
+   authored question id, with no missing, stale, or duplicate id.
+2. Every current record's exact own-property shape, allowed types, and
+   lifecycle enum.
+3. All 153 current questions are `draft`, and none is release-qualified.
+4. No current record fabricates a drafter, source, source-checker,
+   reviewer, review date, review scope, independent review, or release
+   qualification.
+5. Fixture-based lifecycle-transition tests, built by PATCHING one
+   `QUESTION_GOVERNANCE` entry's source text (replacing
+   `DRAFT_GOVERNANCE_RECORD()` with a literal record) and re-running the
+   patched script in a fresh sandbox — the only way to exercise
+   `isValidGovernanceRecord()`'s internal prerequisite logic, since it is
+   deliberately not exposed on the public, read-only API (there is no
+   public write method for governance data):
+   - a correctly complete record satisfies each of the `source-checked`,
+     `sme-reviewed`, and `release-qualified` transitions (the last with
+     zero blockers);
+   - a `sme-reviewed` record with no reviewer is rejected at load time
+     (missing prerequisites prevent promotion);
+   - a bare `release-qualified` label with otherwise-default (nothing
+     recorded) fields is rejected (a state label alone cannot bypass the
+     gate);
+   - an empty source citation, an impossible calendar date
+     (`2024-02-30`), a vague review scope (`"reviewed"`), an
+     `independentReviewDocumented:true` claim with no supporting
+     evidence, an invented lifecycle value, and a record missing a
+     required own property are each independently rejected.
+6. Public-API tests: a known id returns the exact documented shape; an
+   unknown id (including a non-string or empty-string id) returns `null`,
+   never a default record; the no-argument complete-registry read returns
+   every id in the same shape; `blockers` is always freshly computed, not
+   stored; both the single-id and complete-registry reads are fully
+   detached (mutating a returned record, including deleting a key from
+   the registry read, cannot affect a later call); reading governance
+   emits no `progress`/`answer`/`exercise`/`content`/`persistence` event
+   and does not change `getProgress()`; `SCHEMA_V` stays `2` and
+   `exportJSON()` carries no governance-shaped data.
+7. A runtime-injected question's id is never entered into
+   `QUESTION_GOVERNANCE` (treated exactly like any unknown id), and a
+   caller cannot self-certify a governance status — governance-shaped
+   fields (`lifecycle`, `reviewer`, `reviewScope`, ...) on an injected
+   question are rejected outright as unrecognized fields, same as any
+   other unsupported key. `getRuntimeContentPolicy()` and the runtime
+   lifecycle itself are confirmed unchanged.
+
+**10 new real-browser Playwright tests** in
+`tests/e2e/review-disclosure.spec.mjs`, run under both the desktop
+(1280×900) and narrow/mobile (390×844) configured projects, cover: the
+disclosure is visible and states the structural-vs-scientific-review
+distinction with a clean console; it sits inside the hero, immediately
+after the hero stats; it links to exactly `./docs/SCIENTIFIC_REVIEW.md`
+with an accessible name; it does not sit under the fixed header and a
+hit-test at its own link resolves to the disclosure itself (nothing
+layered on top intercepting pointer events); and it does not steal focus,
+has no dismiss control or `aria-modal`, and the rest of the page (a
+stubbed Print click) remains fully interactive.
+
+**Mutation-tested** (reverted after each, confirmed byte-identical via
+`diff` before committing): removing an authored governance entry from
+`QUESTION_GOVERNANCE` — failed
+`assertGovernanceRegistryIntegrity()`'s missing-record check, caught at
+script load by every test file; adding a stale governance entry for a
+non-existent id — failed the same integrity check's stale-record branch;
+marking an incomplete record `release-qualified` (via the same
+source-patching fixture technique) — failed
+`isValidGovernanceRecord()`'s cross-field lifecycle check; weakening
+`meetsSourceChecked()`/`meetsSmeReviewed()`/`meetsReleaseQualified()` to
+skip one required check — failed exactly the fixture test(s) depending on
+that specific prerequisite; returning `QUESTION_GOVERNANCE` (or one of
+its records) by reference instead of through `clone()` — failed the
+detachment test; and removing/hiding `#reviewDisclosure` — failed the
+Playwright visibility test. Each mutation failed exactly its intended
+test and no others; the source was reverted and confirmed byte-identical
+before committing.
+
+Full local validation: `npm test` (172 dependency-free DOM-behavior
+checks + 25 new governance checks), targeted
+`npx playwright test tests/e2e/review-disclosure.spec.mjs` (10/10 across
+both projects), and the complete `npx playwright test` suite.
+
+No question, answer, rationale, image, or scientific claim changed —
+this task adds governance metadata and a truthful disclosure; it performs
+no scientific review or correction. `SCHEMA_V` stays `2`. The existing
+`README.md` beta warning is unchanged.
+
+### Correction — the mechanism did not yet fully implement the stated policy, added 2026-08-04
+
+Independent review of the original implementation (head `fd9b897`) found
+the separate-registry design and truthful current-data claims sound, but
+found nine distinct ways the mechanism could certify incomplete or
+contradictory records. Each was independently reproduced against the
+actual PR head before any fix was written:
+
+1. **Duplicate governance IDs undetected.** A second `"m1-q1"` entry
+   silently collapsed into `QUESTION_GOVERNANCE` (a repeated object-literal
+   key overwrites the earlier value with no error); the runtime integrity
+   check and every committed test still passed, because the resulting key
+   SET was still exactly correct even though a real record had been
+   discarded.
+2. **Inexact citation accepted.** `{citation:"ASCP", edition:null,
+   date:null, url:null}` satisfied `source-checked`.
+3. **Arbitrary reviewer accepted.** `reviewer:"Nobody"` satisfied
+   `sme-reviewed`.
+4. **Review-scope length heuristic.** `reviewScope:"rationale checked
+   carefully"` (omitting distractor quality, domain/difficulty,
+   originality, exam integrity, and privacy) satisfied `sme-reviewed`.
+5. **Lifecycle/blocker inconsistency.** A record with every evidence
+   field fully populated but `lifecycle:'draft'` reported `blockers:[]`.
+6. **Independent-review evidence not bidirectionally checked.**
+   `independentReviewDocumented:false` with `independentReviewer`/
+   `independentReviewDate` still populated was accepted; a same-person
+   (case/whitespace-variant) independent reviewer was accepted.
+
+**Corrections** (see `docs/ARCHITECTURE.md` "Question provenance and
+scientific-review governance" for the full schema):
+
+- `QUESTION_GOVERNANCE_ENTRIES` (an ordered `[id, record]` array) plus
+  `buildGovernanceRegistry()`, which throws on a repeated id before the
+  registry object is ever constructed, replaces the object-literal
+  registry.
+- A source record gained a `locator` field; `isSufficientGovernanceSource()`
+  now additionally requires a ≥20-character citation, an exact
+  edition-or-date, and a locator-or-url — a bare organization name can no
+  longer satisfy `source-checked`.
+- `APPROVED_SME_REVIEWERS` (currently `["Jerad Austin Anderson"]`, matching
+  `README.md`'s documented author) plus case/whitespace-normalized
+  comparison (`isApprovedSmeReviewer()`) gates `sme-reviewed`.
+- A new `reviewChecks` field (closed 7-value enum matching
+  `docs/CONTENT_GOVERNANCE.md`'s "Review must verify" list exactly) must
+  be complete for `sme-reviewed`/`release-qualified`; `reviewScope` remains
+  as required narrative documentation but is no longer the completeness
+  gate.
+- `isReleaseQualified(rec)` and a `release-approval-pending` blocker
+  guarantee `blockers.length === 0` if and only if `releaseQualified ===
+  true`, exposed as a new `releaseQualified` field on every
+  `getQuestionGovernance()` result.
+- `independentReviewDocumented:false` now requires both
+  `independentReviewer`/`independentReviewDate` to be `null`; `:true`
+  requires `drafter` to be known and the independent reviewer's
+  normalized identity to differ from both `drafter` and `reviewer`.
+  Independent review remains explicitly NOT a `release-qualified`
+  prerequisite, matching `docs/CONTENT_GOVERNANCE.md`.
+- The disclosure's wording changed from "Automated tests confirm this
+  course is built and behaves correctly" (read as a broader
+  positive-correctness claim) to "Automated checks validate documented
+  structural and behavioral contracts," and its link now points to
+  GitHub's rendered blob view of `docs/SCIENTIFIC_REVIEW.md` (the prior
+  relative link served raw `text/markdown` on GitHub Pages — confirmed by
+  direct request — an unrendered document in a browser). The
+  "first-screen introduction" documentation claim was softened to "near
+  the course introduction," since the disclosure's fit within the initial
+  viewport at a real mobile viewport was confirmed only by a ~2px margin
+  against Playwright's viewport emulation, not a guarantee against real
+  device browser chrome.
+- `docs/ARCHITECTURE.md` gained a release-gate reconciliation table
+  mapping every `docs/CONTENT_GOVERNANCE.md` Release-qualified
+  prerequisite to either a direct `QUESTION_GOVERNANCE` check or a named
+  separate repository-level validation.
+
+`tests/question-governance.mjs` was substantially rewritten: **46
+dependency-free tests** (up from 25), covering registry completeness,
+per-record structural shape, current-data truthfulness, fixture-based
+lifecycle-transition tests for every corrected rule (source sufficiency,
+approved reviewer, structured review checks, lifecycle/blocker/
+releaseQualified invariants, independent-review bidirectional
+consistency), public-API tests, and runtime-injection isolation. Two of
+these are isolated single-check fixtures added specifically so the
+citation-length and citation-locator/date rules can each be mutation-
+tested independently rather than only in combination.
+`tests/e2e/review-disclosure.spec.mjs` was updated (still 10 tests): the
+link-destination test now performs a real `request.get()` against the
+live GitHub URL (with short retries tolerating GitHub's own transient
+429 rate-limiting) and asserts both the response status/content-type and
+that the rendered body contains the expected current-review statement —
+not merely the href string.
+
+**Mutation-tested** (10 required scenarios, each reverted to
+byte-identical via `diff` before committing, run individually so each
+result is unambiguous):
+
+| Mutation | Result |
+| --- | --- |
+| Removed the duplicate-id check from `buildGovernanceRegistry()` | Failed exactly the duplicate-id test |
+| Removed the citation-length check from `isSufficientGovernanceSource()` | Failed exactly the isolated short-citation fixture (the compound "org-name-only" fixture alone did not isolate this — a dedicated fixture was added) |
+| Removed the edition-or-date check | Failed exactly the missing-date test |
+| Removed the locator-or-url check | Failed exactly the missing-locator test |
+| Replaced `isApprovedSmeReviewer()` with a bare non-empty-string check in `meetsSmeReviewed()` | Failed exactly the `"Nobody"` rejection test |
+| Removed the exact-count check from `hasAllRequiredReviewChecks()` | Failed the missing-check and notes-cannot-substitute tests |
+| Removed the `release-approval-pending` block from `computeGovernanceBlockers()` | Failed all three complete-evidence-but-not-promoted invariant tests |
+| Removed the `independentReviewDocumented:false`-requires-null check | Failed exactly the false-with-evidence test |
+| Removed the same-person (drafter/reviewer) distinct-identity checks | Failed all three same-person tests |
+| Hid `#reviewDisclosure` (`hidden` attribute) | Failed all 8 visibility-dependent Playwright tests across both projects |
+
+Also re-verified against the corrected schema: removing an authored
+governance entry still fails every test that boots the script (script
+load throws); returning a single-id `getQuestionGovernance()` result
+without `clone()` still fails the detachment test (plus cross-realm
+comparison artifacts on other single-id fixtures, a legitimate collateral
+consequence of the same missing `clone()` call, not a false positive).
+
+Full local validation after this correction: `npm test` (172
+dependency-free DOM-behavior checks + 46 governance checks), targeted
+`npx playwright test tests/e2e/review-disclosure.spec.mjs` (10/10 across
+both projects), targeted
+`npx playwright test tests/e2e/runtime-content-lifecycle.spec.mjs`
+(14/14, confirming no regression in unrelated, unchanged runtime-content
+coverage), and the complete `npx playwright test` suite.
+
+No question, answer, rationale, image, or scientific claim changed. No
+source was added to any current question, no drafter or reviewer was
+asserted, and no question was marked release-qualified. `SCHEMA_V` stays
+`2`. The existing `README.md` beta warning is unchanged.
+
+### Correction — a second independent review found remaining evidence-precision gaps and tightened the independent-review policy, added 2026-08-04
+
+A third-round independent review of the same head (`eaf18c9`, itself the
+QL-031 correction) confirmed the overall design sound but found six
+further ways the mechanism could still certify incomplete records, plus
+a deliberate human-policy tightening. Each was independently reproduced
+before any fix:
+
+1. A duplicate AUTHORED question id (in `QUIZZES`, not the governance
+   registry) still went undetected — `assertGovernanceRegistryIntegrity()`
+   built its own `authoredIds` set via the same silently-collapsing
+   object-literal pattern QL-031 had only fixed for the governance
+   registry itself.
+2. The `≥20`-character citation-length floor from QL-031 was itself an
+   arbitrary proxy for source identity, not a structural check of it.
+3. The approved-SME-reviewer set was a flat array, not structured for
+   future extensibility to a different subject pack.
+4. The review-checklist enum had no version identifier.
+5. (Policy decision, not a defect) `release-qualified` should require a
+   documented independent second-person review for a public, potentially
+   commercial product — the prior design left it optional.
+6. `computeGovernanceBlockers()` had no blocker code for missing
+   independent review, a gap that would have become real once (5) took
+   effect.
+
+**Corrections:**
+
+- `assertGovernanceRegistryIntegrity()` now counts the flat authored-
+  question list and separately counts the unique id set, throwing on any
+  disagreement — independent of any keyed set.
+- Source schema gained `publisher` (6 fields:
+  `{citation, publisher, edition, date, locator, url}`).
+  `isSufficientGovernanceSource()` requires both `citation` and
+  `publisher` to be genuine, non-placeholder strings (exact-token
+  denylist, never a substring match), replacing the length heuristic.
+- `APPROVED_SME_REVIEWERS_BY_PACK`, keyed by `GOVERNANCE_SUBJECT_PACK`,
+  replaces the flat reviewer array.
+- `GOVERNANCE_REVIEW_CHECKS_V1` names the checklist's version explicitly.
+- `meetsIndependentReview()` + a new `missing-independent-review`
+  blocker; `release-qualified` now requires it.
+  `docs/CONTENT_GOVERNANCE.md` and `docs/SCIENTIFIC_REVIEW.md` updated to
+  state the policy explicitly.
+
+**8 new dependency-free tests** (`tests/question-governance.mjs`, 46 → 54):
+a dedicated duplicate-authored-question-id test (patching `QUIZZES`
+source text directly); isolated placeholder-citation and
+placeholder-publisher fixtures; a missing-publisher fixture; a genuine-
+title-containing-a-placeholder-word fixture (proving exact-token, not
+substring, matching); release-qualified-without-independent-review
+rejection; an sme-reviewed-with-complete-evidence-but-no-independent-
+review blocker-exactness test; a malformed (non-string) `reviewChecks`
+entry test; and a zero-blockers-vs-`releaseQualified` equivalence matrix
+test across 6 fixtures.
+
+**Mutation-tested:** 7 targeted reversions — removing the duplicate-
+authored-id count check, removing the citation-placeholder check,
+removing the publisher-non-null requirement, removing
+`isApprovedSmeReviewer()` from `meetsSmeReviewed()`, removing
+`meetsIndependentReview()` from `meetsReleaseQualified()`, removing the
+`missing-independent-review` blocker, and weakening the reviewChecks
+type check — each failed exactly its intended test(s) and no others,
+reverted to byte-identical via `diff` before committing.
+
+Also added, as a SEPARATE, bank-level (not per-question) confirmed known
+risk: independently reproduced answer-choice cueing statistics across
+all 153 authored questions — answer index 1/B is correct in 139/153
+(90.8%); the correct choice is the uniquely longest option in 114/153
+(74.5%), longest-or-tied in 133/153 (86.9%). Recorded in
+`docs/QUALITY_LOG.md` QL-033 and `docs/ROADMAP.md` as a tracked,
+unresolved risk — no content was rewritten, shuffled, or rebalanced in
+this PR, and no psychometric pass threshold was invented.
+
+Full local validation: `npm test` (172 dependency-free DOM-behavior
+checks + 54 governance checks), targeted
+`npx playwright test tests/e2e/review-disclosure.spec.mjs` (10/10 across
+both projects, unaffected by this round's code changes), and the
+complete `npx playwright test` suite.
+
+No question, answer, rationale, image, or scientific claim changed.
+`SCHEMA_V` stays `2`.
+
+### Correction — the independent-review requirement did not actually enforce its own documented evidence contract, added 2026-08-05
+
+A fourth-round independent review of the same head (`d4eabb6`, itself the
+QL-032 correction) confirmed the prior corrections present and materially
+improving, but found one remaining release-gate blocker, reproduced
+before any fix:
+
+`docs/CONTENT_GOVERNANCE.md` requires an independent reviewer to have a
+stable identity, a recorded date, a defined scope/checklist, and be
+distinct from the drafter and SME reviewer. The implementation
+(`meetsIndependentReview()`) checked only
+`independentReviewDocumented === true` plus the pre-existing distinct-
+identity checks — a release-qualified fixture with
+`independentReviewer: "A Distinct Reviewer"` (an arbitrary, unqualified,
+unapproved name, only a flag and a date, no scope, no checklist, no
+conflict declaration) loaded cleanly, reported `releaseQualified:true`,
+and had `blockers:[]`. The existing test suite's own "valid, genuinely
+distinct future independent-review fixture" test explicitly blessed this
+exact inadequate record.
+
+**Correction:** three new record fields —
+`independentReviewScope` (narrative, a separate instance from the SME
+`reviewScope`), `independentReviewChecks` (structured array, a separate
+instance of the same versioned `GOVERNANCE_REVIEW_CHECKS_V1` enum),
+`independentReviewNoConflictDeclared` (`null`/`true`/`false`, only `true`
+satisfies release-qualified) — and `APPROVED_INDEPENDENT_REVIEWERS_BY_PACK`,
+a separate approved-identity registry from the SME one, **deliberately
+empty for the current production pack** (no real independent reviewer or
+credential is invented). `meetsIndependentReview()` now requires approval,
+scope, a complete separate checklist, and an explicit no-conflict
+declaration. The bidirectional `false`-requires-blank-state rule was
+extended to the three new fields. Blocker codes: kept
+`missing-independent-review` as the aggregate code for
+`independentReviewDocumented === false`; added four granular codes for
+when `true` but still insufficient, matching the granular style already
+used for the primary SME review. Also corrected a stale in-source comment
+that claimed independent review was "intentionally NOT required for any
+lifecycle state" — true when written, false since QL-032 changed
+`meetsReleaseQualified()`, and never updated to match.
+
+**14 new dependency-free tests** (`tests/question-governance.mjs`,
+54 → 68): a `bootWithApprovedTestReviewerAndPatchedRecord()` helper that
+patches a test-only entry into the approved-independent-reviewer list
+and a governance record in one script mutation; the exact reported
+loophole, now confirmed rejected; unapproved-reviewer,
+missing/empty/partial-checklist, missing/false/malformed-conflict-
+declaration rejections; a proof the SME reviewer's own complete checklist
+cannot substitute for an empty independent one; stray-evidence rejections
+for the three new fields when documented is `false`; a same-person-as-
+primary-reviewer whitespace/case-variant rejection (the drafter case
+already existed); a fully populated approved fixture proven to satisfy
+release-qualified with a dedicated detachment proof; and an exact-
+granular-blocker-set test.
+
+**Mutation-tested:** 5 targeted reversions — removing the approved-
+independent-reviewer gate, reusing the SME checklist instead of the
+independent one, removing the scope requirement, removing the conflict-
+declaration requirement, and weakening the `false`-blank-state rule to
+omit the three new fields — each failed exactly its intended test(s) and
+no others, reverted to byte-identical via `diff` before committing.
+
+Full local validation: `npm test` (172 dependency-free DOM-behavior
+checks + 68 governance checks), targeted
+`npx playwright test tests/e2e/review-disclosure.spec.mjs` (10/10 across
+both projects, unaffected by this round's code changes), and the complete
+`npx playwright test` suite.
+
+No question, answer, rationale, image, or scientific claim changed. No
+independent reviewer, credential, or approval record was fabricated.
+`SCHEMA_V` stays `2`.
+
+### Correction — `independentReviewDocumented:true` still permitted an incomplete record; blocker codes conflated "missing" with "complete but disqualified", added 2026-08-05
+
+A fifth-round independent review of the same head (`92732b5`, itself the
+QL-034 correction) found the just-added evidence fields were checked for
+release-qualification but not enforced as a package at the point where a
+record is marked `documented`. Reproduced before any fix: a fixture with
+`independentReviewDocumented: true`, a present `independentReviewer` and
+`independentReviewDate`, but `independentReviewScope: null`,
+`independentReviewChecks: []`, and
+`independentReviewNoConflictDeclared: null` loaded successfully — the
+committed test suite's own "documented but missing scope/checklist/
+conflict-declaration reports granular blockers" test explicitly expected
+this. That expectation was itself the defect: it let a question be
+described as having a "documented" independent review when almost none
+of the required evidence existed, contradicting the field's own name and
+`docs/CONTENT_GOVERNANCE.md`'s policy.
+
+**Correction:** `isValidGovernanceRecord()`'s independent-review block
+now enforces `independentReviewDocumented` bidirectionally as an
+all-or-nothing package. `false` still requires every independent-review
+field blank. `true` now REQUIRES, in the same record, all of: non-empty
+`independentReviewer`; a valid `independentReviewDate`; a non-empty
+`independentReviewScope`; a COMPLETE `independentReviewChecks` (exact-set
+match against `GOVERNANCE_REVIEW_CHECKS_V1`, via `hasAllRequiredReviewChecks()`
+rather than the structural-only `isValidReviewChecksArray()`); an actual
+boolean `independentReviewNoConflictDeclared` (`true` or `false`, never
+`null`); a known `drafter`; and normalized-distinct identity from both
+drafter and SME reviewer. Any `true` record missing any of this now fails
+at script load, the same as any other structurally invalid record — not
+merely a reported blocker. No partial/in-progress review state was
+introduced to soften this; a future workflow needing to represent
+"review started but not finished" needs its own, separately reviewed
+status field.
+
+Because an incomplete `true` record is now impossible for any record that
+successfully loads, the four granular "missing-*" blocker codes added in
+the QL-034 correction (`missing-independent-reviewer`,
+`missing-independent-review-scope`, `incomplete-independent-review-checks`,
+`missing-independent-review-conflict-declaration`) became unreachable dead
+code and were removed rather than kept for contract stability. What a
+*complete* documented review can still fail on is qualification, not
+completeness, so two new codes describe that distinctly from "missing":
+`unapproved-independent-reviewer` (present identity, not on the approved
+list) and `independent-review-conflict-declared` (present declaration,
+value `false`). `meetsIndependentReview()` and
+`computeGovernanceBlockers()` were simplified accordingly — they no
+longer re-check scope/checklist completeness, since it is now
+load-time-guaranteed whenever `documented:true`.
+
+**New dependency-free tests** (`tests/question-governance.mjs`,
+68 → 70, after removing the one obsolete test whose premise was the bug):
+missing-scope, empty-checklist, partial-checklist, and the SME checklist
+substituting for the independent one, each rejected at load;
+null-conflict-declaration and malformed-conflict-declaration rejected at
+load (the null case deliberately exercised at `lifecycle: 'sme-reviewed'`
+to isolate the structural check from the separate,
+`release-qualified`-only qualification check that would otherwise also
+reject a `null` value for an unrelated reason and mask whether the
+structural gate itself was load-bearing); a complete-but-unapproved
+fixture that loads, stays `releaseQualified:false`, and reports exactly
+`unapproved-independent-reviewer`; a complete-but-conflicted fixture that
+loads, stays `releaseQualified:false`, and reports exactly
+`independent-review-conflict-declared`; a complete, approved,
+conflict-free fixture reaching `releaseQualified:true` with zero
+blockers, including a detachment proof that also covers the new conflict
+field; a full-registry scan asserting no `documented:true` record in the
+public API can ever be incomplete; and two new tests proving
+`meetsReleaseQualified()` itself — not only `computeGovernanceBlockers()`'s
+display logic — rejects a `release-qualified` label backed by a
+complete-but-unapproved or complete-but-conflicted independent review
+(added after mutation testing below found this was a genuine,
+previously-uncovered gap, not just a masking artifact).
+
+**Mutation-tested:** 7 targeted reversions — allowing `true` without
+scope, allowing `true` without a complete checklist, allowing `true` with
+a `null` conflict declaration, treating an unapproved reviewer as
+approved, treating a declared conflict as conflict-free, and reverting
+each of the two new blocker codes' string values back toward the old
+naming — each failed exactly its intended test(s) and no others, reverted
+to byte-identical via `diff` before committing. Two of these mutations
+(unapproved-as-approved, declared-conflict-as-conflict-free) initially
+showed zero failures against the pre-existing test suite; investigation
+found this was a genuine coverage gap — no existing test asserted
+rejection *at load time* for a `release-qualified`-labeled record built
+on a complete-but-disqualified independent review, only that the blocker
+was reported correctly for a lower lifecycle. The two new tests described
+above close that gap; both mutations then failed exactly the new tests
+and were reverted.
+
+Full local validation: `npm test` (172 dependency-free DOM-behavior
+checks + 70 governance checks), targeted
+`npx playwright test tests/e2e/review-disclosure.spec.mjs` (10/10 across
+both projects, unaffected by this round's code changes), and the complete
+`npx playwright test` suite (237/238 passing; the one failure was
+GitHub's own transient 429 rate-limit on the live link-reachability
+check in that same file, caused by this session's repeated live requests
+against the same URL, confirmed transient by an isolated re-run passing
+cleanly).
+
+No question, answer, rationale, image, or scientific claim changed. No
+independent reviewer, credential, or approval record was fabricated.
+`SCHEMA_V` stays `2`. See `docs/QUALITY_LOG.md` QL-035 for the full
+record.
+
 ## Gates still open
 
 ### Browser behavior

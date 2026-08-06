@@ -129,6 +129,21 @@
   .hero-stat{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);border-radius:11px;padding:.6rem .85rem;min-width:120px}
   .hero-stat .n{font-size:1.3rem;font-weight:700;color:#fff;font-family:var(--mono)}
   .hero-stat .l{font-size:.74rem;color:#a9c8e2}
+  /* Persistent, non-modal, non-dismissible content-review disclosure
+     (Issue #3, Milestone 1 provenance/review-gates task). Deliberately a
+     plain in-flow block -- no fixed/sticky positioning, no close button,
+     no JS, nothing that can steal focus or obstruct navigation -- styled
+     to match the hero's own translucent-card language (see .hero-stat)
+     rather than an alarm color, since it states a documented fact, not a
+     warning. Sits directly under the hero stats so it is part of the
+     course's first-screen introduction on both desktop and mobile,
+     without requiring a mobile-specific breakpoint override for either
+     visibility or legibility -- flex-wrap and the hero's own responsive
+     padding already keep it full-width and readable at any viewport. */
+  .review-disclosure{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.22);border-radius:11px;padding:.75rem 1rem;margin-top:1rem;font-size:.86rem;line-height:1.55;color:#dceaf5;max-width:66ch}
+  .review-disclosure strong{color:#fff}
+  .review-disclosure a{color:#7fd6e2;text-decoration:underline;text-underline-offset:2px}
+  .review-disclosure a:hover,.review-disclosure a:focus-visible{color:#aeeaf2}
 
   .section-block{margin-top:2.2rem}
   .weight-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:1.1rem 1.2rem;box-shadow:var(--shadow)}
@@ -546,6 +561,9 @@
         <div class="hero-stat"><div class="n">150+</div><div class="l">practice questions</div></div>
         <div class="hero-stat"><div class="n">6</div><div class="l">interactive exercises</div></div>
         <div class="hero-stat"><div class="n">8</div><div class="l">integrated cases</div></div>
+      </div>
+      <div class="review-disclosure" id="reviewDisclosure" role="note" aria-label="Content review status">
+        <strong>Structurally validated beta.</strong> Automated checks validate documented structural and behavioral contracts &mdash; they do not establish scientific accuracy. The question bank has not yet completed documented, question-by-question scientific review and should not yet be treated as release-qualified. See the <a href="https://github.com/jaustinanderson/cytogenetics-cg-course/blob/main/docs/SCIENTIFIC_REVIEW.md">Scientific Review Status</a> record for the current, itemized state.
       </div>
     </section>
 
@@ -3131,6 +3149,802 @@
      w:{0:"Touching does not automatically make a cell uncountable.",2:"Touching is spatial, not a structural rearrangement.",3:"A dicentric is a two-centromere chromosome, unrelated to mere touching."}}
   ];
 
+  /* ============================ QUESTION PROVENANCE & SCIENTIFIC-REVIEW GOVERNANCE (Issue #3 / Milestone 1) ============================
+     Full policy record: docs/CONTENT_GOVERNANCE.md and docs/SCIENTIFIC_REVIEW.md
+     (human-readable policy), docs/ARCHITECTURE.md "Question provenance and
+     scientific-review governance" (this design's decision record).
+
+     Corrected 2026-08-04 after independent review of the original
+     implementation found several ways the mechanism could certify
+     incomplete or contradictory records despite the registry design
+     itself being sound. Each correction is noted at its own site below;
+     see docs/QUALITY_LOG.md for the full defect-by-defect record.
+
+     ARCHITECTURE DECISION (requirement: independently compare designs).
+     Three designs were considered before writing any code:
+       1. Governance fields added directly onto each question object in
+          QUIZZES. Rejected: it would mix two different lifecycles (a
+          question's SCIENTIFIC content is authored once and rarely
+          changes; its REVIEW status changes independently, potentially
+          many times, by a different actor). It would also let
+          addQuestions() -- which builds a canonical snapshot of exactly
+          the documented runtime-question schema -- accidentally accept
+          or fabricate governance-shaped fields on a caller-supplied
+          runtime question, letting an external caller self-certify a
+          question as reviewed. Keeping governance out of the question
+          object makes that structurally impossible instead of merely
+          policy-forbidden.
+       2. A single flat status string per question. Rejected: a bare
+          label cannot carry the evidence (source, reviewer, date, scope)
+          the lifecycle prerequisites below require, and a label with no
+          attached evidence is exactly the "state label alone bypasses
+          the gate" failure mode this task exists to prevent.
+       3. A SEPARATE registry, keyed by the question's existing stable
+          authored id, holding a complete evidence record, with the
+          promoted lifecycle state VALIDATED AGAINST -- not computed
+          from -- that evidence. CHOSEN. It keeps scientific governance
+          data entirely separate from both the question content (QUIZZES)
+          and learner progress (`state`/SCHEMA_V, untouched by this
+          change), reuses the exact stable question ids already
+          established as this course's identity mechanism (no new id
+          scheme, no position-derived identity), and gives a single place
+          to enforce "a label requires its evidence" cross-field
+          validation independent of question authoring.
+
+     HONEST CORRECTION on "computed from evidence" (point 5 of the
+     2026-08-04 review): the ORIGINAL comment here claimed the lifecycle
+     was "computed from -- not merely declared alongside -- that
+     evidence." That overstated what the code actually does: a record's
+     `lifecycle` is a STORED, DECLARED value; the code only ever prevents
+     it from OUTRUNNING its evidence (isValidGovernanceRecord rejects a
+     declared state whose prerequisites are not met). It does not compute
+     or auto-promote a lifecycle from complete evidence. That stored,
+     intentionally-approved model is deliberate and correct -- promotion
+     to a state like Release-qualified must be an explicit governance
+     decision, not something that happens automatically the moment every
+     field is filled in -- but the prior wording described it backwards.
+     Corrected here, and the public API now makes the distinction
+     observable: `releaseQualified` (computed, see getQuestionGovernance()
+     below) is true only when the DECLARED lifecycle is
+     'release-qualified' AND every prerequisite passes; a record with
+     complete evidence but a lifecycle still at 'draft' or
+     'sme-reviewed' -- evidence entered, promotion not yet approved -- is
+     `releaseQualified:false` and carries the `release-approval-pending`
+     blocker, never a bare empty `blockers` array. The invariant enforced
+     everywhere this registry is read: `blockers.length === 0` if and
+     only if `releaseQualified === true`.
+
+     REGISTRY COMPLETENESS AND DUPLICATE-ID SAFETY (point 1 of the
+     2026-08-04 review). The original comment here claimed "duplicate
+     keys are structurally impossible in a JS object literal." That claim
+     was WRONG: a JS object literal MAY repeat the same key more than
+     once, and the later value silently overwrites the earlier one with
+     no error, warning, or observable trace -- confirmed by direct
+     execution before this correction (a second `"m1-q1": ...` entry
+     collapsed into the registry with the original committed test suite
+     and the runtime integrity check both still passing, because the
+     resulting object's key SET was still exactly correct even though a
+     real record had been silently discarded). QUESTION_GOVERNANCE is
+     therefore no longer authored as a single object literal. It is
+     authored as QUESTION_GOVERNANCE_ENTRIES, an ORDERED array of
+     `[questionId, record]` pairs, and built by buildGovernanceRegistry()
+     below, which explicitly tracks every id it has already placed and
+     THROWS if the same id appears twice, before the final registry
+     object is ever constructed -- so a duplicate entry can never
+     silently collapse into a single key again. assertGovernanceRegistryIntegrity()
+     (below, after the validation functions) still separately confirms
+     the resulting key set has no missing or stale id against the live
+     authored-question id set; duplicate-id safety is now guaranteed
+     earlier, at construction time, by the builder itself.
+
+     LIFECYCLE STATES. Machine-readable values are the lowercase,
+     hyphenated form of docs/CONTENT_GOVERNANCE.md's four human-readable
+     content states, deliberately reconciled 1:1 (never renamed,
+     reordered, or given a fifth value here):
+       'draft'             <-> Draft
+       'source-checked'    <-> Source-checked
+       'sme-reviewed'      <-> SME-reviewed
+       'release-qualified' <-> Release-qualified
+
+     RECORD SCHEMA. Every governance record is a plain object with
+     EXACTLY these 17 own properties (GOVERNANCE_RECORD_KEYS below;
+     corrected 2026-08-05 -- this comment previously said 14 and did not
+     document independentReviewScope/independentReviewChecks/
+     independentReviewNoConflictDeclared at all, a documentation drift
+     independent review caught) -- no more, no fewer -- using `null`
+     (never an empty string, and never a truthy placeholder) for "not yet
+     recorded," and `[]` for "nothing yet cited/checked," so an
+     unrecorded field can never be misread as a recorded-but-empty one:
+       lifecycle                     -- one of the four states above
+       drafter                       -- string name, or null if unrecorded
+       sources                       -- array of structured source
+                                         records (see
+                                         isValidGovernanceSource /
+                                         isSufficientGovernanceSource
+                                         below); [] means none recorded
+       sourceCheckedBy               -- string name, or null
+       sourceCheckedDate             -- 'YYYY-MM-DD' string, or null
+       reviewer                      -- string name, or null. Corrected
+                                         2026-08-04 (point 3): this alone
+                                         is NOT sufficient for
+                                         'sme-reviewed' -- see
+                                         isApprovedSmeReviewer() below.
+                                         docs/CONTENT_GOVERNANCE.md
+                                         defines SME-reviewed specifically
+                                         as review BY AUSTIN, not by an
+                                         arbitrary named person; a bare
+                                         non-empty string (even
+                                         `"Nobody"`) previously satisfied
+                                         this field, which did not
+                                         implement that policy.
+       reviewDate                    -- 'YYYY-MM-DD' string, or null
+       reviewScope                   -- a narrative string, or null --
+                                         kept as documentation of what was
+                                         checked (matching
+                                         docs/SCIENTIFIC_REVIEW.md's
+                                         review-log "Scope" column), but,
+                                         corrected 2026-08-04 (point 4),
+                                         NO LONGER the gate for
+                                         'sme-reviewed' -- see
+                                         `reviewChecks` below, which is.
+       reviewChecks                  -- NEW 2026-08-04 (point 4): array
+                                         of GOVERNANCE_REVIEW_CHECKS enum
+                                         values, [] for Draft/unreviewed.
+                                         'sme-reviewed' and
+                                         'release-qualified' require this
+                                         to contain EVERY mandatory
+                                         category from
+                                         docs/CONTENT_GOVERNANCE.md's
+                                         review-verification list, with
+                                         no duplicate, unknown, or missing
+                                         entry -- see
+                                         hasAllRequiredReviewChecks()
+                                         below. This replaces the
+                                         original reviewScope
+                                         length/vague-phrase heuristic,
+                                         which could not prove which
+                                         categories were actually
+                                         checked.
+       independentReviewDocumented   -- boolean, default false. Corrected
+                                         2026-08-04 (point 6): the
+                                         invariant is BIDIRECTIONAL --
+                                         false REQUIRES every
+                                         independent-review field
+                                         (independentReviewer/Date/Scope/
+                                         Checks/NoConflictDeclared) to be
+                                         in its blank state (null/null/
+                                         null/[]/null). Corrected again
+                                         2026-08-04 (second pass, point
+                                         5): independent review IS a
+                                         Release-qualified prerequisite --
+                                         Austin's own SME review is not,
+                                         by itself, sufficient.
+
+                                         CORRECTED AGAIN 2026-08-05 (final
+                                         semantics): `true` previously
+                                         required only independentReviewer/
+                                         independentReviewDate to be
+                                         present -- letting a record claim
+                                         `independentReviewDocumented:true`
+                                         while independentReviewScope was
+                                         still null, independentReviewChecks
+                                         was still [], and
+                                         independentReviewNoConflictDeclared
+                                         was still null. That is NOT what
+                                         "documented" means -- confirmed
+                                         directly by the field's own name
+                                         and by a committed test that
+                                         explicitly expected exactly this
+                                         "bare-but-structurally-valid
+                                         documented independent review" to
+                                         load. `true` now REQUIRES ALL of
+                                         the following, or the record is
+                                         REJECTED AT LOAD TIME (not merely
+                                         flagged with blockers -- a
+                                         genuinely incomplete "documented"
+                                         claim is a contradictory record,
+                                         same as any other lifecycle label
+                                         without its prerequisites):
+                                           - independentReviewer: a
+                                             non-empty string
+                                           - independentReviewDate: a
+                                             valid date
+                                           - independentReviewScope: a
+                                             non-empty string (this
+                                             course's own recorded scope,
+                                             never the SME reviewer's)
+                                           - independentReviewChecks: the
+                                             COMPLETE versioned checklist
+                                             (hasAllRequiredReviewChecks()
+                                             -- not merely a valid,
+                                             possibly-partial array; a
+                                             review that only partially
+                                             happened is not "documented")
+                                           - independentReviewNoConflictDeclared:
+                                             an actual recorded boolean
+                                             (`true` OR `false` -- `null`,
+                                             "not yet assessed," is NOT a
+                                             completed declaration and
+                                             fails this gate; a genuinely
+                                             conflicted reviewer
+                                             (`false`) is still a fully
+                                             DOCUMENTED review, just one
+                                             that correctly cannot reach
+                                             Release-qualified -- see
+                                             meetsIndependentReview() and
+                                             computeGovernanceBlockers()
+                                             below for how `false` is
+                                             distinguished from missing
+                                             evidence)
+                                           - drafter known, and the
+                                             independent reviewer's
+                                             normalized identity distinct
+                                             from both drafter and the
+                                             primary SME reviewer
+                                         This file deliberately does NOT
+                                         introduce a partial/in-progress
+                                         review state -- `true` means a
+                                         complete review record exists,
+                                         full stop; a future workflow
+                                         needing to represent "review
+                                         started but not finished" would
+                                         need its own, separately
+                                         reviewed status field, not an
+                                         overloaded meaning for this
+                                         boolean.
+       independentReviewer           -- string name, or null (see
+                                         independentReviewDocumented above
+                                         for the exact bidirectional rule)
+       independentReviewDate         -- 'YYYY-MM-DD' string, or null (see
+                                         independentReviewDocumented above)
+       independentReviewScope        -- NEW 2026-08-05: a narrative
+                                         string documenting what the
+                                         INDEPENDENT reviewer specifically
+                                         checked, or null. A SEPARATE
+                                         recorded instance from the
+                                         primary SME `reviewScope` -- the
+                                         SME reviewer's own scope can
+                                         never stand in as evidence of
+                                         what a different person
+                                         independently reviewed. Required
+                                         non-empty whenever
+                                         independentReviewDocumented is
+                                         true (see above).
+       independentReviewChecks       -- NEW 2026-08-05: array of the same
+                                         versioned GOVERNANCE_REVIEW_CHECKS_V1
+                                         enum used by `reviewChecks`, but
+                                         a SEPARATE recorded instance --
+                                         reusing or aliasing the SME
+                                         reviewer's own `reviewChecks`
+                                         does not satisfy this. Required
+                                         to equal the complete set
+                                         whenever independentReviewDocumented
+                                         is true (see above) -- an empty
+                                         or partial checklist means the
+                                         review is not actually
+                                         documented as complete.
+       independentReviewNoConflictDeclared -- NEW 2026-08-05: null / true
+                                         / false. null means genuinely not
+                                         yet assessed -- the only valid
+                                         value while
+                                         independentReviewDocumented is
+                                         false. Once
+                                         independentReviewDocumented is
+                                         true, this MUST be an actual
+                                         recorded boolean (true or false,
+                                         never null) -- an explicit
+                                         per-question declaration of
+                                         whether the reviewer had any
+                                         authorship stake or other
+                                         relevant conflict in THIS
+                                         content. true (no conflict) is
+                                         the only value that can satisfy
+                                         Release-qualified; false (a
+                                         conflict WAS declared to exist)
+                                         is still a complete, honestly
+                                         DOCUMENTED review record -- see
+                                         computeGovernanceBlockers() below
+                                         for how this is distinguished
+                                         from a record that never recorded
+                                         a declaration at all.
+       editionSensitive              -- boolean once assessed, or null
+                                         if genuinely not yet assessed
+                                         (explicit unknown, never assumed
+                                         false)
+       notes                         -- a single narrow string, or null --
+                                         optional narrative; per point 4,
+                                         never a substitute for
+                                         `reviewChecks`.
+
+     LIFECYCLE PREREQUISITES (requirement: enforce prerequisites, not a
+     trusted label). isValidGovernanceRecord() below rejects any record
+     whose declared `lifecycle` outruns what its own evidence fields
+     actually support. See meetsSourceChecked/meetsSmeReviewed/
+     meetsReleaseQualified for the exact prerequisite chain (each state
+     requires everything the previous state requires, plus its own
+     additional evidence):
+       source-checked    -- >=1 SUFFICIENT source (see
+                             isSufficientGovernanceSource: a genuine,
+                             non-placeholder citation AND publisher, an
+                             exact edition/revision/publication date, AND
+                             a question-specific locator or exact webpage
+                             -- a bare organization name/placeholder like
+                             "ASCP"/"x" with no publisher, no date, and no
+                             locator no longer qualifies, point 2) plus a
+                             source-checker and date
+       sme-reviewed      -- everything source-checked requires, plus an
+                             APPROVED reviewer identity (point 3, not
+                             just any non-empty string), a real review
+                             date, and a COMPLETE reviewChecks set
+                             (point 4, not a length heuristic)
+       release-qualified -- everything sme-reviewed requires, plus a
+                             named drafter, an explicitly assessed
+                             editionSensitive, a documented genuinely
+                             distinct second-person INDEPENDENT REVIEW
+                             (point 5, second pass -- previously optional,
+                             now required for this public, potentially
+                             commercial product), AND the declared
+                             lifecycle must itself equal
+                             'release-qualified' (see isReleaseQualified()
+                             / `releaseQualified` in the public API)
+     Independent review is NEVER inferred from `reviewer` or from
+     authorship -- it is only ever true when independentReviewDocumented
+     is explicitly true AND backed by its own distinct-identity evidence. */
+  var GOVERNANCE_LIFECYCLE_STATES = ['draft', 'source-checked', 'sme-reviewed', 'release-qualified'];
+  // Corrected 2026-08-05 (independent-review evidence pass): gained
+  // `independentReviewScope`, `independentReviewChecks`, and
+  // `independentReviewNoConflictDeclared` -- see the "Independent-review
+  // evidence model" comment below DRAFT_GOVERNANCE_RECORD() for the full
+  // rationale. 17 own properties total (was 14).
+  var GOVERNANCE_RECORD_KEYS = [
+    'lifecycle', 'drafter', 'sources', 'sourceCheckedBy', 'sourceCheckedDate',
+    'reviewer', 'reviewDate', 'reviewScope', 'reviewChecks',
+    'independentReviewDocumented', 'independentReviewer', 'independentReviewDate',
+    'independentReviewScope', 'independentReviewChecks', 'independentReviewNoConflictDeclared',
+    'editionSensitive', 'notes'
+  ];
+  // Corrected 2026-08-04 (second pass, point 2): a source record now
+  // carries a separate `publisher` field (the responsible author,
+  // publisher, or organization) alongside `citation` (the identifiable
+  // title), in addition to the earlier `locator` addition
+  // (section/chapter/page/table/figure/clause) and the original
+  // edition/date/url -- see isSufficientGovernanceSource() below for the
+  // sufficiency rule this enables. Deliberately NOT a string-length
+  // heuristic (the prior `GOVERNANCE_MIN_SOURCE_CITATION_LENGTH` floor is
+  // removed): requiring a genuine, non-placeholder title AND a separate,
+  // genuine, non-placeholder publisher/organization is a structural
+  // identity check, not a length proxy for one.
+  var GOVERNANCE_SOURCE_KEYS = ['citation', 'publisher', 'edition', 'date', 'locator', 'url'];
+  // NEW 2026-08-04 (point 4): the exact, closed set of mandatory review
+  // categories from docs/CONTENT_GOVERNANCE.md's "Review must verify"
+  // list. A record's `reviewChecks` array must equal this set exactly
+  // (no more, no fewer, no duplicate, no unknown value) before
+  // 'sme-reviewed' or 'release-qualified' is valid -- see
+  // hasAllRequiredReviewChecks() below. This is a closed enum
+  // specifically so completeness can be checked by exact set membership,
+  // never by string length or a blacklist of vague phrases. VERSIONED:
+  // this exact enum is "v1" of the checklist. If the mandatory review
+  // categories ever change, the new set must ship under a new versioned
+  // name (e.g. `GOVERNANCE_REVIEW_CHECKS_V2`) rather than silently
+  // redefining `_V1` out from under any future review evidence -- no
+  // current record carries any populated `reviewChecks` yet, so this
+  // versioning discipline has not yet been exercised by real data, but
+  // the naming is deliberate so it does not need to be retrofitted later.
+  var GOVERNANCE_REVIEW_CHECKS_V1 = [
+    'best-answer-defensible',
+    'rationale-accuracy',
+    'distractor-quality',
+    'domain-difficulty-correct',
+    'original-wording',
+    'no-recalled-exam-content',
+    'no-phi-or-confidential'
+  ];
+  var GOVERNANCE_REVIEW_CHECKS = GOVERNANCE_REVIEW_CHECKS_V1;
+  // Exact, stable, documented release-blocker reason codes (requirement:
+  // deterministic blocker reasons with exact stable names). See
+  // docs/ARCHITECTURE.md for the documented meaning of each.
+  // RELEASE_APPROVAL_PENDING is NEW 2026-08-04 (point 5): appended
+  // whenever every other blocker is absent (all evidence complete) but
+  // the record's declared `lifecycle` has not itself been promoted to
+  // 'release-qualified' -- so a record can never report an empty
+  // `blockers` array while still failing `releaseQualified`.
+  // MISSING_INDEPENDENT_REVIEW is NEW 2026-08-04 (second pass, point 5):
+  // for a public, potentially commercial scientific learning product,
+  // 'release-qualified' now REQUIRES a documented, genuinely distinct
+  // second-person independent review, not merely Austin's own SME
+  // review -- see meetsReleaseQualified() below. Used when
+  // `independentReviewDocumented` is `false` -- nothing at all has been
+  // documented.
+  //
+  // CORRECTED 2026-08-05 (final semantics). An earlier version of this
+  // block added GRANULAR "missing-*" codes (missing-independent-reviewer,
+  // missing-independent-review-scope, incomplete-independent-review-checks,
+  // missing-independent-review-conflict-declaration) for the case where
+  // `independentReviewDocumented` was `true` but individual evidence
+  // fields were still absent. That entire case is now IMPOSSIBLE for any
+  // record that passes isValidGovernanceRecord() -- `true` now requires
+  // ALL independent-review evidence to be present and complete (see the
+  // RECORD SCHEMA comment above and the bidirectional check below), so a
+  // record can never be BOTH `independentReviewDocumented:true` AND
+  // missing its scope/checklist/conflict-declaration. Those four codes
+  // were therefore dead: unreachable for any validly committed record,
+  // kept only by an earlier draft of this same correction that had not
+  // yet closed the "documented but incomplete" loophole. Removed rather
+  // than retained as unreachable public-contract codes.
+  //
+  // What CAN still legitimately happen for a fully documented,
+  // structurally complete independent review is that it does not qualify
+  // for RELEASE -- for two distinct, non-"missing" reasons, each with its
+  // own exact code:
+  //   UNAPPROVED_INDEPENDENT_REVIEWER -- the recorded reviewer identity
+  //     is present and complete, but is not on the approved list
+  //     (isApprovedIndependentReviewer()). The identity is NOT missing;
+  //     calling this "missing-independent-reviewer" would misdescribe a
+  //     present-but-unapproved identity as absent.
+  //   INDEPENDENT_REVIEW_CONFLICT_DECLARED -- independentReviewNoConflictDeclared
+  //     is recorded as `false`: the reviewer explicitly declared a
+  //     conflict. This is a complete, honest, DOCUMENTED record -- not a
+  //     missing declaration -- that correctly cannot satisfy
+  //     Release-qualified.
+  // Both reflect a genuinely COMPLETE record that is disqualified on its
+  // merits, distinct in kind from every other "missing-*" code, which all
+  // mean evidence was never recorded at all.
+  var GOVERNANCE_BLOCKERS = {
+    MISSING_DRAFTER: 'missing-drafter',
+    MISSING_SOURCES: 'missing-sources',
+    MISSING_SOURCE_CHECK: 'missing-source-check',
+    MISSING_REVIEWER: 'missing-reviewer',
+    MISSING_REVIEW_DATE: 'missing-review-date',
+    INCOMPLETE_REVIEW_CHECKS: 'incomplete-review-checks',
+    UNRESOLVED_EDITION_SENSITIVITY: 'unresolved-edition-sensitivity',
+    MISSING_INDEPENDENT_REVIEW: 'missing-independent-review',
+    UNAPPROVED_INDEPENDENT_REVIEWER: 'unapproved-independent-reviewer',
+    INDEPENDENT_REVIEW_CONFLICT_DECLARED: 'independent-review-conflict-declared',
+    RELEASE_APPROVAL_PENDING: 'release-approval-pending'
+  };
+  // A source consisting only of a bare organization name/acronym
+  // ("ASCP", "CAP", "CLIA") -- or any obvious placeholder -- cannot be a
+  // sufficient source reference on its own --
+  // docs/CONTENT_GOVERNANCE.md: "General organization names without an
+  // exact source are not sufficient for a disputed claim." Corrected
+  // 2026-08-04 (second pass, point 2): the original fix used a bare
+  // string-length floor on `citation` as a proxy for this, which independent
+  // review correctly flagged as an arbitrary heuristic, not a source-identity
+  // check. Replaced with an explicit placeholder-token denylist applied
+  // to BOTH `citation` and the new `publisher` field (case/whitespace-
+  // insensitive, exact match only -- never a substring match, so a
+  // genuine title that happens to CONTAIN one of these words, e.g. a
+  // guideline literally titled with "Test" in it, is not penalized for
+  // it) -- combined with requiring citation, publisher, an edition-or-date,
+  // AND a locator-or-url ALL to be non-null, four independent structural
+  // pillars a bare acronym or placeholder could never satisfy together,
+  // regardless of string length.
+  var GOVERNANCE_SOURCE_PLACEHOLDER_TOKENS = ['x', 'xxx', 'tbd', 'todo', 'n/a', 'na', 'unknown', 'none', 'test', 'placeholder', 'asdf', 'example'];
+
+  /* Case/whitespace-insensitive identity comparison (point 3 and point
+     6): "JERAD austin  Anderson" and "Jerad Austin Anderson" must
+     compare as the SAME identity (so display variation can never be
+     used to dodge the approved-reviewer check, and so the same-person
+     independent-review check cannot be defeated by trivial
+     capitalization/whitespace differences), while still requiring the
+     STORED value to be a genuine non-empty string. Returns null for
+     anything that is not a usable identity string, so callers can use a
+     plain `=== ` check against another normalized identity or `null`
+     without a separate type check. */
+  function normalizeGovernanceIdentity(name){
+    if(typeof name !== 'string'){ return null; }
+    var trimmed = name.trim().toLowerCase().replace(/\s+/g, ' ');
+    return trimmed.length > 0 ? trimmed : null;
+  }
+  // NEW 2026-08-04 (point 3), restructured in a second pass the same day
+  // for explicit multi-pack extensibility: the approved SME-reviewer
+  // identity set is keyed by a named "subject pack" id (this course's
+  // authored content), not a single flat array, so a future different
+  // subject pack (a different exam, a different credentialed author) can
+  // define its own approved-reviewer set under its own key without
+  // touching this course's. `GOVERNANCE_SUBJECT_PACK` identifies which
+  // key this file's own QUESTION_GOVERNANCE registry is governed by.
+  // `APPROVED_SME_REVIEWERS` for THIS pack currently authorizes exactly
+  // one identity, matching docs/CONTENT_GOVERNANCE.md's definition of
+  // 'sme-reviewed' ("reviewed by Austin") and README.md's documented
+  // author identity exactly -- not brittle free-text comparison against
+  // arbitrary input. An unknown or unapproved reviewer string (including
+  // "Nobody") can never satisfy 'sme-reviewed', regardless of its length
+  // or shape. Never exposed by any public API (no getter reads either
+  // constant), so a caller cannot discover, mutate, or extend the
+  // approved set from outside this file.
+  var GOVERNANCE_SUBJECT_PACK = 'cytogenetics-cg-ascp-v1';
+  var APPROVED_SME_REVIEWERS_BY_PACK = {
+    'cytogenetics-cg-ascp-v1': ['Jerad Austin Anderson']
+  };
+  var APPROVED_SME_REVIEWERS = APPROVED_SME_REVIEWERS_BY_PACK[GOVERNANCE_SUBJECT_PACK] || [];
+  var APPROVED_SME_REVIEWERS_NORMALIZED = APPROVED_SME_REVIEWERS.map(normalizeGovernanceIdentity);
+  function isApprovedSmeReviewer(name){
+    var normalized = normalizeGovernanceIdentity(name);
+    return normalized !== null && APPROVED_SME_REVIEWERS_NORMALIZED.indexOf(normalized) !== -1;
+  }
+  /* NEW 2026-08-05 (independent-review evidence correction). Independent
+     review found that `independentReviewer` accepted ANY non-empty
+     string that merely differed from `drafter`/`reviewer` -- confirmed
+     by direct reproduction that `independentReviewer: "A Distinct
+     Reviewer"` (an unqualified, unapproved, arbitrary name) satisfied
+     `release-qualified` with zero blockers. The same approved-identity
+     mechanism used for `APPROVED_SME_REVIEWERS_BY_PACK` above now also
+     gates the independent reviewer -- comparable structure, separate
+     registry, since being an approved SME reviewer and being an approved
+     INDEPENDENT reviewer are different roles (the whole point of
+     independence is that they must be different people). Deliberately
+     EMPTY for the current `'cytogenetics-cg-ascp-v1'` pack: no real
+     independent reviewer, credential, or approval record exists yet, and
+     none is invented here. This means NO record can currently reach
+     `release-qualified` via a real, production identity -- exactly the
+     intended, honest consequence, matching all 153 current questions
+     remaining Draft. Test fixtures patch this table's SOURCE TEXT to add
+     a clearly test-only entry (see tests/question-governance.mjs) --
+     never exposed by any public API, so a caller cannot discover, read,
+     or extend either approved set from outside this file. */
+  var APPROVED_INDEPENDENT_REVIEWERS_BY_PACK = {
+    'cytogenetics-cg-ascp-v1': []
+  };
+  var APPROVED_INDEPENDENT_REVIEWERS = APPROVED_INDEPENDENT_REVIEWERS_BY_PACK[GOVERNANCE_SUBJECT_PACK] || [];
+  var APPROVED_INDEPENDENT_REVIEWERS_NORMALIZED = APPROVED_INDEPENDENT_REVIEWERS.map(normalizeGovernanceIdentity);
+  function isApprovedIndependentReviewer(name){
+    var normalized = normalizeGovernanceIdentity(name);
+    return normalized !== null && APPROVED_INDEPENDENT_REVIEWERS_NORMALIZED.indexOf(normalized) !== -1;
+  }
+
+  /* Every current record starts here: authored, nothing yet recorded.
+     A FRESH object every call (never one shared literal reused by
+     reference across all 153 entries below) so that a later hand-edit of
+     one question's record can never accidentally alias another's. */
+  function DRAFT_GOVERNANCE_RECORD(){
+    return {
+      lifecycle: 'draft',
+      drafter: null,
+      sources: [],
+      sourceCheckedBy: null,
+      sourceCheckedDate: null,
+      reviewer: null,
+      reviewDate: null,
+      reviewScope: null,
+      reviewChecks: [],
+      independentReviewDocumented: false,
+      independentReviewer: null,
+      independentReviewDate: null,
+      independentReviewScope: null,
+      independentReviewChecks: [],
+      independentReviewNoConflictDeclared: null,
+      editionSensitive: null,
+      notes: null
+    };
+  }
+  /* Independent-review evidence model (NEW 2026-08-05, correcting a
+     confirmed loophole): `independentReviewer`/`independentReviewDate`
+     alone let ANY distinct, unapproved, unqualified name satisfy
+     `release-qualified` -- reproduced directly with
+     `independentReviewer: "A Distinct Reviewer"`. A genuine independent
+     review needs, separately from the primary SME review:
+       independentReviewScope             -- narrative, like `reviewScope`
+         but describing what the INDEPENDENT reviewer checked -- the
+         primary reviewer's `reviewScope` can never stand in as evidence
+         of what a DIFFERENT person independently reviewed.
+       independentReviewChecks            -- a structured checklist
+         array, like `reviewChecks` but a SEPARATE recorded instance --
+         same reasoning: the SME reviewer's checklist proves what the SME
+         reviewer checked, not what an independent reviewer did.
+       independentReviewNoConflictDeclared -- boolean or `null`. `null`
+         means genuinely not yet assessed (the honest default, and the
+         only valid value while `independentReviewDocumented` is
+         `false`). `true` means the independent reviewer explicitly
+         declared no authorship stake and no other relevant conflict in
+         this specific question -- the ONLY value that can satisfy
+         `release-qualified`. `false` means a conflict WAS declared to
+         exist (a legitimate, auditable "considered and disqualified"
+         record -- structurally valid, but can never satisfy
+         release-qualified, same as `true` is required, not merely
+         non-null).
+     Approval: `independentReviewer` must additionally be an
+     APPROVED independent-reviewer identity (see
+     `isApprovedIndependentReviewer()` above) -- empty for the current
+     production pack, so no record can currently reach `release-qualified`
+     via independent review at all, honestly matching that no real
+     independent reviewer exists yet. See meetsIndependentReview() below
+     for the exact sufficiency gate this enables. */
+  /* NEW 2026-08-04 (point 1): builds the final registry object from an
+     ORDERED array of `[id, record]` pairs, throwing immediately if the
+     same id appears more than once -- unlike an object literal, which
+     would silently let the later entry overwrite the earlier one with
+     no error and no observable trace (confirmed by direct execution
+     before this correction). Uses `Object.prototype.hasOwnProperty.call`
+     directly (not the module-level `hasOwn` alias, which is not defined
+     until later in this file) so this builder has no ordering dependency
+     on where it is declared. */
+  function buildGovernanceRegistry(entries){
+    var registry = {};
+    var seenIds = {};
+    entries.forEach(function(entry){
+      var id = entry[0], record = entry[1];
+      if(Object.prototype.hasOwnProperty.call(seenIds, id)){
+        throw new Error('duplicate governance registry id: ' + id + ' (an ordered-entries builder rejects this before construction, unlike an object literal, which would silently let the later entry overwrite the earlier one)');
+      }
+      seenIds[id] = true;
+      registry[id] = record;
+    });
+    return registry;
+  }
+  /* One entry per CURRENT authored question id (every id in every
+     QUIZZES.* array, including the final pool) -- see
+     tests/validate-course.mjs / tests/question-governance.mjs for the
+     committed structural checks that this key set exactly matches the
+     live question id set and contains no duplicate (guaranteed by
+     buildGovernanceRegistry() above, not merely checked after the fact).
+     Every entry is currently DRAFT_GOVERNANCE_RECORD() because no
+     question in this repository has yet had a source, source-check, or
+     scientific review performed and recorded -- see
+     docs/SCIENTIFIC_REVIEW.md. This is read-only from outside this file:
+     the only external access point is
+     window.CytoCourse.getQuestionGovernance() below, which returns a
+     detached clone -- there is no public write method, and
+     addQuestions() (runtime-injected questions) never reads or writes
+     this table, so an injected question can never self-certify a
+     governance status (requirement: runtime-injected questions remain
+     outside this registry). */
+  var QUESTION_GOVERNANCE_ENTRIES = [
+    ["m1-q1", DRAFT_GOVERNANCE_RECORD()],
+    ["m1-q2", DRAFT_GOVERNANCE_RECORD()],
+    ["m1-q3", DRAFT_GOVERNANCE_RECORD()],
+    ["m1-q4", DRAFT_GOVERNANCE_RECORD()],
+    ["m1-q5", DRAFT_GOVERNANCE_RECORD()],
+    ["m2-q1", DRAFT_GOVERNANCE_RECORD()],
+    ["m2-q2", DRAFT_GOVERNANCE_RECORD()],
+    ["m2-q3", DRAFT_GOVERNANCE_RECORD()],
+    ["m2-q4", DRAFT_GOVERNANCE_RECORD()],
+    ["m2-q5", DRAFT_GOVERNANCE_RECORD()],
+    ["m2-q6", DRAFT_GOVERNANCE_RECORD()],
+    ["m3-q1", DRAFT_GOVERNANCE_RECORD()],
+    ["m3-q2", DRAFT_GOVERNANCE_RECORD()],
+    ["m3-q3", DRAFT_GOVERNANCE_RECORD()],
+    ["m3-q4", DRAFT_GOVERNANCE_RECORD()],
+    ["m3-q5", DRAFT_GOVERNANCE_RECORD()],
+    ["m3-q6", DRAFT_GOVERNANCE_RECORD()],
+    ["m4-q1", DRAFT_GOVERNANCE_RECORD()],
+    ["m4-q2", DRAFT_GOVERNANCE_RECORD()],
+    ["m4-q3", DRAFT_GOVERNANCE_RECORD()],
+    ["m4-q4", DRAFT_GOVERNANCE_RECORD()],
+    ["m4-q5", DRAFT_GOVERNANCE_RECORD()],
+    ["m4-q6", DRAFT_GOVERNANCE_RECORD()],
+    ["m5-q1", DRAFT_GOVERNANCE_RECORD()],
+    ["m5-q2", DRAFT_GOVERNANCE_RECORD()],
+    ["m5-q3", DRAFT_GOVERNANCE_RECORD()],
+    ["m5-q4", DRAFT_GOVERNANCE_RECORD()],
+    ["m5-q5", DRAFT_GOVERNANCE_RECORD()],
+    ["m5-q6", DRAFT_GOVERNANCE_RECORD()],
+    ["m6-q1", DRAFT_GOVERNANCE_RECORD()],
+    ["m6-q2", DRAFT_GOVERNANCE_RECORD()],
+    ["m6-q3", DRAFT_GOVERNANCE_RECORD()],
+    ["m6-q4", DRAFT_GOVERNANCE_RECORD()],
+    ["m6-q5", DRAFT_GOVERNANCE_RECORD()],
+    ["m6-q6", DRAFT_GOVERNANCE_RECORD()],
+    ["m6-q7", DRAFT_GOVERNANCE_RECORD()],
+    ["m7-q1", DRAFT_GOVERNANCE_RECORD()],
+    ["m7-q2", DRAFT_GOVERNANCE_RECORD()],
+    ["m7-q3", DRAFT_GOVERNANCE_RECORD()],
+    ["m7-q4", DRAFT_GOVERNANCE_RECORD()],
+    ["m7-q5", DRAFT_GOVERNANCE_RECORD()],
+    ["m7-q6", DRAFT_GOVERNANCE_RECORD()],
+    ["m7-q7", DRAFT_GOVERNANCE_RECORD()],
+    ["m8-q1", DRAFT_GOVERNANCE_RECORD()],
+    ["m8-q2", DRAFT_GOVERNANCE_RECORD()],
+    ["m8-q3", DRAFT_GOVERNANCE_RECORD()],
+    ["m8-q4", DRAFT_GOVERNANCE_RECORD()],
+    ["m8-q5", DRAFT_GOVERNANCE_RECORD()],
+    ["m8-q6", DRAFT_GOVERNANCE_RECORD()],
+    ["m9-q1", DRAFT_GOVERNANCE_RECORD()],
+    ["m9-q2", DRAFT_GOVERNANCE_RECORD()],
+    ["m9-q3", DRAFT_GOVERNANCE_RECORD()],
+    ["m9-q4", DRAFT_GOVERNANCE_RECORD()],
+    ["m9-q5", DRAFT_GOVERNANCE_RECORD()],
+    ["m9-q6", DRAFT_GOVERNANCE_RECORD()],
+    ["m9-q7", DRAFT_GOVERNANCE_RECORD()],
+    ["m9-q8", DRAFT_GOVERNANCE_RECORD()],
+    ["m10-q1", DRAFT_GOVERNANCE_RECORD()],
+    ["m10-q2", DRAFT_GOVERNANCE_RECORD()],
+    ["m10-q3", DRAFT_GOVERNANCE_RECORD()],
+    ["m10-q4", DRAFT_GOVERNANCE_RECORD()],
+    ["m10-q5", DRAFT_GOVERNANCE_RECORD()],
+    ["m10-q6", DRAFT_GOVERNANCE_RECORD()],
+    ["m10-q7", DRAFT_GOVERNANCE_RECORD()],
+    ["m10-q8", DRAFT_GOVERNANCE_RECORD()],
+    ["m11-q1", DRAFT_GOVERNANCE_RECORD()],
+    ["m11-q2", DRAFT_GOVERNANCE_RECORD()],
+    ["m11-q3", DRAFT_GOVERNANCE_RECORD()],
+    ["m11-q4", DRAFT_GOVERNANCE_RECORD()],
+    ["m11-q5", DRAFT_GOVERNANCE_RECORD()],
+    ["m11-q6", DRAFT_GOVERNANCE_RECORD()],
+    ["m11-q7", DRAFT_GOVERNANCE_RECORD()],
+    ["m12-q1", DRAFT_GOVERNANCE_RECORD()],
+    ["m12-q2", DRAFT_GOVERNANCE_RECORD()],
+    ["m12-q3", DRAFT_GOVERNANCE_RECORD()],
+    ["m12-q4", DRAFT_GOVERNANCE_RECORD()],
+    ["m12-q5", DRAFT_GOVERNANCE_RECORD()],
+    ["m12-q6", DRAFT_GOVERNANCE_RECORD()],
+    ["m12-q7", DRAFT_GOVERNANCE_RECORD()],
+    ["m12-q8", DRAFT_GOVERNANCE_RECORD()],
+    ["m13-q1", DRAFT_GOVERNANCE_RECORD()],
+    ["m13-q2", DRAFT_GOVERNANCE_RECORD()],
+    ["m13-q3", DRAFT_GOVERNANCE_RECORD()],
+    ["m13-q4", DRAFT_GOVERNANCE_RECORD()],
+    ["m13-q5", DRAFT_GOVERNANCE_RECORD()],
+    ["m13-q6", DRAFT_GOVERNANCE_RECORD()],
+    ["m13-q7", DRAFT_GOVERNANCE_RECORD()],
+    ["m14-q1", DRAFT_GOVERNANCE_RECORD()],
+    ["m14-q2", DRAFT_GOVERNANCE_RECORD()],
+    ["m14-q3", DRAFT_GOVERNANCE_RECORD()],
+    ["m14-q4", DRAFT_GOVERNANCE_RECORD()],
+    ["m14-q5", DRAFT_GOVERNANCE_RECORD()],
+    ["m14-q6", DRAFT_GOVERNANCE_RECORD()],
+    ["m14-q7", DRAFT_GOVERNANCE_RECORD()],
+    ["m14-q8", DRAFT_GOVERNANCE_RECORD()],
+    ["m14-q9", DRAFT_GOVERNANCE_RECORD()],
+    ["m15-q1", DRAFT_GOVERNANCE_RECORD()],
+    ["m15-q2", DRAFT_GOVERNANCE_RECORD()],
+    ["m15-q3", DRAFT_GOVERNANCE_RECORD()],
+    ["m15-q4", DRAFT_GOVERNANCE_RECORD()],
+    ["m15-q5", DRAFT_GOVERNANCE_RECORD()],
+    ["m15-q6", DRAFT_GOVERNANCE_RECORD()],
+    ["m15-q7", DRAFT_GOVERNANCE_RECORD()],
+    ["m15-q8", DRAFT_GOVERNANCE_RECORD()],
+    ["m16-q1", DRAFT_GOVERNANCE_RECORD()],
+    ["m16-q2", DRAFT_GOVERNANCE_RECORD()],
+    ["m16-q3", DRAFT_GOVERNANCE_RECORD()],
+    ["m16-q4", DRAFT_GOVERNANCE_RECORD()],
+    ["m16-q5", DRAFT_GOVERNANCE_RECORD()],
+    ["m16-q6", DRAFT_GOVERNANCE_RECORD()],
+    ["m16-q7", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q1", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q2", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q3", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q4", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q5", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q6", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q7", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q8", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q9", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q10", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q11", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q12", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q13", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q14", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q15", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q16", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q17", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q18", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q19", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q20", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q21", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q22", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q23", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q24", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q25", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q26", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q27", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q28", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q29", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q30", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q31", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q32", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q33", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q34", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q35", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q36", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q37", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q38", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q39", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q40", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q41", DRAFT_GOVERNANCE_RECORD()],
+    ["final-q42", DRAFT_GOVERNANCE_RECORD()]
+  ];
+  var QUESTION_GOVERNANCE = buildGovernanceRegistry(QUESTION_GOVERNANCE_ENTRIES);
   /* ============================ SVG HELPERS (schematic art) ============================ */
   var COL = {body:'#c9d8e6', band:'#41556b', out:'#33506b', sat:'#8aa0b5', bridge:'#7c93a8',
              sec:'#eef4fb', red:'#e4572e', green:'#2fae66', yellow:'#e6b800',
@@ -5131,6 +5945,403 @@
     var d = Object.getOwnPropertyDescriptor(q, 'id');
     return (d && hasOwn.call(d, 'value') && typeof d.value === 'string') ? d.value : null;
   }
+  function isValidGovernanceDate(s){
+    if(typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)){ return false; }
+    var d = new Date(s + 'T00:00:00Z');
+    return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+  }
+  function isNonEmptyGovernanceString(v){
+    return typeof v === 'string' && v.trim().length > 0;
+  }
+  /* True only when `v` is a non-empty string AND, once trimmed and
+     case/whitespace-normalized, is not an exact match for a known
+     placeholder token (GOVERNANCE_SOURCE_PLACEHOLDER_TOKENS) -- an exact
+     match only, never a substring match, so a genuine title/publisher
+     that happens to contain one of these words is never penalized for
+     it. Used for BOTH `citation` and `publisher` -- see
+     isSufficientGovernanceSource() below. */
+  function isNonPlaceholderGovernanceString(v){
+    if(!isNonEmptyGovernanceString(v)){ return false; }
+    var normalized = normalizeGovernanceIdentity(v);
+    return GOVERNANCE_SOURCE_PLACEHOLDER_TOKENS.indexOf(normalized) === -1;
+  }
+  /* A structured source reference: EXACT own-property set {citation,
+     publisher, edition, date, locator, url} (point 2, 2026-08-04; gained
+     `publisher` in a second correction pass the same day), reusing the
+     same isPlainObject/isSafeKey/hasOwn primitives already established
+     for progress import and runtime questions. `citation` is the only
+     field required non-null at the STRUCTURAL level -- publisher/
+     edition/date/locator/url are each independently nullable here, since
+     not every possible source shape needs every field -- but see
+     isSufficientGovernanceSource() below for the stronger SUFFICIENCY
+     rule a source must satisfy before it can support 'source-checked'.
+     `url`, if present, must be an https URL (this course's existing
+     HTTPS-only convention, see tests/validate-course.mjs). */
+  function isValidGovernanceSource(s){
+    if(!isPlainObject(s)){ return false; }
+    var keys = Object.keys(s);
+    if(keys.length !== GOVERNANCE_SOURCE_KEYS.length){ return false; }
+    for(var i = 0; i < GOVERNANCE_SOURCE_KEYS.length; i++){
+      if(!hasOwn.call(s, GOVERNANCE_SOURCE_KEYS[i])){ return false; }
+    }
+    if(!isNonEmptyGovernanceString(s.citation)){ return false; }
+    if(s.publisher !== null && !isNonEmptyGovernanceString(s.publisher)){ return false; }
+    if(s.edition !== null && !isNonEmptyGovernanceString(s.edition)){ return false; }
+    if(s.date !== null && !isValidGovernanceDate(s.date)){ return false; }
+    if(s.locator !== null && !isNonEmptyGovernanceString(s.locator)){ return false; }
+    if(s.url !== null && !(typeof s.url === 'string' && /^https:\/\//.test(s.url))){ return false; }
+    return true;
+  }
+  /* Corrected 2026-08-04 (second pass, point 2). A source is SUFFICIENT
+     to support 'source-checked' only when it is structurally valid AND:
+       - its `citation` (an identifiable title) is a genuine,
+         non-placeholder string, AND
+       - it carries a `publisher` (the responsible author, publisher, or
+         organization) that is ALSO a genuine, non-placeholder string --
+         a source with only a title and no accountable publisher, or only
+         an organization name and no actual title, is not sufficient, AND
+       - it carries an exact edition/revision OR publication date
+         (`edition` or `date` non-null -- docs/CONTENT_GOVERNANCE.md:
+         "Record the exact edition, revision date, or publication
+         date."), AND
+       - it carries a question-specific locator OR a specific webpage URL
+         (`locator` or `url` non-null) -- "General organization names
+         without an exact source are not sufficient for a disputed
+         claim" is exactly the gap this closes: {citation:"x",
+         publisher:null, edition:null, date:null, locator:null, url:null}
+         previously satisfied (an earlier, string-length-based version of)
+         'source-checked' and no longer does, confirmed by direct
+         reproduction before this correction. Deliberately NOT a string-
+         length threshold (independent review correctly flagged the
+         original citation-length floor as an arbitrary proxy, not a
+         source-identity check) -- these are four independent structural
+         pillars, checked via isNonPlaceholderGovernanceString() rather
+         than length. */
+  function isSufficientGovernanceSource(s){
+    if(!isValidGovernanceSource(s)){ return false; }
+    if(!isNonPlaceholderGovernanceString(s.citation)){ return false; }
+    if(!isNonPlaceholderGovernanceString(s.publisher)){ return false; }
+    if(s.edition === null && s.date === null){ return false; }
+    if(s.locator === null && s.url === null){ return false; }
+    return true;
+  }
+  /* Structural-only check (point 4): every element of `checks` is a
+     known GOVERNANCE_REVIEW_CHECKS value with no duplicate -- but the
+     array may be partial (even empty, as every current Draft record's
+     is). Used by isValidGovernanceRecord() for basic type-safety of ANY
+     record, complete or not; see hasAllRequiredReviewChecks() below for
+     the stronger COMPLETENESS rule 'sme-reviewed'/'release-qualified'
+     require. */
+  function isValidReviewChecksArray(checks){
+    if(!isDenseArray(checks)){ return false; }
+    var seen = {};
+    for(var i = 0; i < checks.length; i++){
+      var c = checks[i];
+      if(typeof c !== 'string' || GOVERNANCE_REVIEW_CHECKS.indexOf(c) === -1){ return false; }
+      if(hasOwn.call(seen, c)){ return false; }
+      seen[c] = true;
+    }
+    return true;
+  }
+  /* NEW 2026-08-04 (point 4). True only when `checks` is a dense array
+     whose values are EXACTLY the closed GOVERNANCE_REVIEW_CHECKS set --
+     no missing category, no duplicate, no unknown value, and (since the
+     set is closed and length-matched) no possibility of an extra
+     snuck-in value either. Deliberately an exact-set match, never a
+     count or length threshold, so completeness can be proven rather than
+     approximated. */
+  function hasAllRequiredReviewChecks(checks){
+    return isValidReviewChecksArray(checks) && Array.isArray(checks) && checks.length === GOVERNANCE_REVIEW_CHECKS.length;
+  }
+  function meetsSourceChecked(rec){
+    return rec.sources.length >= 1 &&
+      rec.sources.every(isSufficientGovernanceSource) &&
+      isNonEmptyGovernanceString(rec.sourceCheckedBy) &&
+      isValidGovernanceDate(rec.sourceCheckedDate);
+  }
+  /* Corrected 2026-08-04 (points 3 and 4): previously required only a
+     non-empty `reviewer` string and a reviewScope passing a length/
+     vague-phrase heuristic -- confirmed by direct reproduction that
+     reviewer:"Nobody" and reviewScope:"rationale checked carefully"
+     (which omits distractor quality, domain/difficulty, originality,
+     exam integrity, and privacy) both satisfied 'sme-reviewed'. Now
+     requires an APPROVED reviewer identity (isApprovedSmeReviewer --
+     point 3) and a COMPLETE structured review-checks set
+     (hasAllRequiredReviewChecks -- point 4); `reviewScope` remains
+     required as narrative documentation but is no longer itself the
+     completeness gate. */
+  function meetsSmeReviewed(rec){
+    return meetsSourceChecked(rec) &&
+      isApprovedSmeReviewer(rec.reviewer) &&
+      isValidGovernanceDate(rec.reviewDate) &&
+      isNonEmptyGovernanceString(rec.reviewScope) &&
+      hasAllRequiredReviewChecks(rec.reviewChecks);
+  }
+  /* Corrected 2026-08-05 (independent-review evidence correction; final
+     semantics tightened the same day -- see the RECORD SCHEMA comment
+     above for the full history). By the time this function runs,
+     `isValidGovernanceRecord()` has ALREADY guaranteed that
+     `independentReviewDocumented:true` means a COMPLETE review record:
+     non-empty `independentReviewer`/`independentReviewScope`, a valid
+     `independentReviewDate`, a COMPLETE `independentReviewChecks` set,
+     an actual recorded `independentReviewNoConflictDeclared` boolean,
+     and normalized-distinct identity from both `drafter` and `reviewer`.
+     This function therefore does NOT re-check completeness -- only
+     whether the (already-complete) record additionally QUALIFIES for
+     release: an APPROVED reviewer identity
+     (isApprovedIndependentReviewer() -- empty for the current production
+     pack, so this can only be satisfied by a test-only patched fixture,
+     never by real current data), AND no declared conflict
+     (`independentReviewNoConflictDeclared === true`, not `false` -- a
+     complete record where the reviewer declared an actual conflict is
+     honest and valid, just correctly disqualifying). */
+  function meetsIndependentReview(rec){
+    return rec.independentReviewDocumented === true &&
+      isApprovedIndependentReviewer(rec.independentReviewer) &&
+      rec.independentReviewNoConflictDeclared === true;
+  }
+  /* Corrected 2026-08-04 (second pass, point 5): for a public,
+     potentially commercial scientific learning product, the safer
+     explicit policy is adopted -- Austin's documented SME review alone
+     satisfies 'sme-reviewed', but 'release-qualified' additionally
+     requires a documented, genuinely distinct second-person independent
+     review (see meetsIndependentReview() above). Independent review was
+     previously NOT a release-qualified prerequisite at all; this is a
+     deliberate policy tightening, reconciled across
+     docs/CONTENT_GOVERNANCE.md, docs/SCIENTIFIC_REVIEW.md, and
+     docs/ARCHITECTURE.md, not merely a code-only change. */
+  function meetsReleaseQualified(rec){
+    return meetsSmeReviewed(rec) &&
+      isNonEmptyGovernanceString(rec.drafter) &&
+      rec.editionSensitive !== null &&
+      meetsIndependentReview(rec);
+  }
+  function lifecycleRequirementsMet(rec, lifecycle){
+    if(lifecycle === 'draft'){ return true; }
+    if(lifecycle === 'source-checked'){ return meetsSourceChecked(rec); }
+    if(lifecycle === 'sme-reviewed'){ return meetsSmeReviewed(rec); }
+    if(lifecycle === 'release-qualified'){ return meetsReleaseQualified(rec); }
+    return false;
+  }
+  /* NEW 2026-08-04 (point 5). The single source of truth for "is this
+     record ACTUALLY, validly Release-qualified" -- true only when the
+     DECLARED lifecycle is 'release-qualified' AND every prerequisite for
+     that state passes. By construction, any record that survives
+     isValidGovernanceRecord() with lifecycle:'release-qualified' already
+     satisfies meetsReleaseQualified(); this function stays explicit
+     (rather than degrading to a bare `rec.lifecycle === 'release-qualified'`
+     check) so the invariant documented in computeGovernanceBlockers()
+     below is provably, not just structurally, correct. */
+  function isReleaseQualified(rec){
+    return rec.lifecycle === 'release-qualified' && meetsReleaseQualified(rec);
+  }
+  /* Deterministic, always-computed-fresh list of exactly what a record
+     is missing toward 'release-qualified', independent of what
+     `lifecycle` it currently declares -- used by getQuestionGovernance()
+     and by the release-readiness fixture tests. Never mutates `rec`.
+
+     Corrected 2026-08-04 (point 5): a record with COMPLETE evidence
+     (every prerequisite field filled in and valid) but a `lifecycle`
+     still at, say, 'draft' or 'sme-reviewed' previously reported an
+     EMPTY blockers array -- confirmed by direct reproduction -- which
+     falsely implied release-readiness for a record nobody had actually
+     approved for release. The invariant this function now guarantees,
+     paired with isReleaseQualified() above:
+       `blockers.length === 0`  if and only if  `isReleaseQualified(rec) === true`.
+     Achieved by appending RELEASE_APPROVAL_PENDING whenever every other
+     (evidence) blocker is already absent but the declared lifecycle has
+     not itself been promoted to 'release-qualified' -- evidence entered,
+     explicit promotion still pending. */
+  function computeGovernanceBlockers(rec){
+    var blockers = [];
+    if(!isNonEmptyGovernanceString(rec.drafter)){ blockers.push(GOVERNANCE_BLOCKERS.MISSING_DRAFTER); }
+    if(!(rec.sources.length >= 1 && rec.sources.every(isSufficientGovernanceSource))){ blockers.push(GOVERNANCE_BLOCKERS.MISSING_SOURCES); }
+    if(!(isNonEmptyGovernanceString(rec.sourceCheckedBy) && isValidGovernanceDate(rec.sourceCheckedDate))){ blockers.push(GOVERNANCE_BLOCKERS.MISSING_SOURCE_CHECK); }
+    if(!isApprovedSmeReviewer(rec.reviewer)){ blockers.push(GOVERNANCE_BLOCKERS.MISSING_REVIEWER); }
+    if(!isValidGovernanceDate(rec.reviewDate)){ blockers.push(GOVERNANCE_BLOCKERS.MISSING_REVIEW_DATE); }
+    if(!hasAllRequiredReviewChecks(rec.reviewChecks)){ blockers.push(GOVERNANCE_BLOCKERS.INCOMPLETE_REVIEW_CHECKS); }
+    if(rec.editionSensitive === null){ blockers.push(GOVERNANCE_BLOCKERS.UNRESOLVED_EDITION_SENSITIVITY); }
+    // Corrected 2026-08-05 (final semantics): once
+    // `independentReviewDocumented` is `true`, isValidGovernanceRecord()
+    // has ALREADY guaranteed the record is COMPLETE (reviewer, date,
+    // scope, full checklist, and an actual recorded conflict-declaration
+    // boolean all present) -- so the only two things that can still be
+    // wrong are QUALIFICATION, not completeness: an unapproved reviewer
+    // identity, or an affirmatively declared conflict. Neither is
+    // "missing" evidence -- both are complete, honest records that
+    // simply do not qualify for release, hence the distinct non-"missing"
+    // code names (see the GOVERNANCE_BLOCKERS comment above).
+    if(!rec.independentReviewDocumented){
+      blockers.push(GOVERNANCE_BLOCKERS.MISSING_INDEPENDENT_REVIEW);
+    } else {
+      if(!isApprovedIndependentReviewer(rec.independentReviewer)){ blockers.push(GOVERNANCE_BLOCKERS.UNAPPROVED_INDEPENDENT_REVIEWER); }
+      if(rec.independentReviewNoConflictDeclared !== true){ blockers.push(GOVERNANCE_BLOCKERS.INDEPENDENT_REVIEW_CONFLICT_DECLARED); }
+    }
+    if(blockers.length === 0 && rec.lifecycle !== 'release-qualified'){
+      blockers.push(GOVERNANCE_BLOCKERS.RELEASE_APPROVAL_PENDING);
+    }
+    return blockers;
+  }
+  /* Full structural + cross-field validation of one governance record.
+     Exact own-property shape (no missing/extra key), allowed types for
+     every field, the lifecycle enum, structured source shape, real
+     calendar dates where present, non-vague review-scope representation,
+     explicit-null unknown-value rules, the reviewChecks enum/duplicate/
+     completeness rules, the independent-review bidirectional and
+     distinct-identity rules, AND the cross-field lifecycle check (a
+     declared state must be backed by its own evidence -- a label alone
+     cannot promote a record). */
+  function isValidGovernanceRecord(rec){
+    if(!isPlainObject(rec)){ return false; }
+    var keys = Object.keys(rec);
+    if(keys.length !== GOVERNANCE_RECORD_KEYS.length){ return false; }
+    for(var i = 0; i < GOVERNANCE_RECORD_KEYS.length; i++){
+      if(!hasOwn.call(rec, GOVERNANCE_RECORD_KEYS[i])){ return false; }
+    }
+    if(GOVERNANCE_LIFECYCLE_STATES.indexOf(rec.lifecycle) === -1){ return false; }
+    if(rec.drafter !== null && !isNonEmptyGovernanceString(rec.drafter)){ return false; }
+    if(!isDenseArray(rec.sources)){ return false; }
+    for(var j = 0; j < rec.sources.length; j++){
+      if(!isValidGovernanceSource(rec.sources[j])){ return false; }
+    }
+    if(rec.sourceCheckedBy !== null && !isNonEmptyGovernanceString(rec.sourceCheckedBy)){ return false; }
+    if(rec.sourceCheckedDate !== null && !isValidGovernanceDate(rec.sourceCheckedDate)){ return false; }
+    if(rec.reviewer !== null && !isNonEmptyGovernanceString(rec.reviewer)){ return false; }
+    if(rec.reviewDate !== null && !isValidGovernanceDate(rec.reviewDate)){ return false; }
+    if(rec.reviewScope !== null && !isNonEmptyGovernanceString(rec.reviewScope)){ return false; }
+    // reviewChecks (point 4): a dense array of GOVERNANCE_REVIEW_CHECKS
+    // values only, no duplicate, no unknown entry -- structurally valid
+    // even when incomplete (e.g. [] for Draft, or a partial set); only
+    // hasAllRequiredReviewChecks() above additionally demands the FULL
+    // set for 'sme-reviewed'/'release-qualified', enforced below via
+    // lifecycleRequirementsMet().
+    if(!isValidReviewChecksArray(rec.reviewChecks)){ return false; }
+    if(typeof rec.independentReviewDocumented !== 'boolean'){ return false; }
+    if(rec.independentReviewer !== null && !isNonEmptyGovernanceString(rec.independentReviewer)){ return false; }
+    if(rec.independentReviewDate !== null && !isValidGovernanceDate(rec.independentReviewDate)){ return false; }
+    if(rec.independentReviewScope !== null && !isNonEmptyGovernanceString(rec.independentReviewScope)){ return false; }
+    if(!isValidReviewChecksArray(rec.independentReviewChecks)){ return false; }
+    if(rec.independentReviewNoConflictDeclared !== null && typeof rec.independentReviewNoConflictDeclared !== 'boolean'){ return false; }
+    // independent-review bidirectional consistency, CORRECTED 2026-08-05
+    // (final semantics -- see the field-by-field RECORD SCHEMA comment
+    // above for the full rationale). `false` REQUIRES every
+    // independent-review evidence field to be in its blank state.
+    // `true` now means a COMPLETE review record exists -- REQUIRES ALL
+    // of: independentReviewer/independentReviewDate present; a
+    // non-empty independentReviewScope (a SEPARATE recorded instance
+    // from the SME reviewer's own reviewScope); a COMPLETE
+    // independentReviewChecks set (hasAllRequiredReviewChecks() -- not
+    // merely a structurally valid, possibly-partial array); an actual
+    // recorded independentReviewNoConflictDeclared boolean (`true` or
+    // `false`, never `null` -- a review whose conflict status was never
+    // assessed is not a "documented" review); a known `drafter`; and the
+    // independent reviewer's normalized identity distinct from both
+    // `drafter` and the primary SME `reviewer`. A record claiming
+    // `independentReviewDocumented:true` while any of this is missing is
+    // CONTRADICTORY and is rejected here, at load time -- the previous
+    // version of this check treated `true` as "some evidence may exist,"
+    // confirmed by a committed test that explicitly expected exactly
+    // that incomplete state to load; that was wrong, and this file
+    // deliberately does not introduce a partial/in-progress review state
+    // to work around it. Whether the (now-guaranteed-complete) review
+    // reaches Release-qualified -- approved reviewer, no conflict
+    // declared -- is meetsIndependentReview()'s job below, not this
+    // structural gate's; a documented review with an unapproved reviewer
+    // or a declared conflict is still a valid, complete, honest record,
+    // just one release-qualified correctly excludes.
+    if(rec.independentReviewDocumented){
+      if(!isNonEmptyGovernanceString(rec.independentReviewer)){ return false; }
+      if(!isValidGovernanceDate(rec.independentReviewDate)){ return false; }
+      if(!isNonEmptyGovernanceString(rec.independentReviewScope)){ return false; }
+      if(!hasAllRequiredReviewChecks(rec.independentReviewChecks)){ return false; }
+      if(typeof rec.independentReviewNoConflictDeclared !== 'boolean'){ return false; }
+      if(rec.drafter === null){ return false; }
+      var normIndependent = normalizeGovernanceIdentity(rec.independentReviewer);
+      var normDrafter = normalizeGovernanceIdentity(rec.drafter);
+      var normReviewer = normalizeGovernanceIdentity(rec.reviewer);
+      if(normIndependent !== null && normIndependent === normDrafter){ return false; }
+      if(normIndependent !== null && normReviewer !== null && normIndependent === normReviewer){ return false; }
+    } else {
+      if(rec.independentReviewer !== null || rec.independentReviewDate !== null){ return false; }
+      if(rec.independentReviewScope !== null){ return false; }
+      if(rec.independentReviewChecks.length !== 0){ return false; }
+      if(rec.independentReviewNoConflictDeclared !== null){ return false; }
+    }
+    if(rec.editionSensitive !== null && typeof rec.editionSensitive !== 'boolean'){ return false; }
+    if(rec.notes !== null && !isNonEmptyGovernanceString(rec.notes)){ return false; }
+    // The core anti-bypass check: the declared label must be backed by
+    // its own prerequisites (requirement 9) -- a contradictory record
+    // (e.g. lifecycle:'release-qualified' with reviewer:null) fails here.
+    if(!lifecycleRequirementsMet(rec, rec.lifecycle)){ return false; }
+    return true;
+  }
+  /* Fail fast, at load time, if the COMMITTED governance table itself is
+     ever malformed or self-contradictory -- e.g. a future hand-edit that
+     sets lifecycle:'release-qualified' on a record still missing a
+     reviewer. This is the actual enforcement point for "a state label
+     alone cannot bypass the gate": isValidGovernanceRecord() is not
+     merely documented policy, it gates every record this file ships
+     with, every time the script loads (including in tests -- see
+     tests/question-governance.mjs, which patches this table's source
+     text to prove both a complete valid record loads cleanly and an
+     incomplete/contradictory one throws here). Also confirms, at load
+     time, that the key set is exactly the current authored question id
+     set -- no missing or stale id. Corrected 2026-08-04 (point 1): this
+     comment previously also claimed duplicate keys were "structurally
+     impossible in a JS object literal" -- that was wrong (a repeated
+     key silently overwrites the earlier value with no error). Duplicate
+     GOVERNANCE-entry ids are impossible to reach this point at all: they
+     are rejected earlier, at construction, by buildGovernanceRegistry()
+     (see its own comment, above `QUESTION_GOVERNANCE_ENTRIES`).
+
+     Corrected again 2026-08-04 (a second independent-review pass, same
+     day): the fix above only protected the GOVERNANCE registry's own
+     keys. It did NOT protect the SEPARATE `authoredIds` set this
+     function itself builds by iterating QUIZZES and writing
+     `authoredIds[q.id] = true` -- if two AUTHORED QUESTIONS (in QUIZZES,
+     not in QUESTION_GOVERNANCE) ever shared the same `id`, that
+     assignment silently collapses them into one key, exactly the same
+     object-literal footgun as before, just one level up. Confirmed by
+     direct reproduction: renaming one authored question's id to collide
+     with another's, and removing the now-orphaned governance entry for
+     the renamed id so the (miscounted) key sets still lined up, let the
+     script load with NO error at all -- 153 question objects, but only
+     152 unique ids, entirely undetected. Every completeness check below
+     operates on the collapsed KEY SET, which cannot distinguish "152
+     authored questions, all fine" from "153 authored questions but two
+     collided." The fix does not rely on any keyed set at all: it counts
+     the flat list of authored question objects and separately counts the
+     unique id set, and throws the instant those two counts disagree --
+     deterministic, and independent of which two ids collided or where.
+     tests/validate-course.mjs separately asserts global id uniqueness as
+     defense in depth (a committed test, not a load-time gate) -- this
+     runtime check is the one that fires on every load, including in a
+     deployed page a test suite never touches. */
+  (function assertGovernanceRegistryIntegrity(){
+    var authoredIdList = [];
+    Object.keys(QUIZZES).forEach(function(k){
+      QUIZZES[k].forEach(function(q){ authoredIdList.push(q.id); });
+    });
+    var authoredIds = {};
+    authoredIdList.forEach(function(id){ authoredIds[id] = true; });
+    if(Object.keys(authoredIds).length !== authoredIdList.length){
+      throw new Error('duplicate authored question id detected: ' + authoredIdList.length + ' authored questions but only ' + Object.keys(authoredIds).length + ' unique ids');
+    }
+    Object.keys(QUESTION_GOVERNANCE).forEach(function(qid){
+      if(!isValidGovernanceRecord(QUESTION_GOVERNANCE[qid])){
+        throw new Error('invalid or self-contradictory governance record for question id: ' + qid);
+      }
+      if(!hasOwn.call(authoredIds, qid)){
+        throw new Error('stale governance record for a question id no longer authored: ' + qid);
+      }
+    });
+    Object.keys(authoredIds).forEach(function(qid){
+      if(!hasOwn.call(QUESTION_GOVERNANCE, qid)){
+        throw new Error('authored question is missing a governance record: ' + qid);
+      }
+    });
+  })();
+
   /* Validates one runtime question and, only on success, returns a fresh
      CANONICAL, fully DETACHED snapshot -- a new object with a new `o`
      array (and a new `w` object, if present) -- built entirely from
@@ -5140,6 +6351,7 @@
      successful addQuestions() call cannot alter the live, accepted
      question (the defect this corrects -- see docs/QUALITY_LOG.md for
      the reproduction). Returns {ok:false, error} otherwise. */
+
   function validateRuntimeQuestion(q){
     if(!isPlainObject(q)){ return {ok:false, error:'question must be a plain, record-shaped object'}; }
     var keys = Object.keys(q);
@@ -5197,6 +6409,55 @@
     getImages:     function(status){
       var out = status ? IMAGES.filter(function(i){ return i.status === status; }) : IMAGES;
       return clone(out);
+    },
+    /* --- question provenance & scientific-review governance (Issue #3 / Milestone 1) --- */
+    /* Read-only. With a known authored question id: returns that
+       question's governance record plus two freshly computed fields --
+       never stored, possibly-stale values:
+         blockers        -- see computeGovernanceBlockers() above
+         releaseQualified -- see isReleaseQualified() above; true only
+           when the DECLARED lifecycle is 'release-qualified' AND every
+           prerequisite passes. Corrected 2026-08-04: the invariant
+           `blockers.length === 0` if and only if `releaseQualified ===
+           true` now holds for every record this method can return -- a
+           record with complete evidence but a lifecycle not yet
+           explicitly promoted reports `releaseQualified:false` and
+           carries the `release-approval-pending` blocker, never a bare
+           empty blockers array.
+       With no argument: returns every authored record, keyed by id, in
+       the same shape. An id not present in QUESTION_GOVERNANCE (unknown,
+       or a runtime-injected question's id -- addQuestions() never writes
+       to this registry) returns `null`, never an empty/default record,
+       so a caller cannot mistake "not governed" for "governed and
+       Draft." Uses clone() -- the same JSON-roundtrip detachment every
+       other read method here uses -- so a caller mutating the returned
+       value can never reach the live QUESTION_GOVERNANCE table, and this
+       method never adds, rebuilds, or emits any event (it only reads). */
+    getQuestionGovernance: function(id){
+      function view(qid, rec){
+        return {
+          id: qid, lifecycle: rec.lifecycle, drafter: rec.drafter, sources: rec.sources,
+          sourceCheckedBy: rec.sourceCheckedBy, sourceCheckedDate: rec.sourceCheckedDate,
+          reviewer: rec.reviewer, reviewDate: rec.reviewDate, reviewScope: rec.reviewScope,
+          reviewChecks: rec.reviewChecks,
+          independentReviewDocumented: rec.independentReviewDocumented,
+          independentReviewer: rec.independentReviewer, independentReviewDate: rec.independentReviewDate,
+          independentReviewScope: rec.independentReviewScope, independentReviewChecks: rec.independentReviewChecks,
+          independentReviewNoConflictDeclared: rec.independentReviewNoConflictDeclared,
+          editionSensitive: rec.editionSensitive, notes: rec.notes,
+          releaseQualified: isReleaseQualified(rec),
+          blockers: computeGovernanceBlockers(rec)
+        };
+      }
+      if(id === undefined){
+        var all = {};
+        Object.keys(QUESTION_GOVERNANCE).forEach(function(qid){
+          all[qid] = view(qid, QUESTION_GOVERNANCE[qid]);
+        });
+        return clone(all);
+      }
+      if(typeof id !== 'string' || !hasOwn.call(QUESTION_GOVERNANCE, id)){ return null; }
+      return clone(view(id, QUESTION_GOVERNANCE[id]));
     },
 
     /* --- read progress + analytics --- */

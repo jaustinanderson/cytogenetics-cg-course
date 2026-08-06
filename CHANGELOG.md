@@ -6,8 +6,133 @@ All notable repository changes are recorded here.
 
 ### Added
 
+- Added a strict, auditable question-provenance and scientific-review
+  governance model (`index.html`, Issue #3, carried by PR #23): a
+  separate `QUESTION_GOVERNANCE` registry, keyed by each authored
+  question's existing stable id, holds a 17-field evidence record —
+  `lifecycle`, `drafter`, structured `sources`, source-check identity/date
+  (`sourceCheckedBy`/`sourceCheckedDate`), `reviewer`/`reviewDate`/
+  `reviewScope`, structured `reviewChecks`, and a documented independent
+  review with its own separately recorded evidence
+  (`independentReviewDocumented`, `independentReviewer`,
+  `independentReviewDate`, `independentReviewScope`,
+  `independentReviewChecks`, `independentReviewNoConflictDeclared`),
+  plus `editionSensitive` and `notes` — kept entirely separate from
+  question content and learner progress (`SCHEMA_V` unchanged). An
+  earlier draft of this registry held only 14 fields, omitting the three
+  separately recorded independent-review evidence fields entirely; see
+  the QL-034/QL-035 corrections below for why those fields were added and
+  then tightened. A question's lifecycle label
+  (`draft`/`source-checked`/`sme-reviewed`/`release-qualified`, matching
+  `docs/CONTENT_GOVERNANCE.md`'s four content states) cannot be promoted
+  without its documented prerequisites — enforced at script-load time by
+  `assertGovernanceRegistryIntegrity()`, which throws on a missing,
+  stale, or self-contradictory record. New read-only
+  `CytoCourse.getQuestionGovernance(id?)` returns a question's status
+  plus two freshly computed fields, `releaseQualified` and `blockers`
+  (naming exactly what is missing toward release-qualification, e.g.
+  `missing-reviewer`, `missing-review-date`,
+  `unresolved-edition-sensitivity`, `release-approval-pending`); an
+  unknown id — including any runtime-injected question's id, since
+  `addQuestions()` never touches this registry and rejects
+  governance-shaped fields outright — returns `null`. All 153 current
+  authored questions remain Draft; nothing is fabricated. Also adds a
+  persistent, non-modal, non-dismissible in-course disclosure
+  (`#reviewDisclosure`, inside the hero) stating the
+  structural-vs-scientific-review distinction and linking to the
+  rendered `docs/SCIENTIFIC_REVIEW.md` view; the existing `README.md`
+  beta warning is unchanged. Performs no scientific review, source
+  attribution, or content correction. See `docs/QUALITY_LOG.md` QL-030
+  and `docs/ARCHITECTURE.md` "Question provenance and scientific-review
+  governance" for the full record.
+  **Corrected (QL-031):** independent review found duplicate governance
+  ids could silently collapse in the original object-literal registry
+  (now rejected at construction by an ordered-entries builder); a bare
+  organization-name citation satisfied "source-checked" (now requires an
+  exact edition/date and a specific locator/url); any non-empty reviewer
+  string satisfied "SME-reviewed" (now checked against an approved
+  reviewer identity); a review-scope length heuristic stood in for
+  verifying the mandatory checklist (now a closed, structured
+  `reviewChecks` enum matching `docs/CONTENT_GOVERNANCE.md`'s
+  "Review must verify" list exactly); a Draft record with complete
+  evidence reported zero blockers (now carries `release-approval-pending`
+  and `releaseQualified:false` until explicitly promoted); and
+  independent-review evidence fields were not bidirectionally consistent
+  (now enforced both directions, including same-person rejection). Also
+  corrected the disclosure's wording and its link (now the rendered
+  GitHub view, not raw markdown). Test coverage updated to 46 dependency-
+  free tests and 10 real-browser Playwright tests, mutation-tested across
+  the 10 required correction scenarios plus the original 6.
+  **Corrected again (QL-032):** a third round of independent review found
+  a duplicate AUTHORED question id (in `QUIZZES`, not the governance
+  registry) still went undetected — fixed by counting the flat authored-
+  question list against the unique id set at load time; the citation-
+  length heuristic was itself an arbitrary proxy — replaced with a
+  required, separate, non-placeholder `publisher` field; the approved-
+  reviewer set is now keyed by an explicit `GOVERNANCE_SUBJECT_PACK` for
+  future extensibility; the review-checklist enum is now versioned
+  (`GOVERNANCE_REVIEW_CHECKS_V1`); and, for a public, potentially
+  commercial product, `release-qualified` now explicitly requires a
+  documented independent second-person review (`docs/CONTENT_GOVERNANCE.md`
+  and `docs/SCIENTIFIC_REVIEW.md` updated accordingly), with a new
+  `missing-independent-review` blocker. Also recorded, as a separate,
+  bank-level (not per-question) confirmed known risk: independently
+  reproduced answer-choice cueing statistics across the 153-question
+  bank (correct answer is index B in 90.8% of questions; the longest
+  option in 74.5%) — tracked in `docs/QUALITY_LOG.md` QL-033 and
+  `docs/ROADMAP.md`, not fixed in this PR. Test coverage updated to 54
+  dependency-free tests, mutation-tested across 7 further reversions.
+  **Corrected again (QL-034):** a fourth round of independent review
+  found the new independent-review requirement did not actually enforce
+  its own documented evidence contract — an arbitrary, unqualified,
+  unapproved reviewer name with only an identity and a date satisfied
+  `release-qualified` with zero blockers. Corrected: three new record
+  fields (`independentReviewScope`, `independentReviewChecks`,
+  `independentReviewNoConflictDeclared`, separate instances from the SME
+  review's own fields) and a separate `APPROVED_INDEPENDENT_REVIEWERS_BY_PACK`
+  registry, **deliberately empty for the current pack** (no real
+  independent reviewer or credential is invented). `meetsIndependentReview()`
+  now requires approval, a recorded scope, a complete separate checklist,
+  and an explicit `independentReviewNoConflictDeclared === true`
+  declaration. New granular blocker codes
+  (`missing-independent-reviewer`, `missing-independent-review-scope`,
+  `incomplete-independent-review-checks`,
+  `missing-independent-review-conflict-declaration`) apply once
+  `independentReviewDocumented` is `true`; the aggregate
+  `missing-independent-review` code remains for when it is `false`. Also
+  corrected a stale in-source comment claiming independent review was
+  "intentionally NOT required for any lifecycle state." Test coverage
+  updated to 68 dependency-free tests, mutation-tested across 5 further
+  reversions.
+  **Corrected again (QL-035):** a fifth round of independent review found
+  the QL-034 fields were checked for release-qualification but never
+  required by the load-time structural validity check — a record could
+  set `independentReviewDocumented: true` with only a reviewer name and
+  date, leaving scope, checklist, and conflict-declaration unset, and it
+  still loaded. Corrected: `independentReviewDocumented: true` now
+  requires the COMPLETE record (identity, date, non-empty scope, a
+  complete checklist, and an actual boolean conflict declaration) in the
+  same step, or the record is rejected at script load, not merely
+  flagged. The four QL-034 granular "missing-*" blocker codes are now
+  unreachable dead code and were removed; two new codes distinguish a
+  complete-but-disqualified record from a missing one:
+  `unapproved-independent-reviewer` (identity present, not approved) and
+  `independent-review-conflict-declared` (declaration present, value
+  `false`) — replacing `missing-independent-reviewer`,
+  `missing-independent-review-scope`,
+  `incomplete-independent-review-checks`, and
+  `missing-independent-review-conflict-declaration`. `meetsIndependentReview()`
+  and `computeGovernanceBlockers()` simplified accordingly; the main
+  in-source schema comment corrected from "14" to "17" own properties
+  with full field-by-field documentation. Test coverage updated to 70
+  dependency-free tests (net, after removing one obsolete test whose
+  expectation was itself the defect), mutation-tested across 7 further
+  reversions, two of which surfaced and closed a genuine coverage gap
+  (no prior test proved `meetsReleaseQualified()` itself, not only the
+  blocker-display logic, rejects an unapproved or conflicted-but-complete
+  independent review at load time).
 - Defined and enforced the runtime-injected-question lifecycle
-  (`index.html`, Issue #2, draft PR — not yet merged): adopted a
+  (`index.html`, Issue #2, **merged**): adopted a
   deliberate **split lifecycle** — a question definition added via
   `addQuestions()` remains session-only (never written to
   `localStorage`, `state`, `exportJSON()`, or accepted back in by

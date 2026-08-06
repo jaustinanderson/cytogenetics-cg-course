@@ -92,15 +92,76 @@ to anyone outside this repository:
 - **Source-checked** — an identified, dated authoritative source exists
   and is cited, independent of whether anyone has yet reviewed the content
   against that source.
-- **Release-qualified** — source, review, schema, and automated gates all
-  passed together, not any one alone.
+- **Release-qualified** — source, SME review, **and** a documented
+  independent second-person review, plus schema and automated gates, all
+  passed together, not any one alone. **Corrected 2026-08-04**: Austin's
+  SME review alone previously could (in the machine model) satisfy
+  Release-qualified; the policy is now explicit that it cannot — a
+  distinct second person, with no authorship stake in the content and no
+  role as its SME reviewer, must independently review it first. This is
+  the safer policy for a public, potentially commercial scientific
+  learning product; see `docs/CONTENT_GOVERNANCE.md` for the exact
+  requirement and `docs/ARCHITECTURE.md` for how it is machine-enforced.
+  **Corrected 2026-08-05**: the first version of that enforcement checked
+  only that the independent reviewer's name was present and distinct —
+  confirmed by direct reproduction that an arbitrary, unqualified name
+  (with no approval, scope, checklist, or conflict declaration) satisfied
+  Release-qualified. The independent reviewer must now additionally be an
+  approved identity (this course's approved list is currently empty — no
+  reviewer is invented here), with their own recorded scope, their own
+  complete structured checklist (separate from the SME reviewer's), and
+  an explicit declaration of no authorship stake or conflict in that
+  specific question.
+  **Corrected again 2026-08-05**: that fix still let a record mark
+  independent review "documented" while leaving scope, checklist, or the
+  conflict declaration unset — confirmed by direct reproduction that a
+  reviewer name and a date alone still satisfied "documented." Marking a
+  review documented now requires the complete record in one step (name,
+  date, scope, full checklist, and an actual true/false conflict
+  declaration); anything less is rejected at load, not merely flagged. A
+  complete record can still correctly miss Release-qualified for two
+  distinct, non-"missing" reasons — the reviewer is not on the approved
+  list, or the reviewer declared an actual conflict — and this document's
+  and the registry's language now distinguishes those from "nothing was
+  documented."
 
 This record uses **"Not yet independently reviewed"** as its plain-language
 synonym for **Draft**, deliberately, to flag that even a future Austin
 SME-review would not itself be an *independent* review in the
 second-person sense above. That distinction is worth stating explicitly
 rather than letting the single word "reviewed" quietly stand in for both
-meanings.
+meanings — and, as of the correction above, it is no longer only a
+documentation nuance: it is the exact gate between SME-reviewed and
+Release-qualified.
+
+### This record is now backed by a machine-enforced registry (Issue #3, Milestone 1)
+
+As of this addition, every claim in this document about an individual
+question's state is enforced, not just recorded in prose: `index.html`
+carries a `QUESTION_GOVERNANCE` registry with one record per authored
+question id, and `window.CytoCourse.getQuestionGovernance()` exposes it
+read-only. A question's record cannot claim Source-checked, SME-reviewed,
+or Release-qualified without the evidence that state requires — an
+identifiable, non-placeholder title and publisher, dated, located source;
+a reviewer identity matching this document's "SME-reviewed" definition
+(Austin, not an arbitrary name); a complete, structured set of the
+"Review must verify" checks from `docs/CONTENT_GOVERNANCE.md`; and, for
+Release-qualified, a named drafter, an explicit edition-sensitivity
+assessment, and a documented independent second-person review distinct
+from both the drafter and Austin. The app rejects a contradictory record
+at load time, including a duplicate id among the authored questions
+themselves. **Corrected 2026-08-04**: independent review found the
+original mechanism accepted a bare organization name as a "source," an
+arbitrary reviewer string as "SME-reviewed," a free-text review-scope
+description as proof the full checklist was verified, and
+Release-qualified without any independent review at all — none of which
+actually implemented the policy stated above. See `docs/QUALITY_LOG.md`
+QL-031 and QL-032 for the full defect-by-defect record.
+This document's "all 153 questions are Draft" claim below is the same
+fact the registry itself enforces — see `docs/ARCHITECTURE.md` "Question
+provenance and scientific-review governance" for the exact schema and
+lifecycle prerequisites, and `docs/CONTENT_GOVERNANCE.md` for the policy
+this implements.
 
 ## Current status: what is and is not established
 
@@ -328,3 +389,11 @@ documents the recommended wording for a future release
 in progress"*) and what not to claim (*"Validated CG(ASCP) course"*) without
 qualification; that guidance is unaffected by this record and remains the
 standard to follow when release language is next updated.
+
+As of Issue #3 (Milestone 1), the deployed course also carries a persistent,
+in-course disclosure (`#reviewDisclosure`, near the hero) stating
+substantially the same fact in the reader's first screen, not only in this
+repository's documentation — a learner opening the live course now sees
+the structural-vs-scientific-review distinction directly, without needing
+to find this file first. The `README.md` beta warning is unchanged and
+remains in place alongside it.
