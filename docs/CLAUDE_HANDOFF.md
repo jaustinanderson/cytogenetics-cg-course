@@ -1807,14 +1807,15 @@ and the QL-033 assessment-bank cueing correction remain separately
 scoped, unfinished work. Does not perform scientific review or source
 attribution — that remains separately scoped, future work.
 
-### Adaptive/reusable learning platform roadmap — planning only, draft PR opened 2026-08-06
+### Adaptive/reusable learning platform roadmap — planning only, carried by PR #25, first opened 2026-08-06
 
 `docs/LEARNING_PLATFORM_ROADMAP.md` is a new, durable planning document
 describing a long-term direction for this course: a reusable,
 subject-independent learning engine with strength/weakness diagnostics,
 spaced retrieval, a concept graph, and eventual portability beyond
-cytogenetics (molecular biology is the intended first pilot). It is
-committed via a documentation-only draft PR and tracked by
+cytogenetics (molecular biology is the intended first pilot). It is a
+documentation-only, planning-only change, introduced through PR #25 and
+tracked by
 [Issue #24](https://github.com/jaustinanderson/cytogenetics-cg-course/issues/24).
 **Nothing described in that document is implemented.** It explicitly does
 not authorize accounts, telemetry, cloud learner-data storage, pricing, a
@@ -1841,8 +1842,7 @@ the concise summary and phase sequence, and the full document for detail
 on every phase's prerequisites, scope, exclusions, deliverables, tests,
 audits, exit criteria, risks, and rollback plan.
 
-**Independent review correction pass (2026-08-06, same draft PR, before
-merge):** found and corrected ten substantive validity problems in the
+**During PR #25's independent-review correction pass (2026-08-06):** found and corrected ten substantive validity problems in the
 first version of this plan — most significantly, conflating a bank-level
 cueing statistic with a per-item validity judgment (above); allowing a
 merely source-checked item to support a public diagnostic claim; treating

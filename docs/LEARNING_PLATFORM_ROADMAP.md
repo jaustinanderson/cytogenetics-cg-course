@@ -245,11 +245,11 @@ finding proves. The precise relationship:
   their correct position, and some valid correct answers will still
   legitimately be the longest option** — a roughly uniform answer-position
   distribution and a roughly uniform length distribution are bank-level
-  targets, not per-item constraints. No individual item should be rewritten
-  , penalized, or quarantined merely to "avoid another B" or "avoid another
-  long correct answer" if the content is otherwise sound; doing so would
-  itself be a form of unsupervised, mechanical rewriting (already
-  prohibited below).
+  targets, not per-item constraints. No individual item should be
+  rewritten, penalized, or quarantined merely to "avoid another B" or
+  "avoid another long correct answer" if the content is otherwise sound;
+  doing so would itself be a form of unsupervised, mechanical rewriting
+  (already prohibited below).
 - **Conversely, achieving a balanced answer-position count does not by
   itself prove any individual item is scientifically correct, plausible,
   or diagnostically useful.** Position/length rebalancing is a necessary
@@ -631,9 +631,12 @@ in section K before any such sync exists at all.
   Guiding Principle A.3.
 - **Staleness.** Evidence has a shelf life. A concept "mastered" eight
   months ago with no review since is not equivalent to one demonstrated
-  correct yesterday — see section D.5, "decay," and section H's spaced-review
-  design, which exists specifically to keep evidence fresh rather than
-  merely to flag it as stale after the fact.
+  correct yesterday — see "Concept mastery decay" below (this same
+  section, D.4), section F's model-family choice that determines the
+  actual decay function, section H's spaced-review design (which exists
+  specifically to keep evidence fresh rather than merely to flag it as
+  stale after the fact), and decision-log entry 5 (section O) for the
+  open decay-model-shape decision itself.
 - **Conflicting evidence.** A learner correct on early attempts and wrong
   on recent ones (or vice versa) must never be silently averaged into one
   number that hides the trend. The evidence window (recency-weighted, not a
@@ -884,9 +887,12 @@ independently valuable and shippable even if later phases never happen.
   enough prospective attempt-history data (section D.3) to calibrate
   against.
 - Requires simulation against historical/synthetic trajectories **and**
-  retrospective validation against real (anonymized, consented — section K)
-  learner data **before** any calibrated estimate is shown to a real
-  learner, not after.
+  retrospective validation against real, consented learner data (section
+  K) **before** any calibrated estimate is shown to a real learner, not
+  after. That data's precise classification — identifiable, pseudonymous,
+  de-identified, or aggregate (section K.2's terminology) — is not assumed
+  here; it must be determined and documented accurately once a specific,
+  approved data pathway (section O, decision 14) actually exists.
 - The forgetting-curve/decay model itself is an open decision (section O),
   not fixed by this document.
 
@@ -1235,21 +1241,35 @@ policy.
 
 `docs/LICENSING.md` currently states no repository-wide license has been
 selected; original content, diagrams, and third-party media have separate,
-individually-tracked status (`THIRD_PARTY_NOTICES.md`). **This document
-draws a clear line, without making any legal determination:**
+individually-tracked status (`THIRD_PARTY_NOTICES.md`). **Corrected
+2026-08-06 — this document makes no rights-sufficiency determination, and
+an earlier version overstated one:** it previously asserted that current
+rights are "sufficient for a free, non-commercial, static educational
+artifact," implying an evaluated conclusion this planning document is not
+positioned to make. Corrected, more careful framing, still without making
+any legal determination:
 
-- Rights sufficient for a free, non-commercial, static educational
-  artifact (today's product) are not automatically sufficient for a paid
-  commercial product, a redistributable content pack, or a
-  third-party-contributed pack.
-- Any future commercialization path must re-verify every third-party
-  asset's license against *commercial* use terms specifically (several
-  currently-used licenses, e.g. certain CC variants, distinguish
-  commercial from non-commercial use), not assume the existing
-  redistribution-for-education clearance extends automatically.
-- This re-verification, and any actual licensing decision, requires real
-  legal review before a commercial path launches — not performed, and not
-  simulated, by this planning document.
+- The current deployment is free and non-commercial. **That fact alone
+  does not establish that the underlying rights are sufficient** for any
+  particular use, including the current one — sufficiency is a per-asset
+  legal question, not a status this planning document evaluates or
+  concludes.
+- The recorded per-asset licenses and restrictions in
+  `THIRD_PARTY_NOTICES.md` and `docs/LICENSING.md` remain the authoritative
+  source for what is actually known about each asset's rights — this
+  document defers to them rather than restating or summarizing them as a
+  single blanket conclusion.
+- Any future commercialization path requires separate re-verification of
+  every third-party asset's license against *commercial* use terms
+  specifically (license terms vary by asset and are not assumed uniform
+  here; some licenses distinguish commercial from non-commercial use and
+  some do not), not an assumption that the existing
+  redistribution-for-education clearance extends automatically to a
+  different use.
+- This re-verification, and any actual licensing sufficiency or
+  commercialization decision, requires real legal review — not performed,
+  and not simulated, by this planning document, which reaches no legal
+  conclusion of its own.
 
 ---
 
@@ -1273,9 +1293,17 @@ draws a clear line, without making any legal determination:**
   informed, opt-in consent** — never a pre-checked box, never bundled with
   an unrelated action (e.g. never "consent to sync" implied by merely
   creating an account for an unrelated paid feature).
-- Consent must be specific to what's being shared (learner-evidence data
-  is more sensitive than, say, anonymous crash-diagnostic pings, and each
-  needs its own, separately worded consent if both ever exist).
+- Consent must be specific to what's being shared. Different categories of
+  data carry different sensitivity and need their own, separately worded
+  consent if more than one is ever proposed — for example, learner-evidence
+  data (section D) is generally more sensitive than a purely hypothetical,
+  separately consented technical-diagnostic signal (e.g. a crash report).
+  **Neither this example nor any other in this document is an approved
+  data-collection pathway** — none currently exists (K.5) — and whichever
+  categories are eventually proposed must each have their actual
+  sensitivity and precise classification (identifiable, pseudonymous,
+  de-identified, or aggregate — never a casual "anonymous") stated
+  explicitly before that pathway is approved, not assumed by this example.
 
 ### K.3 Separation of identifiable data from learning-event data
 

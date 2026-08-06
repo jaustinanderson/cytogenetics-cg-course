@@ -663,8 +663,8 @@ the same provenance, scientific-review, and release gates as authored content.
 ## Milestone 5 — Adaptive, subject-independent learning platform (planning only)
 
 **Status: planning document committed, no implementation started.** The full
-long-term plan is `docs/LEARNING_PLATFORM_ROADMAP.md`, added by a
-documentation-only draft PR and tracked by
+long-term plan is `docs/LEARNING_PLATFORM_ROADMAP.md`, a documentation-only,
+planning-only change carried by PR #25 and tracked by
 [Issue #24](https://github.com/jaustinanderson/cytogenetics-cg-course/issues/24).
 This entry is a pointer and sequencing summary, not a restatement — see that
 document for full detail on every phase's prerequisites, scope, exclusions,

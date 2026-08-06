@@ -7,7 +7,7 @@ All notable repository changes are recorded here.
 ### Added
 
 - Added `docs/LEARNING_PLATFORM_ROADMAP.md`, a durable planning document
-  (Issue #24, documentation-only draft PR): a long-term roadmap toward a
+  (Issue #24, carried by PR #25): a long-term roadmap toward a
   trustworthy, adaptive, subject-independent learning platform — guiding
   principles and safeguards, assessment-validity prerequisites (naming the
   confirmed QL-033 cueing defect as a hard blocker for any diagnostic use
@@ -29,7 +29,7 @@ All notable repository changes are recorded here.
   gain short discoverability pointers distinguishing current behavior from
   this future proposal. No product code, scientific content, or existing
   issue was changed.
-  **Corrected (same draft PR, before merge):** independent review found ten
+  **Corrected during PR #25's independent-review correction pass:** independent review found ten
   substantive validity problems — most significantly, the plan conflated
   QL-033's bank/form-level cueing statistic with a per-item validity
   judgment (implying every B-keyed or longest-correct-answer question was
