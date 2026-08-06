@@ -1823,16 +1823,41 @@ content-pack system — each remains its own future, separately scoped and
 reviewed proposal.
 
 The plan names a hard prerequisite before any diagnostic/mastery feature
-may use the existing question bank: the confirmed QL-033 answer-choice
-cueing defect (`docs/QUALITY_LOG.md`) must be corrected or the affected
-items quarantined, and questions must clear scientific review
-(`QUESTION_GOVERNANCE`, Issue #3) beyond the current all-Draft baseline.
-The plan's own recommended next implementation task is exactly that QL-033
-correction — already open on `docs/ROADMAP.md` — not begun by this
-planning PR. See `docs/ROADMAP.md` "Milestone 5" for the concise summary
-and phase sequence, and the full document for detail on every phase's
-prerequisites, scope, exclusions, deliverables, tests, audits, exit
-criteria, risks, and rollback plan.
+may use the existing question bank: QL-033's confirmed answer-choice
+cueing pattern (`docs/QUALITY_LOG.md`) — corrected against Independent
+review, a **bank/form-level** statistical defect, not proof that any
+individual B-keyed or longest-correct-answer item is itself invalid — must
+be corrected at the bank/form level (Gate A) and each item used for a
+public diagnostic claim must separately pass item-level review (Gate B)
+and reach `release-qualified` under `QUESTION_GOVERNANCE` (Issue #3), not
+merely source-checked. All 153 questions currently remain Draft. The
+plan's own recommended next implementation task is beginning Phase 0's
+controlled, batched remediation program for this — already open on
+`docs/ROADMAP.md` — not begun by this planning PR; Phase 0 itself still
+requires real design work (a written item-writing rubric and explicit
+Gate A thresholds) before any item rewriting starts, not merely the
+already-reproduced QL-033 counts. See `docs/ROADMAP.md` "Milestone 5" for
+the concise summary and phase sequence, and the full document for detail
+on every phase's prerequisites, scope, exclusions, deliverables, tests,
+audits, exit criteria, risks, and rollback plan.
+
+**Independent review correction pass (2026-08-06, same draft PR, before
+merge):** found and corrected ten substantive validity problems in the
+first version of this plan — most significantly, conflating a bank-level
+cueing statistic with a per-item validity judgment (above); allowing a
+merely source-checked item to support a public diagnostic claim; treating
+Phase 0 as needing no further design work; overstating that early
+below-threshold attempts carry zero information; understating that session
+difficulty/scaffolding materially affects evidence weight; overstating
+what IRT can do to "fix" distractors; a real contradiction between Phase
+11's real-data requirement and the decision log's "no consent model
+required through Phase 11"; making hosted accounts (Phase 9) a blanket
+prerequisite for every commercial path (Phase 10) rather than only paths
+that need hosted identity/sync; and calling the public repository/deployed
+course "private" rather than local-first/account-free. All corrected in
+place in `docs/LEARNING_PLATFORM_ROADMAP.md`, `docs/ROADMAP.md`,
+`README.md`, and this document; see the PR #25 body for the full
+correction record.
 
 ### Accessibility
 

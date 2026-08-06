@@ -29,6 +29,25 @@ All notable repository changes are recorded here.
   gain short discoverability pointers distinguishing current behavior from
   this future proposal. No product code, scientific content, or existing
   issue was changed.
+  **Corrected (same draft PR, before merge):** independent review found ten
+  substantive validity problems — most significantly, the plan conflated
+  QL-033's bank/form-level cueing statistic with a per-item validity
+  judgment (implying every B-keyed or longest-correct-answer question was
+  individually invalid, which QL-033 does not establish); allowed a merely
+  source-checked item to support a public diagnostic claim instead of
+  requiring `release-qualified`; claimed Phase 0 needed no further design
+  work; said early below-threshold attempts carry zero information;
+  understated how session difficulty/scaffolding affects evidence weight;
+  overstated what IRT can do to "fix" distractors; left a real contradiction
+  between Phase 11's real-data requirement and the decision log's "no
+  consent model required through Phase 11"; made hosted accounts (Phase 9)
+  a blanket prerequisite for every commercial path (Phase 10) rather than
+  only paths needing hosted identity/sync; and called the public
+  repository/deployed course "private" rather than local-first/account-free.
+  All corrected in place across `docs/LEARNING_PLATFORM_ROADMAP.md`,
+  `docs/ROADMAP.md`, `README.md`, and `docs/CLAUDE_HANDOFF.md`; see PR #25's
+  body for the full record. Still nothing implemented; still no product
+  code, scientific content, or existing issue changed.
 - Added a strict, auditable question-provenance and scientific-review
   governance model (`index.html`, Issue #3, carried by PR #23): a
   separate `QUESTION_GOVERNANCE` registry, keyed by each authored

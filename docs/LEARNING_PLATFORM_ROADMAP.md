@@ -131,13 +131,19 @@ around it.
    attempt at a defined item or task — with a knowable correctness or
    quality signal — counts as evidence toward any mastery, weakness, or
    retention claim.
-2. **"Insufficient evidence" is a first-class result, not an edge case.**
-   Every diagnostic, dashboard, or recommendation surface must be able to
-   say "not enough evidence yet" as a distinct, equally legitimate outcome
-   alongside "weak" and "mastered." A concept a learner has seen twice is
-   not "weak" merely because both attempts were wrong, if the minimum
-   evidence threshold (section D) has not been met — it is "insufficient
-   evidence," full stop, and must be labeled that way to the learner.
+2. **"Insufficient evidence" is a first-class result, not an edge case —
+   and not the same as "no signal at all."** Every diagnostic, dashboard,
+   or recommendation surface must be able to say "not enough evidence yet"
+   as a distinct, equally legitimate *classification* outcome alongside
+   "weak" and "mastered." A concept a learner has seen twice is not
+   labeled "weak" merely because both attempts were wrong, if the minimum
+   evidence threshold (section D) has not been met — the learner-facing
+   **status** stays "insufficient evidence." This does not mean those two
+   attempts carry zero information: they may still support a low-stakes,
+   clearly provisional recommendation (e.g. "worth reviewing, or attempt a
+   couple more to get a real read") without ever asserting the concept is
+   weak or mastered. See section D.4 for the full classification-sufficiency-
+   versus-provisional-evidence distinction this principle depends on.
 3. **A mastery estimate is a claim with a basis, not a bare number.** Every
    surfaced mastery/strength/weakness value must be presented together with
    (a) how many and which attempts support it, (b) how recent that evidence
@@ -165,11 +171,16 @@ around it.
    unreviewed, inaccessible, or privacy-hostile is not release-qualified
    under this plan, the same way an unreviewed question is not
    release-qualified today.
-7. **The current static, private, offline-capable course keeps working.**
-   Every phase in section N must be evaluable, and disablable, without
-   breaking the existing zero-account, zero-telemetry, open-`index.html`
-   experience. A learner who never opts into anything new must see no
-   regression.
+7. **The current static, local-first, account-free, no-telemetry,
+   offline-capable course keeps working.** (Corrected 2026-08-06: the
+   repository and the deployed GitHub Pages course are both public — this
+   principle is about where learner data lives and what the application
+   requires, not about restricted access, and "private" was imprecise
+   here.) Every phase in section N must be evaluable, and disablable,
+   without breaking the existing zero-account, zero-telemetry,
+   open-`index.html` experience, in which progress is stored only in the
+   learner's own browser. A learner who never opts into anything new must
+   see no regression.
 8. **No fabricated evidence, ever — in the product or in this plan.** This
    document does not, and no phase under it may, invent product-market
    evidence, psychometric validity, scientific review outcomes, reviewer
@@ -189,7 +200,7 @@ No amount of modeling sophistication in sections E–F can compensate for
 diagnosing a learner against compromised or unreviewed items. This section
 is a hard prerequisite gate, referenced by name from section N's Phase 0.
 
-### B.1 The confirmed QL-033 cueing defect (must be corrected or quarantined)
+### B.1 The confirmed QL-033 cueing defect — a bank/form-level finding, corrected 2026-08-06 to stop implying every B-keyed or longest-correct item is individually invalid
 
 Recorded in `docs/QUALITY_LOG.md` QL-033, independently reproduced against
 the live 153-question bank via `window.CytoCourse.getQuestions()`:
@@ -203,56 +214,181 @@ the live 153-question bank via `window.CytoCourse.getQuestions()`:
 
 A learner (or an automated key-extractor) exploiting "pick B" or "pick the
 longest option" alone would score well above true cytogenetics knowledge.
-**Any question exhibiting this cueing pattern is not a valid diagnostic
-instrument for the concept it claims to test** — a correct answer on such a
-question is not distinguishable evidence of mastery versus cue-exploitation
-without external correction. This is independent of, and does not
-substitute for, per-question scientific review (`QUESTION_GOVERNANCE`).
+This is a real, exploitable, **bank/form-level** psychometric validity
+defect. **It is not, by itself, proof that any individual question is
+scientifically unsound or an invalid diagnostic instrument.**
+
+**Correction (2026-08-06): the prior version of this section conflated a
+bank-level statistical pattern with an item-level validity judgment.** An
+earlier draft stated flatly that "any question exhibiting this cueing
+pattern is not a valid diagnostic instrument" — that overstates what the
+finding proves. The precise relationship:
+
+- **Answer-position imbalance is primarily a bank/form-level defect.** A
+  single question keyed to B is not inherently flawed — the problem is that
+  139 of 153 are, which is what makes "always pick B" a winning strategy
+  *across the bank*. A well-written, scientifically sound question does not
+  become invalid merely because its correct answer happens to sit at
+  position B.
+- **Length predictiveness is measured, and matters, at the bank/form
+  level** — "the longest option is usually correct" is a strategy that
+  works because of the aggregate 74.5%/86.9% pattern, not because any one
+  question's correct answer is disqualified by being genuinely, legitimately
+  the most complete or precise statement among its options. At the same
+  time, an **individual item can independently carry a conspicuous
+  item-level length or specificity cue** even after the bank is rebalanced
+  (e.g. one distractor is written in noticeably fewer words, or only the
+  keyed answer includes a qualifying clause that gives it away) — that is
+  an item-level defect, found by item-level review (B.1's twin gate below),
+  not by the bank-level statistic.
+- **After the bank is corrected, some valid questions will still have B as
+  their correct position, and some valid correct answers will still
+  legitimately be the longest option** — a roughly uniform answer-position
+  distribution and a roughly uniform length distribution are bank-level
+  targets, not per-item constraints. No individual item should be rewritten
+  , penalized, or quarantined merely to "avoid another B" or "avoid another
+  long correct answer" if the content is otherwise sound; doing so would
+  itself be a form of unsupervised, mechanical rewriting (already
+  prohibited below).
+- **Conversely, achieving a balanced answer-position count does not by
+  itself prove any individual item is scientifically correct, plausible,
+  or diagnostically useful.** Position/length rebalancing is a necessary
+  bank-level correction, not a substitute for the item-level scientific and
+  assessment-quality review every question still needs (B.1's second gate,
+  and the existing `QUESTION_GOVERNANCE` model).
+
+**Two separate gates, not one conflated rule:**
+
+**Gate A — bank/form-level statistical gate** (applies to the whole bank,
+and separately to any generated or sampled exam form drawn from it, not
+only to the complete master bank):
+
+- Answer positions across the bank/form must not be predictably imbalanced
+  (the current 139/153-at-B pattern fails this; a "0 at D" pattern fails
+  this).
+- Answer length, grammar, specificity, formatting, and similar superficial
+  features must not, in aggregate, systematically reveal the key across
+  the bank/form (the current 74.5% uniquely-longest pattern fails this).
+- This gate must be re-run against every **generated or sampled exam
+  form**, not only the complete master bank — a form drawn from an
+  otherwise-balanced bank can still be accidentally imbalanced by sampling,
+  and must be checked independently.
+- **Numeric thresholds are not decided by this document.** What counts as
+  "predictably imbalanced" (a maximum deviation from uniform position
+  distribution, a maximum longest-correct rate) must be explicitly chosen
+  and justified as part of Phase 0 (section N), grounded in a real
+  measurement and a stated rationale — never silently treated as requiring
+  exact mathematical uniformity, which is neither necessary nor a
+  realistic bar for authored content.
+
+**Gate B — item-level review gate** (applies to each individual question,
+independent of the bank-level statistic):
+
+- The keyed answer is scientifically defensible.
+- Distractors are plausible, parallel in construction, and targeted to
+  meaningful misunderstandings, not filler.
+- No conspicuous wording, grammatical, specificity, or formatting cue
+  reveals the answer for *this specific item*, independent of where it
+  falls in the bank-level distribution.
+- The item actually discriminates the intended concept — a learner who
+  understands the concept should outperform one who does not, distinct
+  from a learner who is simply skilled at multiple-choice test-taking
+  strategy or trivia recall unrelated to the tested concept.
+
+**Quarantining an item from diagnostic use must follow both gates, applied
+to that item and to the bank/form it participates in — never a blanket
+rule that removes or reclassifies every B-keyed or every longest-correct-answer
+item merely for belonging to those categories.**
+
+**Randomization is a partial, order-dependent defense, not a fix.**
+Randomizing displayed answer order may eventually help defend against a
+learner memorizing a fixed position across repeated exposure to the *same*
+item — but only once option/feedback identity is proven stable under
+randomization (the rationale/feedback tied to option 2 must reliably follow
+option 2's content wherever it is displayed, not silently attach to
+whatever is currently in that visual slot — an implementation correctness
+requirement, not a content one). Randomization does nothing to fix a
+genuinely under-written distractor or a genuinely revealing length cue —
+those require the item-level review in Gate B, not a display-order change.
 
 **Remedy constraints (already decided, recorded here for continuity):**
 
-- Not mechanical shuffling of answer positions alone — this would fix the
-  position cue but leave the length cue intact.
+- Not mechanical shuffling of answer positions alone — this would move
+  Gate A's position statistic without touching Gate A's length statistic or
+  any Gate B item-level defect.
 - Not naive answer-length padding — this risks introducing scientific
   inaccuracies into distractors written to "match length" rather than to
-  be plausible.
+  be plausible, and does not by itself satisfy Gate B's plausibility
+  requirement.
 - Not unsupervised/automated rewriting — distractor quality requires the
   same human/scientific judgment already required for question authoring
   (`docs/CONTENT_GOVERNANCE.md`).
-- The actual correction (rewriting distractors credibly, rebalancing
-  answer-index distribution toward a roughly uniform split) remains its own
-  separately scoped task (`docs/ROADMAP.md`, `docs/QUALITY_LOG.md` QL-033
-  "Correct action"), not performed by this planning document and not
+- The actual correction (Gate A rebalancing, Gate B item-by-item review,
+  and only rewriting where an item actually needs it) remains its own
+  separately scoped task, structured as the batched remediation program in
+  section N's Phase 0 — not performed by this planning document and not
   performed by opening Issue #24.
 
-### B.2 Hard prerequisites before a question can contribute to diagnostic/mastery decisions
+### B.2 Hard prerequisites before a question can contribute to a public diagnostic/mastery/weakness/retention/readiness claim
 
-A question item is **diagnostically eligible** only when all of the
-following hold. This is a new, stricter bar than `release-qualified`
-(`QUESTION_GOVERNANCE`) — release-qualification is necessary but not
-sufficient for diagnostic use:
+**Corrected 2026-08-06.** An earlier version of this section allowed a
+merely `source-checked` item to count, calling `sme-reviewed` only
+"strongly preferred" for mastery/weakness claims. That is inconsistent
+with this document's own release-gate discipline (Guiding Principle A.6)
+and with the existing repository rule that a question's lifecycle label
+must actually mean what it claims (`QUESTION_GOVERNANCE`). Corrected policy:
 
-1. It does not currently exhibit the QL-033 cueing pattern for its own
-   position/length profile (corrected, or explicitly re-verified as an
-   acceptable exception after human review — never assumed acceptable by
-   default).
-2. It has a stable ID, a stable concept/objective mapping (section C — does
-   not exist yet), and adequate, reviewed distractors.
-3. It has a complete evidence record and appropriate scientific review
-   under the existing `QUESTION_GOVERNANCE` model (source-checked at
-   minimum; `sme-reviewed` or better strongly preferred for any item used
-   in a weakness/mastery claim, not merely a practice quiz).
-4. It is not `draft`, stale (superseded by a corrected duplicate), or
-   flagged with any open governance blocker relevant to accuracy (e.g. a
-   pending source check).
+- A public, learner-facing diagnostic, weakness, mastery, retention, or
+  readiness claim (any of section E's seven experiences, or the E.3
+  dashboard) **may use only an item that is `release-qualified`** under
+  the existing governance lifecycle (`QUESTION_GOVERNANCE`) — not merely
+  `source-checked` or `sme-reviewed`. Release-qualification already
+  requires a documented, approved, conflict-free independent second-person
+  review (`docs/ARCHITECTURE.md` "Question provenance and scientific-review
+  governance"); this document adopts that existing, already-strict bar
+  rather than inventing a separate, weaker one.
+- Release-qualification is **necessary but not sufficient**. The item must
+  *also* independently pass Gate A (bank/form-level statistical
+  eligibility) and Gate B (item-level review) from B.1 above — a
+  scientifically reviewed question that still carries a conspicuous
+  item-level length cue, or that belongs to a bank/form failing Gate A, is
+  not yet diagnostically eligible.
+- `source-checked` or `sme-reviewed`-but-not-`release-qualified` items may
+  remain available for ordinary practice quizzes and for internal/draft
+  evaluation (e.g. informal self-check use, or an author reviewing draft
+  item quality) — they simply cannot produce a **public** mastery or
+  weakness claim.
+- **This document does not fabricate an independent reviewer, advance any
+  current question's lifecycle, or change `QUESTION_GOVERNANCE` data. All
+  153 current questions remain `draft`.** No item currently meets this bar;
+  none is claimed to.
 
-Items failing any of these must be **excludable** from high-stakes
-analytics — present in ordinary practice quizzes, but never counted toward
-a mastery/weakness/readiness claim. This requires new, explicit
-`diagnosticEligible` metadata (see section C's item metadata list) distinct
-from `QUESTION_GOVERNANCE.lifecycle`; the two answer different questions
-("has this been reviewed" vs. "can this validly discriminate mastery")
-and must not be conflated into one flag.
+**`diagnosticEligible` is a derived, auditable result — never a stale,
+manually trusted boolean.** It must be computed from, and re-derivable at
+any time from, at least:
+
+- the exact item/content version the evidence applies to (content version,
+  not just item ID — see C.5 on why content versioning matters);
+- the concept/objective mapping version in effect at evaluation time
+  (section C — a later remapping must not silently reinterpret old
+  eligibility);
+- current `QUESTION_GOVERNANCE` lifecycle and any open blockers;
+- Gate B item-level assessment-quality review evidence (who reviewed it,
+  when, against what rubric — the same evidentiary discipline
+  `QUESTION_GOVERNANCE` already requires for scientific review, applied to
+  a new review type);
+- current Gate A bank/form-level statistical status (the bank/form this
+  item currently participates in must itself be passing Gate A);
+- any active quarantine or supersession record for this item;
+- the last validation date and the specific reason eligibility was last
+  confirmed or revoked.
+
+**A material change invalidates eligibility until re-review.** Any change
+to an item's stem, correct answer, a distractor, its rationale, its
+concept/objective mapping, or its cited source must immediately invalidate
+that item's `diagnosticEligible` status — it reverts to ineligible (not to
+its last-known value) until the specific change is re-reviewed against
+both gates. Eligibility is never assumed to survive a content edit.
 
 ### B.3 Reporting eligibility, not just a score
 
@@ -449,13 +585,46 @@ in section K before any such sync exists at all.
 
 ### D.4 Rules for uncertainty, staleness, and conflict
 
-- **Minimum evidence.** No concept may be labeled "weak" or "mastered" below
-  an explicit, documented minimum number of *diagnostically eligible*
-  (section B.2) attempts. The exact number is an open decision (section O)
-  requiring simulated-trajectory validation (section L) before being fixed —
-  this document does not invent a threshold, matching the same discipline
-  QL-033 already applied ("no psychometric pass threshold is invented in
-  this entry").
+- **Minimum evidence, and the distinction between classification
+  sufficiency and provisional evidence (corrected 2026-08-06).** An
+  earlier version of this document said attempts below the minimum
+  threshold carry no information at all ("insufficient evidence, full
+  stop"). That overstated the case: it correctly protects against
+  *labeling* a learner weak or mastered prematurely, but early attempts
+  are not informationless. This document separates two distinct things:
+  - **Classification sufficiency** — whether enough *diagnostically
+    eligible* (section B.2) evidence exists to assign one of the E.4
+    status labels ("weak," "fragile," "learning," "mastered"). Below this
+    threshold, the learner-facing **status** must remain "insufficient
+    evidence" — this is the actual protection Guiding Principle A.2 exists
+    to guarantee, and it is not weakened by anything below.
+  - **Provisional evidence** — the limited, real signal early attempts do
+    carry, even below the classification threshold. Below the
+    classification threshold, the system may offer a low-stakes,
+    explicitly and visibly labeled **provisional** recommendation (e.g.
+    "early attempts suggest this may be worth reviewing — not enough
+    evidence yet for a confident read") — but it must never use this
+    signal to assert the learner is weak or mastered, and the provisional
+    label must be impossible to mistake for a classified result (distinct
+    wording, and never the same visual treatment as a classified status).
+  - No concept may be labeled "weak" or "mastered" below an explicit,
+    documented minimum number of diagnostically eligible attempts. The
+    exact number is an open decision (section O) requiring
+    simulated-trajectory validation (section L) before being fixed — this
+    document does not invent a threshold, matching the same discipline
+    QL-033 already applied ("no psychometric pass threshold is invented in
+    this entry"). **The threshold itself is not assumed to be one fixed
+    number across the whole platform** — it may reasonably differ by
+    diagnostic experience (section E — a readiness review warrants a
+    higher bar than a focused concept check), by item quality/discriminating
+    power (a well-discriminating item may justify a lower count than a
+    weak one), by concept breadth (a broad concept tested by many item
+    variants may need more attempts than a narrow one), and by the
+    consequence of the claim (a claim feeding a high-stakes readiness
+    statement warrants more evidence than one feeding a low-stakes study
+    suggestion). Each of these threshold choices requires its own
+    validation before being fixed, not a single borrowed constant applied
+    everywhere.
 - **Uncertainty must be visible, not just internally tracked.** Any surfaced
   mastery estimate needs an explicit confidence/uncertainty representation
   (e.g. a range or a qualitative band), not a bare point percentage — see
@@ -689,7 +858,10 @@ independently valuable and shippable even if later phases never happen.
 - Every recommendation is learner-controlled — the system suggests, the
   learner chooses what to do next. No automatic re-routing yet.
 - Fully deterministic and fully explainable by construction: this phase
-  has no black box to audit.
+  has no black box to audit — but, per F.5's corrected model-family
+  comparison, "no black box" does not mean "no validation required"; its
+  specific thresholds and wording still need the simulation and human
+  review Phase 4 (section N) requires before reaching real learners.
 
 ### F.2 Phase 2 — spaced retrieval and interleaving
 
@@ -732,14 +904,16 @@ independently valuable and shippable even if later phases never happen.
 
 | Family | What it needs | What it's good for | What it requires before use here |
 | --- | --- | --- | --- |
-| Rule-based mastery thresholds (Phase 1) | Nothing but the evidence itself | Full explainability, immediate deployability, easy audit | Nothing further — this is the safe default and the only model family this document actually schedules for near-term use |
+| Rule-based mastery thresholds (Phase 1) | Nothing but the evidence itself | Full explainability, easy audit, no additional data-collection dependency | **Corrected 2026-08-06 — not "nothing further."** Being the most explainable starting model does not make it deploy-ready without validation: its thresholds, evidence requirements, classification behavior (E.4), and learner-facing wording still require simulated-trajectory testing (section L), human review, and prospective validation against real (even if early/limited) usage before shipping — the same discipline every other family here needs, just against a smaller and more tractable set of parameters. It is the safe default *design*, not a shortcut around validation. |
 | Bayesian Knowledge Tracing (BKT) | A reasonably large set of real per-attempt sequences per concept to fit parameters; assumes a single latent "known/unknown" state per concept | Well-studied, moderately explainable (parameters have real meanings: guess rate, slip rate, learn rate), works with modest data | Real attempt-history data (D.3) at meaningful volume; parameter-fitting validation; an explicit, reviewed decision that its binary known/unknown assumption is an acceptable simplification for this subject |
-| Item Response Theory (IRT) / Rasch models | A larger, more diverse real-response dataset; assumes stable item difficulty parameters | Rigorous psychometric grounding, well-suited to calibrating item difficulty itself (directly useful for fixing QL-033's distractor-quality problem, independent of adaptive sequencing) | Real response data at real volume; and, notably, valid items to begin with (section B) — IRT calibration on cueing-compromised items would calibrate the cue, not the concept |
+| Item Response Theory (IRT) / Rasch models | Adequate, valid real-response data (not cue-compromised — see below); assumes stable item difficulty parameters | Estimating item **difficulty and discrimination** from response data, and helping identify poorly functioning items statistically | **Corrected 2026-08-06 — IRT does not itself rewrite or fix a distractor.** An earlier version of this row implied IRT was "directly useful for fixing QL-033's distractor-quality problem" — that overstated what IRT does. Standard IRT models an item's overall difficulty/discrimination from response patterns; it can flag that an item is functioning poorly, but diagnosing and fixing *why* (a specific weak or non-functioning distractor) requires either a separate distractor-functioning analysis (e.g. examining option-level response proportions) or a polytomous/nominal-response IRT variant, combined with human item review (Gate B, section B.1) — IRT output alone does not tell an author what to change. **Fitting IRT to items still exhibiting the QL-033 cueing pattern would calibrate the cue, not the concept** — real response data collected from cue-compromised items reflects cue-exploitation strategy as much as or more than actual knowledge, so this family requires the bank/form-level Gate A correction (section B.1) to have already happened, not merely "valid items" in the abstract. |
 | Deep-learning knowledge tracing (e.g. DKT-style) | Large volumes of real sequential data; typically far less explainable | Potentially higher predictive accuracy at scale | Explicitly the *least* compatible with Guiding Principle A.5 (explainability) as commonly implemented; would require a dedicated explainability layer or interpretable surrogate before consideration, and is not scheduled by this document |
 
-**This document does not select a model family.** Phase 1 ships a
-deterministic rule-based approach because it is the only family that needs
-no additional data collection and is fully explainable from day one.
+**This document does not select a model family, in this PR or any prior
+one.** Phase 1 ships a deterministic rule-based approach because it needs
+no additional data collection and is fully explainable from day one — but,
+per the correction above, "explainable and data-light" is a reason to
+prioritize it for validation *first*, not a reason it can skip validation.
 Anything past Phase 1 is explicitly gated on real evidence volume and
 validation, not chosen for sophistication's own sake (Guiding Principle
 A.5's explainability requirement rules out defaulting to the most complex
@@ -848,11 +1022,33 @@ entity type, not a new governance philosophy.
   never silently overridden by the system's own priorities.
 - **Overdue and upcoming reviews** — both surfaced explicitly, distinct
   categories (not merged into one generic "to do" count).
-- **Difficulty and cognitive-load controls** — a learner-facing option to
-  request an easier session (e.g. after a stressful day) without that
-  choice corrupting the underlying evidence record's interpretation (the
-  session-difficulty preference is metadata about the session, not a
-  reason to discount the attempt's evidentiary value).
+- **Difficulty and cognitive-load controls, and the corrected distinction
+  between the learner's preference and the evidence it produces (corrected
+  2026-08-06).** A learner-facing option to request an easier session
+  (e.g. after a stressful day) must never be penalized, shamed, or
+  discouraged — the preference itself is not evidence of weakness, and the
+  UI must never frame choosing an easier session as a deficiency. An
+  earlier version of this document additionally claimed choosing an easier
+  session should not "discount the attempt's evidentiary value" — that
+  went too far in the other direction. The learner's *preference* to go
+  easier is not evidence of anything; but the resulting **attempt's actual
+  evidentiary weight is not fixed regardless of what produced it.**
+  Concretely: the actual difficulty of the item shown, how much scaffolding
+  or hinting was present, whether feedback/rationale was visible before the
+  answer, how familiar the learner already was with that specific item, and
+  how far the item is from a near-identical repeat versus a genuine
+  transfer task (section D.1) all materially affect what a correct or
+  incorrect attempt can support. Correct performance on a heavily
+  scaffolded, previously-seen easy item cannot support the same mastery
+  claim as unassisted correct performance on a reviewed, sufficiently
+  novel item — treating them identically would misrepresent the evidence,
+  not protect the learner. This evidence-weighting logic must remain
+  explainable (Guiding Principle A.5 — a learner or auditor can ask why an
+  attempt counted the way it did) and must not rely solely on the
+  author-assigned difficulty field (`x`) as authoritative without later
+  validation against real response data (Phase 11) — an author's difficulty
+  rating is a starting estimate, not a calibrated measurement, until
+  validated.
 - **Recovery after missed study periods** — a lapse in study must not
   produce a punishing pile-up ("47 items overdue!") that discourages
   return; the queue re-balances gracefully, prioritizing the most
@@ -963,19 +1159,33 @@ document's own standard.
 
 ### J.1 Candidate paths
 
-| Path | Description | Primary technical/operational needs |
-| --- | --- | --- |
-| Free/open demonstration course | Today's product, or close to it — no account, static, free | What already exists; lowest operational burden |
-| Individual paid learning product | A paid tier with additional features (e.g. adaptive study plan, cross-device sync) | Authentication + account recovery; payments/entitlement handling; data export/deletion; privacy policy/terms; customer support |
-| Institutional/cohort licensing | Sold to programs/schools for their students | Everything above, plus instructor/institution data boundaries (a program admin must never see individual learner answer-level data without explicit learner consent), cohort-level (not individual) reporting design, procurement-friendly terms |
-| Licensed subject packs | Selling/licensing a pack (e.g. molecular biology) separately from the engine | Pack signing/verification (I.1), content licensing terms distinct from software licensing, versioned entitlement to specific packs |
-| Authoring/review tools | Tools supporting `QUESTION_GOVERNANCE`-style workflows, concept-graph editing, item-variant authoring | Could be free (benefits content quality generally) or a separate product; either way, output must still clear the same validity gates as hand-authored content |
-| Optional hosted sync/analytics | Cross-device profile, backup, optional aggregate research analytics | Explicit informed consent (section K) before any data leaves the device; encryption in transit and at rest; data minimization |
-| Enterprise administration | SSO, advanced admin controls, compliance reporting | Only justified once institutional licensing (above) has real, non-fabricated demand evidence — explicitly not assumed needed by this document |
+**Corrected 2026-08-06 — not every paid path requires hosted accounts.**
+The table below distinguishes paths that can work entirely offline/local
+(needing only Phase 10, not Phase 9) from paths that inherently need
+hosted identity or sync (needing Phase 9 first) — see Phase 10 (section N)
+for the full conditional-prerequisite reasoning.
+
+| Path | Description | Needs Phase 9 (hosted accounts/sync)? | Primary technical/operational needs |
+| --- | --- | --- | --- |
+| Free/open demonstration course | Today's product, or close to it — no account, static, free | No | What already exists; lowest operational burden |
+| Paid offline/download course or licensed content pack | A one-time-purchase, fully local product — the current course (or a future pack) distributed under a paid license, no account or sync involved | **No** | An entitlement/distribution mechanism appropriate to offline delivery (e.g. a license key or a purchase-gated download), rights/licensing evidence (J.3), support, versioned release policy — no authentication, no hosted data at all |
+| Institutional offline deployment | An institution licenses the course/pack for local/offline use by its own students, with no vendor-hosted learner data | **No** | Licensing terms suited to institutional redistribution, support, no hosted learner-data boundary to design since none is hosted |
+| Individual paid learning product with hosted features | A paid tier whose value depends on hosted features (e.g. cross-device sync, a hosted adaptive study plan) | **Yes** | Authentication + account recovery; payments/entitlement handling; data export/deletion; privacy policy/terms; customer support |
+| Institutional/cohort licensing with hosted reporting | Sold to programs/schools, including cohort-level hosted reporting | **Yes** | Everything above, plus instructor/institution data boundaries (a program admin must never see individual learner answer-level data without explicit learner consent), cohort-level (not individual) reporting design, procurement-friendly terms |
+| Authoring/review tools | Tools supporting `QUESTION_GOVERNANCE`-style workflows, concept-graph editing, item-variant authoring | Depends on delivery (an offline authoring tool needs no accounts; a hosted collaborative one would) | Could be free (benefits content quality generally) or a separate product; either way, output must still clear the same validity gates as hand-authored content |
+| Optional hosted sync/analytics | Cross-device profile, backup, optional aggregate research analytics | **Yes** | Explicit informed consent (section K) before any data leaves the device; encryption in transit and at rest; data minimization |
+| Enterprise administration | SSO, advanced admin controls, compliance reporting | **Yes** | Only justified once institutional licensing (above) has real, non-fabricated demand evidence — explicitly not assumed needed by this document |
 
 ### J.2 Cross-cutting operational requirements
 
-For any path beyond the current free/static baseline:
+The items below are grouped by whether they apply to *any* commercial path
+(including offline/local ones) or only to paths that actually involve
+hosted accounts, payments processed online, or hosted learner data — see
+J.1's table above for which paths need which. An offline/download or
+institutional-offline path does not need authentication, hosted payments,
+or a hosted-data privacy design; it still needs licensing evidence,
+accessibility, an appropriate support plan, and a versioned release
+policy.
 
 - **Authentication and account recovery** — password/passkey/OAuth choice,
   recovery flow, and the security posture of each, all undecided here.
@@ -1217,31 +1427,135 @@ human audits, measurable exit criteria, known risks, and a rollback/
 disablement strategy — no phase is "big bang," and every phase can stop
 after shipping without blocking the ones before it.
 
-### Phase 0 — Assessment and scientific-validity prerequisites
+### Phase 0 — Assessment and scientific-validity prerequisites (a controlled remediation program, corrected 2026-08-06)
+
+**Correction (2026-08-06):** an earlier version of this phase stated no
+further design work was needed before starting the QL-033 correction — that
+understated the task. QL-033's *existence* is proven and needs no further
+proof, but safely correcting 153 scientific questions, each requiring
+subject-matter judgment and carrying real scientific-accuracy risk if
+rushed, needs an explicit remediation protocol, not a single undifferentiated
+"fix it" step. Phase 0 proceeds through small, reviewed batches, not a
+single bulk rewrite of the bank.
 
 - **Prerequisites:** none (this is the starting gate).
-- **Scope:** correct or quarantine the QL-033 cueing defect (B.1); advance
-  question governance beyond Draft for at least the items any early
-  diagnostic surface would use (B.2).
+- **Scope:** run the nine-step batched remediation protocol below against
+  the question bank; advance question governance for at least the items any
+  early diagnostic surface would use (B.2); design (not necessarily fully
+  populate) the `diagnosticEligible` derivation model (B.2).
 - **Explicit exclusions:** no diagnostic/adaptive feature ships in this
-  phase; this phase is entirely about the assessment bank itself.
-- **Deliverables:** a corrected or explicitly quarantined answer-choice
-  distribution; documented `diagnosticEligible` criteria and metadata
-  design (not necessarily full re-authoring of all 153 items — quarantine
-  is an acceptable interim state per B.1).
-- **Automated tests:** a committed check for the answer-index/length
-  distribution going forward (preventing QL-033 from silently recurring in
-  future authoring), extending the existing structural-validation suite.
-- **Human audits:** Austin's item-writing review of every corrected
-  distractor (B.1's remedy constraints — no mechanical fix).
-- **Exit criteria:** zero diagnostically-eligible items exhibit the
-  uncorrected QL-033 pattern; `docs/QUALITY_LOG.md` QL-033 marked
-  corrected (not merely "recorded"), with reproduced before/after counts.
-- **Known risks:** distractor rewriting could introduce new scientific
-  inaccuracies if rushed — mitigated by requiring the same
-  `QUESTION_GOVERNANCE` review discipline already in force.
-- **Rollback:** none needed — this phase only improves existing content;
-  no new runtime capability to disable.
+  phase; this phase is entirely about the assessment bank itself. Concept
+  mapping (Phase 2), independent-review-registry population beyond what a
+  given item's rewrite requires, and full-bank psychometric validation
+  (Phase 11) are related but distinct efforts, not silently completed as a
+  side effect of this phase (see "What this phase does and does not
+  complete" below).
+
+**Batched remediation protocol:**
+
+1. **Freeze and reproduce the original bank/form metrics.** Snapshot the
+   current QL-033 counts (139/153 at B, 0 at D, 114/153 uniquely longest,
+   133/153 longest-or-tied) as the authoritative "before" baseline, with the
+   exact reproduction method recorded so it can be re-run identically at
+   every later step.
+2. **Define the item-writing rubric and statistical guardrails.** Write
+   down, before touching any question: what "plausible, parallel,
+   targeted" distractors mean in practice for this content (Gate B, B.1);
+   the explicit numeric thresholds for Gate A's position/length balance
+   (B.1 — chosen and justified here, not assumed); and the rubric a
+   reviewer uses to judge a rewritten item.
+3. **Select a representative pilot batch** across domains, topics, and
+   difficulty levels (not the easiest or most B-clustered items only) —
+   small enough to review thoroughly, large enough to expose real problems
+   with the rubric and process before scaling.
+4. **Rewrite only where justified.** Not every item needs a rewrite — an
+   item legitimately keyed to B with a legitimately longer correct answer,
+   passing Gate B on its own merits, is left alone (B.1). Where a rewrite
+   is genuinely needed, preserve the item's original stable ID and
+   assessed intent whenever the underlying concept/objective is unchanged;
+   where the intent itself must change to fix the item, explicitly version
+   or supersede it (a new ID, with the old one's governance record marked
+   superseded) rather than silently mutating what a stable ID is understood
+   to test.
+5. **Perform source checking, scientific review, independent review, and
+   item-quality (Gate B) review** on every touched item, through the
+   existing `QUESTION_GOVERNANCE` workflow — a rewritten distractor is new
+   content and needs the same evidentiary discipline as any other question
+   edit, not a lighter bar because the motivation was statistical.
+6. **Re-run item-level (Gate B) and bank/form-level (Gate A) cue audits**
+   on the pilot batch specifically, not only the whole bank — confirming
+   the rewrite actually fixed what it targeted before trusting the
+   process at scale.
+7. **Confirm quiz feedback and answer mappings remain correct** after each
+   rewrite — a changed option list must keep its rationale, distractor
+   feedback (`why`/`w`), and correct-answer index correctly aligned; this
+   is a structural regression check, not a scientific one, and belongs in
+   the automated test suite.
+8. **Scale to additional batches only after the pilot batch passes** every
+   step above — including a check that the rubric from step 2 held up in
+   practice and did not need major revision mid-batch (if it did, revise
+   the rubric and re-run the pilot before scaling).
+9. **Reproduce final metrics against the step-1 baseline, without claiming
+   the metrics alone prove validity.** A corrected Gate A statistic shows
+   the bank/form-level cueing pattern is fixed; it does not, by itself,
+   show every item is scientifically sound (that's Gate B, performed
+   per-item in steps 4–6) or that the bank is psychometrically validated
+   (that's Phase 11, which needs real learner response data this phase
+   does not generate).
+
+**What this phase does and does not complete** — completing one of these
+does not automatically complete the others, and this phase's exit
+criteria (below) require only the first:
+
+- correcting the QL-033 cueing defect (this phase's actual goal);
+- scientific correctness of the rewritten items (step 5, via existing
+  `QUESTION_GOVERNANCE` review — required, but a separate evidentiary
+  question from cueing);
+- independent review (step 5 — required per item, not assumed from the
+  cueing fix);
+- concept mapping (Phase 2 — unrelated design work that may run in
+  parallel but is not this phase's deliverable);
+- diagnostic eligibility (B.2's full derived-eligibility model — this
+  phase designs it and can populate it for touched items, but full-bank
+  population is not required to exit this phase);
+- psychometric validation (Phase 11 — requires real learner data this
+  phase does not collect).
+
+- **Deliverables:** the frozen baseline (step 1); the written rubric and
+  Gate A thresholds (step 2); a corrected or explicitly quarantined
+  answer-choice distribution for at least the pilot batch, scaling to the
+  full bank across subsequent batches; the `diagnosticEligible` derivation
+  model design (B.2).
+- **Automated tests:** a committed, ongoing check for the answer-index/
+  length distribution (preventing QL-033 from silently recurring in future
+  authoring), extending the existing structural-validation suite; the
+  step-7 feedback/answer-mapping regression check for every rewritten item.
+- **Human audits:** Austin's item-writing review of every rewritten item
+  against the step-2 rubric (no mechanical fix); a documented independent
+  review per rewritten item (step 5), consistent with the existing
+  `QUESTION_GOVERNANCE` independent-review model.
+- **Exit criteria:** the pilot batch, and each subsequent batch through
+  the full bank, passes Gate A and Gate B; `docs/QUALITY_LOG.md` QL-033
+  marked corrected (not merely "recorded"), with reproduced before/after
+  counts per the step-1/step-9 baseline comparison. Full-bank completion,
+  not merely the pilot, is required before this phase's overall exit
+  criteria are met — the pilot batch alone satisfies only the process
+  validation this phase's batching exists to provide.
+- **Known risks:** rewriting under time pressure could introduce new
+  scientific inaccuracies — mitigated by the pilot-first batching and the
+  same `QUESTION_GOVERNANCE` review discipline already in force; a
+  rewritten item could silently change what a stable ID is understood to
+  test — mitigated by step 4's explicit versioning/supersession rule; a
+  rubric that looks right on paper could fail in practice — mitigated by
+  the pilot batch existing specifically to surface that before scaling.
+- **Rollback:** every batch is a normal, reviewable version-control commit
+  — content corrections are not risk-free, and this phase does not treat
+  them as such. Each batch must remain revertible on its own (not only as
+  part of reverting the whole phase); an item whose rewrite is later found
+  questionable must be individually quarantinable (excluded from
+  diagnostic/practice use) while its last-reviewed-good version remains
+  recoverable from history, without requiring every other already-landed
+  batch to be reverted along with it.
 
 ### Phase 1 — Complete current Milestone 1 foundations
 
@@ -1478,24 +1792,67 @@ after shipping without blocking the ones before it.
 
 ### Phase 10 — Commercial-product readiness and operational controls
 
-- **Prerequisites:** Phase 9; a real (not fabricated) licensing
-  determination for any content intended to be sold (J.3).
+**Corrected 2026-08-06 — Phase 9 is a conditional, not universal,
+prerequisite.** An earlier version of this phase listed Phase 9 as a flat
+prerequisite for all commercialization, which incorrectly made accounts
+and cloud synchronization a requirement for every commercial path in J.1.
+That is not justified: a privacy-preserving local/offline course, a paid
+download, a licensed content pack, or an institutional offline deployment
+can all be commercially viable using only the existing local-first
+architecture, with no learner account or cloud sync involved at all.
+
+- **Prerequisites (conditional on the path chosen):**
+  - Always required, regardless of path: scientific validity for any
+    content being sold (Phase 0 corrected, and `QUESTION_GOVERNANCE`
+    review appropriate to what's being sold); rights/licensing evidence
+    for that content (J.3 — a real, not fabricated, determination);
+    accessibility and security appropriate to the actual delivery model
+    chosen; a support plan; a versioned release/end-of-life policy; and
+    honest, non-overstated product claims (Guiding Principle A.4 applies
+    to marketing copy, not only in-app text).
+  - **Only required for a path that itself needs hosted identity,
+    cross-device synchronization, an institution-facing dashboard, or any
+    other form of hosted learner data** (per J.1 — e.g. the "individual
+    paid learning product" path *if* it includes cloud sync, or
+    "institutional/cohort licensing" *if* it includes hosted reporting):
+    **Phase 9 must be complete first.** A path that doesn't need any of
+    those (a paid local download, a licensed offline content pack, an
+    institution's own offline deployment) does not need Phase 9 at all.
 - **Scope:** whichever path(s) from J.1 are actually pursued, with their
-  full J.2 operational-requirement checklist satisfied.
-- **Explicit exclusions:** no pricing or packaging decision is made by
-  this document (Guiding Principle A.8); this phase *implements* a
-  decision made elsewhere, separately, with real evidence.
-- **Deliverables:** depends entirely on the path(s) chosen; at minimum,
-  payments/entitlement, support channel, and versioned release/EOL policy.
-- **Automated tests:** payment/entitlement test suite (L).
-- **Human audits:** legal review of terms/licensing (J.3); a real
-  security review scoped to the payment surface specifically.
+  full J.2 operational-requirement checklist satisfied — and, per the
+  above, only the subset of J.2 actually relevant to that path's delivery
+  model (a purely local/offline path has no payment-fraud or
+  hosted-uptime surface to secure, for instance, but still needs the
+  "always required" list above).
+- **Explicit exclusions:** no pricing, packaging, open/proprietary
+  boundary, payment-provider, or hosting-model decision is made by this
+  document (Guiding Principle A.8); this phase *implements* a decision
+  made elsewhere, separately, with real evidence. **Payment and
+  entitlement infrastructure is not universally required for every
+  candidate path** — a one-time paid download or an offline-licensed pack
+  may use a much simpler distribution/entitlement mechanism than a
+  subscription product would; which mechanism applies depends entirely on
+  the distribution and business model chosen, not decided here.
+- **Deliverables:** depends entirely on the path(s) chosen and, per above,
+  which of them require Phase 9; at minimum, whatever entitlement
+  mechanism the chosen distribution model actually needs, a support
+  channel, and a versioned release/EOL policy.
+- **Automated tests:** payment/entitlement test suite (L), scoped to
+  whichever entitlement mechanism the chosen path(s) actually use.
+- **Human audits:** legal review of terms/licensing (J.3); a real security
+  review scoped to whatever surface the chosen path(s) actually introduce
+  (a hosted path's payment/account surface; an offline path's
+  distribution/anti-piracy surface, if relevant to that path).
 - **Exit criteria:** depends on path; the invariant across all paths is
-  that every J.2 requirement relevant to the chosen path is satisfied
-  before launch, not retrofitted after the first customer.
-- **Known risks:** commercializing before Phase 0–9's trust
-  infrastructure is solid would sell a product this document explicitly
-  says isn't ready yet — mitigated by the strict phase ordering itself.
+  that every J.2 requirement relevant to the *chosen* path is satisfied
+  before launch, not retrofitted after the first customer, and that no
+  requirement irrelevant to the chosen delivery model is treated as
+  blocking it.
+- **Known risks:** commercializing before this document's applicable trust
+  infrastructure for the *chosen path* is solid would sell a product this
+  document explicitly says isn't ready yet — mitigated by the phase
+  ordering above being conditional on path, not a blanket "Phase 9 first"
+  rule that would otherwise block viable, simpler paths unnecessarily.
 - **Rollback:** a commercial path can be paused/sunset using the
   versioned-release/EOL policy this phase itself requires shipping.
 
@@ -1503,29 +1860,81 @@ after shipping without blocking the ones before it.
 
 - **Prerequisites:** Phases 3–6 running in production long enough to
   generate real evidence at meaningful volume; Phase 0's assessment
-  validity holding throughout (re-verified, not assumed still true).
+  validity holding throughout (re-verified, not assumed still true); **and,
+  corrected 2026-08-06, an ethical, lawful, explicitly approved pathway for
+  the real learner data this phase depends on** — see below. This is a hard
+  gate, not a formality: **Phase 11 cannot begin without it, and remains
+  blocked indefinitely, not silently worked around, if no such pathway is
+  ever approved.**
+- **The data-pathway/consent prerequisite, reconciled with section K and
+  the decision log (corrected 2026-08-06):** an earlier version of this
+  document required Phase 11 to use real, held-out learner data and
+  perform subgroup analysis, while the decision log separately said a
+  research/consent model was "not required through Phase 11" — those two
+  statements contradicted each other, since subgroup analysis and
+  calibration both consume real learner data that, per section K, cannot
+  be collected without consent. Reconciled:
+  - The local-only, account-free experience remains fully valid on its own
+    and needs no data-contribution pathway at all — a learner who never
+    opts in sees no change and loses nothing.
+  - Any learner data used for Phase 11 calibration or validation requires
+    a **voluntary, explicit, specific consent** (K.2) — never inferred,
+    never bundled with an unrelated action, and always accompanied by data
+    minimization (K.1), a clearly stated permitted purpose, and honored
+    withdrawal/deletion requests (K.4) that remove the learner's data from
+    future model training, not merely from display.
+  - Depending on how the data is used (e.g. product analytics/calibration
+    the platform performs itself, versus a formal research study whose
+    findings might be published), the pathway may additionally require
+    ethics/IRB review and a separate legal determination — **this document
+    makes no legal conclusion about which is required for which use; that
+    determination is real future work, not decided here.**
+  - **Precise data-sensitivity terminology, used consistently, not
+    "anonymous" as a casual catch-all:** *identifiable* data can be traced
+    to a specific person; *pseudonymous* data is keyed to a stable
+    identifier that could be re-linked to a person under some
+    circumstance; *de-identified* data has had identifying information
+    removed with no realistic re-linkage path; *aggregate* data describes
+    a group and contains no individual-level record at all. Whichever of
+    these Phase 11's data pathway actually is must be stated precisely and
+    accurately — "anonymous" is not itself an accurate description of any
+    of these on its own and must not be used as a substitute for saying
+    which one actually applies.
 - **Scope:** F.3–F.4 — calibrated mastery/forgetting models and, only after
   validation, adaptive item selection.
 - **Explicit exclusions:** no model family is pre-selected (F.5); no
   calibrated model reaches a real learner before simulation +
-  retrospective validation + subgroup analysis (L) all pass.
+  retrospective validation (+ subgroup analysis, where lawfully and
+  ethically possible — see Exit criteria) all pass. **No real learner
+  telemetry or demographic collection is authorized by this correction, or
+  by any prior version of this document** — this phase only describes what
+  would be required if and when a specific, approved pathway exists.
 - **Deliverables:** a validated calibrated model; adaptive selection,
   shipped incrementally and remaining fully explainable (Guiding Principle
   A.5) and disablable per-learner.
 - **Automated tests:** calibration/regression tests against held-out real
   data.
 - **Human audits:** the full L-table's human-required rows for this
-  category — psychometric analysis, subgroup analysis, recommendation-
-  safety review — all performed by qualified reviewers before launch.
+  category — psychometric analysis, subgroup analysis (where possible, see
+  below), recommendation-safety review — all performed by qualified
+  reviewers before launch.
 - **Exit criteria:** a calibrated model demonstrably outperforms Phase
-  1's deterministic thresholds on real, held-out evidence, with no
-  material subgroup degradation (M.2), and every recommendation remains
-  individually explainable.
+  1's deterministic thresholds on real, held-out evidence, and every
+  recommendation remains individually explainable. **Subgroup analysis is
+  possible only if the attributes it needs can themselves be lawfully and
+  ethically collected, with adequate sample sizes per subgroup** — this is
+  its own consent and data-collection decision, gated the same way as the
+  rest of this phase's data. **If those attributes are not collected, the
+  product must say plainly that subgroup fairness has not been empirically
+  established — never silently omit the caveat, and never claim a
+  fairness audit "passed" when it was never actually run.**
 - **Known risks:** the temptation to ship a more "sophisticated" but less
   explainable model — explicitly foreclosed by Guiding Principle A.5 and
   F.5's model-family framing, which do not permit trading away
   explainability for predictive accuracy without a dedicated, reviewed
-  exception.
+  exception; the temptation to quietly start collecting data ahead of an
+  approved pathway "to be ready" — explicitly foreclosed by this phase's
+  hard prerequisite gate above.
 - **Rollback:** Phase 1's deterministic model remains available as a
   fallback indefinitely — Phase 11 is additive, not a replacement that
   removes the explainable baseline.
@@ -1537,14 +1946,18 @@ Based on repository evidence — `docs/ROADMAP.md`'s own stated sequencing
 provenance, and review requirements"), the fact that Milestone 1's
 provenance item just merged (PR #23) while two Milestone 1 items remain
 explicitly open, and this document's own Phase 0/Phase 1 ordering — the
-recommended next implementation task is **Phase 0's QL-033 correction**
-(`docs/ROADMAP.md`'s open item "Correct the confirmed assessment-bank
-answer-choice cueing defect"), because it is the single hard prerequisite
-every later diagnostic/adaptive capability in this document depends on, and
-it is already fully scoped with exact reproduced counts and explicit remedy
-constraints (B.1) — no further design work is needed to start it, only the
-human/scientific item-writing judgment the task itself requires. This task
-is **not begun** by this roadmap PR.
+recommended next implementation task is **beginning Phase 0's remediation
+program** (`docs/ROADMAP.md`'s open item "Correct the confirmed
+assessment-bank answer-choice cueing defect"), because it is the single
+hard prerequisite every later diagnostic/adaptive capability in this
+document depends on, and QL-033's underlying defect is already fully
+reproduced with exact counts (B.1). **Correction (2026-08-06):** an earlier
+version of this section said no further design work was needed to start —
+that was inaccurate; Phase 0's own batched-remediation steps 1–2 (freezing
+the baseline and writing the item-writing rubric and Gate A thresholds) are
+themselves real, not-yet-done design work, required before the
+human/scientific item-rewriting judgment the task also needs. This task is
+**not begun** by this roadmap PR.
 
 ---
 
@@ -1558,9 +1971,9 @@ be decided — some may resolve much earlier).
 | --- | --- | --- | --- |
 | 1 | Local-only vs. hosted learner profiles, and exactly which capabilities require which | Real usage data on whether learners want cross-device continuity badly enough to justify K's consent/security burden | Before Phase 9 |
 | 2 | Exact prospective attempt schema (D.3's full field list is a maximal candidate set, not a ratified schema) | Design review + a first real implementation attempt surfacing practical gaps | Before Phase 3 ships |
-| 3 | Mastery model (which of F.5's families, if any beyond Phase 1's rule-based default) | Real attempt-history volume; simulation results; retrospective validation | Before Phase 11 |
-| 4 | Exact evidence thresholds (minimum-attempt counts, recency windows) for each E.4 status category | Simulated-trajectory analysis (L) and, later, real usage calibration | Before Phase 4 ships (an initial value is needed then; it may be revised later) |
-| 5 | Decay/forgetting model shape | Real retention-check data (E.2 #5) — inherently requires elapsed real time | Before Phase 11 |
+| 3 | Mastery model (which of F.5's families, if any beyond Phase 1's rule-based default) | Real attempt-history volume; simulation results; retrospective validation | Before Phase 11 — and gated behind decision #14's approved data pathway, since real attempt-history volume at calibration scale requires it |
+| 4 | Exact evidence thresholds (minimum-attempt counts, recency windows) for each E.4 status category, which may reasonably differ by diagnostic experience, item quality, concept breadth, and claim consequence (D.4, corrected 2026-08-06) | Simulated-trajectory analysis (L) and, later, real usage calibration | Before Phase 4 ships (an initial value is needed then; it may be revised later, and may need separate values per experience rather than one global constant) |
+| 5 | Decay/forgetting model shape | Real retention-check data (E.2 #5) — inherently requires elapsed real time | Before Phase 11 — and gated behind decision #14's approved data pathway for the same reason as #3 |
 | 6 | Whether/how to collect confidence responses | UX testing on whether learners engage honestly with an optional confidence prompt without it feeling burdensome | Before Phase 3 finalizes its schema (can ship without it and add later, since it's additive) |
 | 7 | Adaptive stopping rules for each E.2 experience (exact thresholds, not just the framework) | Simulation + real usage per experience | Before Phase 4 (initial), refined through Phase 11 |
 | 8 | Content-pack trust and signing mechanism (I.1) | Security review of realistic pack-distribution scenarios; whether third-party packs are ever actually pursued | Before any pack beyond the first-party cytogenetics/molecular-biology ones is contemplated — not required for Phases 7–8 |
@@ -1569,7 +1982,7 @@ be decided — some may resolve much earlier).
 | 11 | Product packaging (which of J.1's paths, in what combination) | Real, non-fabricated market/demand evidence | Before Phase 10 |
 | 12 | Pricing | Real market evidence; explicitly out of this document's scope entirely (Guiding Principle A.8) | Before Phase 10 |
 | 13 | Institutional features' exact shape (J.1's institutional row) | Real institutional-customer conversations, if that path is pursued at all | Before Phase 10, only if that path is chosen |
-| 14 | Research/consent model for any future aggregate or research use of learner data | Legal review; a specific research question that would justify it (none currently exists) | Before any research use is contemplated — not required for any phase through 11 as scoped here |
+| 14 | Data-contribution and research/consent model for any real learner data Phase 11 (or any earlier aggregate/research use) would need | Legal and, where applicable, ethics/IRB review; a specific approved purpose and consent design (K.2); a decision on whether the data involved is de-identified, pseudonymous, aggregate, or identifiable (precise terms, not "anonymous") | **Corrected 2026-08-06 — this is a hard prerequisite for Phase 11, not something Phase 11 can proceed without.** Must be decided before Phase 11 begins; if it is never approved, Phase 11 remains blocked indefinitely rather than proceeding on assumed or informally collected data. Not required for any phase through 10, which do not depend on real learner-evidence data for calibration. |
 
 ---
 

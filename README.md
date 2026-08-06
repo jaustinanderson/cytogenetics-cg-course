@@ -202,8 +202,11 @@ spaced retrieval, a concept graph, and eventual portability to other
 subjects (molecular biology first). It is a durable planning document, not
 a schedule or an approval to build; see
 [Issue #24](https://github.com/jaustinanderson/cytogenetics-cg-course/issues/24)
-for tracking. The static, private, account-free course described above
-remains the actual, current product.
+for tracking. The static, local-first, account-free, no-telemetry course
+described above — its repository and deployed site are both public;
+"local-first" describes where learner progress is stored (only in the
+learner's own browser), not restricted access — remains the actual,
+current product.
 
 ## Validation
 
