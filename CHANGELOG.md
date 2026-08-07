@@ -6,6 +6,48 @@ All notable repository changes are recorded here.
 
 ### Added
 
+- Added `docs/LEARNING_PLATFORM_ROADMAP.md`, a durable planning document
+  (Issue #24, carried by PR #25): a long-term roadmap toward a
+  trustworthy, adaptive, subject-independent learning platform — guiding
+  principles and safeguards, assessment-validity prerequisites (naming the
+  confirmed QL-033 cueing defect as a hard blocker for any diagnostic use
+  of the bank), a subject-independent concept/evidence/learner-state model,
+  seven distinct diagnostic learner experiences, a four-phase adaptive-
+  sequencing progression, a concept graph design, spaced-retention study
+  planning, subject-pack portability prerequisites (cytogenetics as the
+  reference pack, molecular biology as the first portability pilot),
+  candidate commercial paths and their operational requirements (no
+  pricing or market claims made), a privacy/security/ethics section, a
+  full test-and-audit matrix, success metrics with explicit
+  learning-vs-engagement separation, an 11-phase roadmap with exit
+  criteria and rollback plans for each, and a decision log of
+  intentionally open questions. **Nothing described in the document is
+  implemented** — no accounts, telemetry, cloud storage, pricing, adaptive
+  algorithm, framework migration, or content-pack system is authorized by
+  it. `docs/ROADMAP.md` gains a concise "Milestone 5" pointer/summary
+  section; `README.md`, `docs/ARCHITECTURE.md`, and `docs/CLAUDE_HANDOFF.md`
+  gain short discoverability pointers distinguishing current behavior from
+  this future proposal. No product code, scientific content, or existing
+  issue was changed.
+  **Corrected during PR #25's independent-review correction pass:** independent review found ten
+  substantive validity problems — most significantly, the plan conflated
+  QL-033's bank/form-level cueing statistic with a per-item validity
+  judgment (implying every B-keyed or longest-correct-answer question was
+  individually invalid, which QL-033 does not establish); allowed a merely
+  source-checked item to support a public diagnostic claim instead of
+  requiring `release-qualified`; claimed Phase 0 needed no further design
+  work; said early below-threshold attempts carry zero information;
+  understated how session difficulty/scaffolding affects evidence weight;
+  overstated what IRT can do to "fix" distractors; left a real contradiction
+  between Phase 11's real-data requirement and the decision log's "no
+  consent model required through Phase 11"; made hosted accounts (Phase 9)
+  a blanket prerequisite for every commercial path (Phase 10) rather than
+  only paths needing hosted identity/sync; and called the public
+  repository/deployed course "private" rather than local-first/account-free.
+  All corrected in place across `docs/LEARNING_PLATFORM_ROADMAP.md`,
+  `docs/ROADMAP.md`, `README.md`, and `docs/CLAUDE_HANDOFF.md`; see PR #25's
+  body for the full record. Still nothing implemented; still no product
+  code, scientific content, or existing issue changed.
 - Added a strict, auditable question-provenance and scientific-review
   governance model (`index.html`, Issue #3, carried by PR #23): a
   separate `QUESTION_GOVERNANCE` registry, keyed by each authored

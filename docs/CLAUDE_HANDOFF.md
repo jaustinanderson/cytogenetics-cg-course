@@ -1807,6 +1807,58 @@ and the QL-033 assessment-bank cueing correction remain separately
 scoped, unfinished work. Does not perform scientific review or source
 attribution — that remains separately scoped, future work.
 
+### Adaptive/reusable learning platform roadmap — planning only, carried by PR #25, first opened 2026-08-06
+
+`docs/LEARNING_PLATFORM_ROADMAP.md` is a new, durable planning document
+describing a long-term direction for this course: a reusable,
+subject-independent learning engine with strength/weakness diagnostics,
+spaced retrieval, a concept graph, and eventual portability beyond
+cytogenetics (molecular biology is the intended first pilot). It is a
+documentation-only, planning-only change, introduced through PR #25 and
+tracked by
+[Issue #24](https://github.com/jaustinanderson/cytogenetics-cg-course/issues/24).
+**Nothing described in that document is implemented.** It explicitly does
+not authorize accounts, telemetry, cloud learner-data storage, pricing, a
+specific adaptive-model selection, a framework migration, or a persistent
+content-pack system — each remains its own future, separately scoped and
+reviewed proposal.
+
+The plan names a hard prerequisite before any diagnostic/mastery feature
+may use the existing question bank: QL-033's confirmed answer-choice
+cueing pattern (`docs/QUALITY_LOG.md`) — corrected against Independent
+review, a **bank/form-level** statistical defect, not proof that any
+individual B-keyed or longest-correct-answer item is itself invalid — must
+be corrected at the bank/form level (Gate A) and each item used for a
+public diagnostic claim must separately pass item-level review (Gate B)
+and reach `release-qualified` under `QUESTION_GOVERNANCE` (Issue #3), not
+merely source-checked. All 153 questions currently remain Draft. The
+plan's own recommended next implementation task is beginning Phase 0's
+controlled, batched remediation program for this — already open on
+`docs/ROADMAP.md` — not begun by this planning PR; Phase 0 itself still
+requires real design work (a written item-writing rubric and explicit
+Gate A thresholds) before any item rewriting starts, not merely the
+already-reproduced QL-033 counts. See `docs/ROADMAP.md` "Milestone 5" for
+the concise summary and phase sequence, and the full document for detail
+on every phase's prerequisites, scope, exclusions, deliverables, tests,
+audits, exit criteria, risks, and rollback plan.
+
+**During PR #25's independent-review correction pass (2026-08-06):** found and corrected ten substantive validity problems in the
+first version of this plan — most significantly, conflating a bank-level
+cueing statistic with a per-item validity judgment (above); allowing a
+merely source-checked item to support a public diagnostic claim; treating
+Phase 0 as needing no further design work; overstating that early
+below-threshold attempts carry zero information; understating that session
+difficulty/scaffolding materially affects evidence weight; overstating
+what IRT can do to "fix" distractors; a real contradiction between Phase
+11's real-data requirement and the decision log's "no consent model
+required through Phase 11"; making hosted accounts (Phase 9) a blanket
+prerequisite for every commercial path (Phase 10) rather than only paths
+that need hosted identity/sync; and calling the public repository/deployed
+course "private" rather than local-first/account-free. All corrected in
+place in `docs/LEARNING_PLATFORM_ROADMAP.md`, `docs/ROADMAP.md`,
+`README.md`, and this document; see the PR #25 body for the full
+correction record.
+
 ### Accessibility
 
 The course has a skip link that now moves keyboard focus into `#main`

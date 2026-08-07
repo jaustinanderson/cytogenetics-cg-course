@@ -1419,3 +1419,25 @@ edit risk.
 
 If modular authoring is adopted, the build should continue to emit one portable
 `index.html` unless Austin approves a product-boundary change.
+
+## Future direction: adaptive, subject-independent learning platform (planning only)
+
+Everything above this section describes **current, implemented behavior**.
+`docs/LEARNING_PLATFORM_ROADMAP.md` is a separate, durable planning
+document describing a possible long-term direction — a reusable learning
+engine, a cytogenetics content pack, concept/prerequisite modeling,
+evidence-qualified strength/weakness diagnostics, spaced retrieval, and
+eventual portability to other subjects — none of which exists in this
+codebase today. Tracked by
+[Issue #24](https://github.com/jaustinanderson/cytogenetics-cg-course/issues/24).
+
+That document explicitly treats this section's "Restructuring trigger"
+doctrine as a real constraint, not a hurdle to route around: extracting a
+reusable engine from the current single-file architecture (its Phase 7) is
+gated on the same "measured maintenance problem, not modernization for its
+own sake" bar stated above, and even then the shipped product is expected
+to remain one portable artifact unless Austin approves a genuine
+product-boundary change. Until that phase is reached and approved, this
+"Data model," "Progress," and "Public API" documentation above remains the
+complete and authoritative description of what the application actually
+does.

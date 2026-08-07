@@ -660,6 +660,75 @@ The API provides prerequisites for an adaptive workflow, but adaptation is not
 automatic. Generated content remains external or session-only until it passes
 the same provenance, scientific-review, and release gates as authored content.
 
+## Milestone 5 — Adaptive, subject-independent learning platform (planning only)
+
+**Status: planning document committed, no implementation started.** The full
+long-term plan is `docs/LEARNING_PLATFORM_ROADMAP.md`, a documentation-only,
+planning-only change carried by PR #25 and tracked by
+[Issue #24](https://github.com/jaustinanderson/cytogenetics-cg-course/issues/24).
+This entry is a pointer and sequencing summary, not a restatement — see that
+document for full detail on every phase's prerequisites, scope, exclusions,
+deliverables, tests, audits, exit criteria, risks, and rollback plan.
+
+**Direction:** grow this course from a static practice quiz into a
+system that can tell a learner what they know, don't know, or lack enough
+evidence to judge; recommend what to study next and why; support spaced,
+interleaved retrieval and delayed-retention checks; and, eventually, do the
+same for other subjects (molecular biology is the intended first
+portability pilot) — without ever overstating what the evidence supports,
+implying certification, or compromising the current static, local-first,
+account-free, no-telemetry product.
+
+**Hard prerequisite, before any diagnostic or mastery feature may use the
+existing bank (corrected 2026-08-06):** QL-033's confirmed answer-choice
+cueing pattern is primarily a **bank/form-level** statistical defect, not
+proof that any individual B-keyed or longest-correct-answer question is
+itself invalid — the bank/form-level statistics must be corrected (a
+"Gate A" check), and each item used for a public diagnostic claim must
+separately pass item-level review (a "Gate B" check) and be
+`release-qualified` under `QUESTION_GOVERNANCE` (Issue #3), not merely
+source-checked. All 153 questions currently remain Draft. See
+`docs/LEARNING_PLATFORM_ROADMAP.md` section B for the full corrected model.
+
+**Phase sequence** (full detail in section N of the linked document):
+
+0. Assessment and scientific-validity prerequisites — a controlled, batched
+   remediation program (QL-033 Gate A/B correction, review status)
+1. Complete remaining Milestone 1 items (image-manifest normalization,
+   public-API contract tests)
+2. Subject-independent concept/objective and item metadata design
+3. Prospective attempt-history and learner-evidence design
+4. Explainable local diagnostic and strength/weakness dashboard MVP
+5. Spaced retrieval, interleaving, and study-plan MVP
+6. Prerequisite and misconception concept graph
+7. Cytogenetics content-pack extraction
+8. Molecular-biology portability pilot
+9. Optional accounts, synchronization, and privacy architecture — required
+   only for a commercial or product path that itself needs hosted
+   identity/sync/institution dashboards (see Phase 10)
+10. Commercial-product readiness and operational controls — a purely
+    offline/local commercial path (paid download, licensed content pack,
+    institutional offline deployment) does not require Phase 9 first;
+    only a path needing hosted accounts/sync does
+11. Evidence-based adaptive calibration using adequate real-world data —
+    blocked indefinitely, not merely "future work," unless an explicitly
+    approved, consented data pathway exists first (see the linked
+    document's Phase 11 and decision-log entry 14)
+
+**Explicitly not approved by this milestone entry or by Issue #24:**
+accounts, telemetry, cloud learner-data storage, pricing/commercial
+packaging, selection of any specific adaptive/mastery algorithm, a
+framework migration, or a persistent content-pack system. Each requires its
+own separately scoped, separately reviewed proposal when its phase arrives.
+
+**Recommended next implementation task:** beginning Phase 0 — a controlled,
+batched remediation program correcting the QL-033 assessment-cueing defect
+(the defect itself is already fully reproduced with exact counts above; the
+remediation program's own design steps, and the human/scientific
+item-by-item review it requires, are not yet done — see
+`docs/LEARNING_PLATFORM_ROADMAP.md` Phase 0 for the full batched protocol).
+Not begun by this planning entry.
+
 ## Quality gates
 
 Every release candidate must satisfy the applicable gates:
