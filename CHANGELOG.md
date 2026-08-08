@@ -135,6 +135,46 @@ All notable repository changes are recorded here.
   correctly fails the bank and every form, still QL-033 not marked
   corrected. See `docs/QUALITY_LOG.md` QL-039 and
   `docs/ASSESSMENT_VALIDITY.md` for the full record.
+  **Corrected (QL-040):** a fourth independent review found the
+  Cohen's-w threshold's own justification cited an impossible probability
+  distribution (`[0.40,0.25,0.25,0.25]`, summing to 1.15) as algebraically
+  equivalent to the prior margin rule -- replaced with Cohen's own
+  directly-quoted, verified-normalized m=4 examples (Cohen, 1988, pages
+  224-227, directly inspected), reframed explicitly as an adopted
+  operational threshold, not a uniquely correct or item-validity result.
+  A distribution-wide Cohen's-w failure (N=100, `[38,24,19,19]`) could be
+  reported with zero explanation of which position drove it when every
+  cell stayed inside the separate per-cell diagnostic margin -- every
+  position now reports its full directional/chi-square-contribution
+  record, with a new `primaryContributors` field naming the position(s)
+  responsible for a majority of the aggregate effect. The aggregate
+  helpers were found to trust malformed input
+  (`exactPigeonholeBalance([2,1,1],4,5)` reported `balanced:true`;
+  `poissonBinomialPMF([1.5,0.5])` produced a negative probability mass) --
+  corrected with one reusable validation function per input shape, and a
+  fractional-count test fixture replaced with a valid integer one. The
+  round-4 "independent" p-value fixture was found to reuse the same
+  incomplete-gamma recurrence as the implementation under test --
+  replaced with two genuinely independent analytic closed forms (df=2,
+  df=4) and an NIST/SEMATECH critical-value cross-check extended to
+  alpha=0.05 for df 1-7; the Numerical Recipes attribution is removed
+  since its bookreader is subscription-gated and only its table of
+  contents, not its content, was inspected. The N=19/20/21
+  "no easier to pass" claim was found to hold only for severe
+  zero-position omissions, not universally -- a genuine, accepted,
+  limited discontinuity (N=19 `[6,5,4,4]` fails; N=20 `[7,5,4,4]`, with a
+  larger raw maximum, passes) is now documented explicitly, since the two
+  regimes use deliberately different standards by design. Mutation count
+  reconciled across all five rounds: 8+8+4+7+6 = **33**, with no coverage
+  gaps in round 5's own 6 mutations.
+  `tests/assessment-cue-audit.mjs` grew from 157 to 187 dependency-free
+  checks; `tests/e2e/assessment-cue-audit.spec.mjs` stayed at 7. A
+  complete `npx playwright test` run at a deterministic fixed worker
+  count produced a fully clean result: 252 passed, 6 skipped, 0 failed.
+  Still no question content changed, still Gate A correctly fails the
+  bank and every form, still QL-033 not marked corrected. See
+  `docs/QUALITY_LOG.md` QL-040 and `docs/ASSESSMENT_VALIDITY.md` for the
+  full record.
 - Added `docs/LEARNING_PLATFORM_ROADMAP.md`, a durable planning document
   (Issue #24, carried by PR #25): a long-term roadmap toward a
   trustworthy, adaptive, subject-independent learning platform — guiding

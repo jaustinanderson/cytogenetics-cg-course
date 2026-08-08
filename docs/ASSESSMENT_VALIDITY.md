@@ -29,8 +29,17 @@ reported an actual chi-square p-value, that a comment wrongly claimed the
 frozen id manifest detected reordering it structurally cannot detect,
 and that the NBME source-provenance wording described the two official
 NBME URLs less precisely than directly re-inspecting them supports
-(`docs/QUALITY_LOG.md` QL-039). Every counterexample that prompted a
-correction, from any of the three reviews, is recorded in the relevant
+(`docs/QUALITY_LOG.md` QL-039). A **fourth** independent review, still
+before merge, found that the Cohen's-w rationale itself rested on a
+mathematically impossible example (a claimed probability distribution
+summing to 1.15), that a distribution-wide practical failure could be
+reported with no explanation of which position(s) or direction(s) drove
+it, that the aggregate helpers trusted malformed caller-supplied input
+without validation, that the round-4 p-value "independent" verification
+reused the same recurrence as the implementation under test, and that the
+regime-transition claim overstated what the retained evidence proves
+(`docs/QUALITY_LOG.md` QL-040). Every counterexample that prompted a
+correction, from any of the four reviews, is recorded in the relevant
 section below, along with the fix and why it is now correct.
 
 **What this document does NOT do:**
@@ -507,6 +516,12 @@ a number CITL itself supplies — justified individually in sections 4.3,
 | Cohen's w as the large-N distribution-wide practical/effect-size measure | Yes | **Yes** — scale-free (unlike chi-square itself), symmetric to over- and under-representation by construction, and uses Cohen's own published "medium effect" convention (0.3), not a number tuned to this bank. See 4.3b |
 | A critical-value-table lookup reported in place of an actual chi-square p-value | Yes | **No — corrected.** A Boolean table comparison is not itself a p-value, and was limited to the table's own df range. See 4.6b |
 | Exact chi-square p-value via the regularized incomplete gamma function | Yes | **Yes** — closed-form, not an approximation beyond the chi-square test's own well-known validity assumption, and valid at any df, not only the previously tabulated range. See 4.6b |
+| An unnormalized illustrative distribution to justify the w=0.30 threshold | Yes | **No — corrected.** `[0.40,0.25,0.25,0.25]` sums to 1.15, not a valid distribution; the claimed algebraic equivalence to the prior margin rule was false. See 4.3b |
+| Cohen's own directly-quoted m=4 illustrative examples to justify w=0.30 | Yes | **Yes** — genuinely normalized, independently verified to reproduce Cohen's own stated w, and the threshold is framed as an adopted operational convention, not a uniquely correct or item-validity result. See 4.3b |
+| Reporting an aggregate practical-effect decision with no per-position explanation | Yes | **No — corrected.** A Cohen's-w failure with every cell inside the per-cell diagnostic margin left the report unable to say which position(s) drove it. See 4.3d |
+| Full directional/contribution reporting per position, plus majority-contribution "primary contributors" | Yes | **Yes** — explains every aggregate failure by position and direction without inventing an arbitrary "top N," and keeps the per-cell diagnostic flag conceptually separate from the aggregate decision. See 4.3d |
+| Trusting caller-supplied aggregate/probability summaries without validation | Yes | **No — corrected.** A malformed positionCounts array or an out-of-range probability could reach formulas that assume valid input, producing silently wrong results. See 4.3c |
+| One reusable validation function per input shape, rejecting malformed input with a descriptive error | Yes | **Yes** — the same discipline `assertValidQuestionShape()` already applies to question objects, applied consistently to every aggregate/probability entry point. See 4.3c |
 
 ### 4.3 Adopted rules — position balance (corrected: a two-regime model with one shared threshold)
 
@@ -655,15 +670,14 @@ sequence confirmed the same gap at the whole-gate level: `overall: pass`,
 despite position D never being correct.
 
 **Corrected measure: Cohen's w**, the standard multinomial/chi-square
-effect size (Cohen, J. (1988). *Statistical Power Analysis for the
-Behavioral Sciences*, 2nd ed., chapter 7): `w = sqrt(chiSquare / N)`.
-Compared against the alternatives before selecting it:
+effect size: `w = sqrt(chiSquare / N)`. Compared against the alternatives
+before selecting it:
 
 - **Symmetric per-position deviations, reported but not decision-driving:**
   retained as `positionDeviations`/`materialDeviations` in the detail
-  object (below) — genuinely useful for reporting WHICH positions and in
-  WHICH direction, but not, by itself, a single aggregate decision measure
-  a fixed threshold can be compared against.
+  object (section 4.3d) — genuinely useful for reporting WHICH positions
+  and in WHICH direction, but not, by itself, a single aggregate decision
+  measure a fixed threshold can be compared against.
 - **Total-variation distance:** considered; rejected in favor of Cohen's w
   because w has an established, independently-sourced (not
   self-invented) conventional threshold (below) and a direct algebraic
@@ -679,46 +693,251 @@ Compared against the alternatives before selecting it:
   is derived from the same squared-deviation sum every position
   contributes to.
 
-**Threshold: `COHENS_W_MEDIUM_EFFECT = 0.3`**, Cohen's own published
-convention for a "medium" effect — an independently-sourced,
-non-arbitrary number, not tuned to this bank or to make any specific
-counterexample fail. (Reassuring, not engineered, consistency check: for
-`n=4`, a single position exactly at the OLD single-position margin
-boundary, `1/n + PRACTICAL_MARGIN`, with every other position exactly at
-its own expected value, algebraically produces `w` exactly equal to this
-same `0.3` threshold — the two definitions agree at that boundary case
-for `n=4`, which is a property of the numbers involved, not something
-chosen to make it so.)
+**Source, directly inspected (round 5 correction — the prior version of
+this section made an invalid claim; see the counterexample below):**
+
+> Jacob Cohen, *Statistical Power Analysis for the Behavioral Sciences*,
+> 2nd edition, Lawrence Erlbaum Associates, Publishers, 1988. Chapter 7
+> "Chi-Square Tests for Goodness of Fit and Contingency Tables," section
+> 7.2.3 "'Small,' 'Medium,' and 'Large' w Values," printed pages 224–227.
+> Directly inspected via the publicly hosted scan at
+> <https://utstat.utoronto.ca/brunner/oldclass/378f16/readings/CohenPower.pdf>,
+> verified 2026-08-08 against the title page (confirms 2nd edition, same
+> publisher) and section 7.2.3's own printed text. Official publisher
+> metadata for the same 2nd edition, confirming title/author/year, is also
+> available at
+> <https://www.taylorfrancis.com/books/mono/10.4324/9780203771587/statistical-power-analysis-behavioral-sciences-jacob-cohen>.
+
+**Counterexample reproduced (round 5 — the claimed algebraic justification
+for w=0.3 was itself mathematically impossible):** an earlier version of
+this document, and the corresponding source code comment, justified
+adopting `w = 0.3` by claiming it was algebraically equivalent to the
+prior single-cell margin rule at its boundary — illustrated with a
+four-category distribution `[0.40, 0.25, 0.25, 0.25]`. **That distribution
+sums to 1.15, not 1 — it is not a valid probability distribution, and the
+claimed equivalence is false.** Confirmed directly:
+`0.40 + 0.25 + 0.25 + 0.25 = 1.15` (`tests/assessment-cue-audit.mjs`).
+
+**Corrected justification, using Cohen's own directly-quoted example**
+(page 226, verbatim): for `m = 4` (four categories), Cohen gives
+`H0 = .250 .250 .250 .250` (equiprobable) and
+`H1 = .380 .207 .207 .207`, describing it as *"a w = .30 departure from
+equiprobability in which the effect is concentrated in the first
+category, the remainder being equiprobable."* This distribution **is**
+valid: `.380 + .207 + .207 + .207 = 1.001` (Cohen's own printed
+3-decimal values, rounding to 1). Cohen also gives an equally-spaced
+`m = 4` medium-effect `H1` on page 225: `.149 .216 .284 .351`
+(sums to exactly 1.000). Both are directly transcribed as
+`COHENS_M4_ILLUSTRATIVE_EXAMPLES` in `scripts/assessment-cue-audit.mjs`,
+alongside Cohen's own small (`w=.10`) and large (`w=.50`) `m=4`
+illustrations, and a dedicated test independently verifies every one of
+these fixtures both sums to 1 (a check the removed impossible example
+would have failed) and reproduces Cohen's own stated `w` value via this
+file's own formula.
+
+**Threshold: `COHENS_W_MEDIUM_EFFECT = 0.3`, ADOPTED, not uniquely
+correct.** Cohen's own words (page 224) are explicit that his
+small/medium/large conventions are offered *"to serve as conventions for
+these qualitative adjectives,"* that their use *"requires particular
+caution,"* and that *"the investigator is best advised to use the
+conventional definitions as a general frame of reference for ES and not
+to take them too literally."* This project **adopts** `w = 0.30` —
+Cohen's own conventional "medium effect" reference point — as a
+deliberately **conservative, project-defined operational release gate**
+for Gate A's large-N regime. This is explicitly **not** a claim that 0.30
+is the uniquely correct threshold, **not** an item-validity result, and
+**not** mathematically equivalent to the prior single-cell margin rule it
+replaced (the counterexample this section fixes is a direct
+demonstration that no such equivalence holds).
+
+**Limitations and false-positive/false-negative risk, stated honestly:**
+a fixed `w` threshold does not itself indicate WHICH position(s) or in
+WHICH direction a distribution deviates — section 4.3d exists to close
+exactly that gap. At very large N, a `w` just under 0.30 can still be
+statistically significant, an intentional, separately-handled case
+(section 4.6a's review-flag policy, unaffected by this correction). Cohen
+himself notes `w`'s relationship to other association measures (Cramér's
+`C`, `phi`) varies with table size, so a "medium" effect by this
+convention is not directly comparable across differently-shaped
+contingency tables (page 227).
 
 **Verified for `[7,7,6,0]`, `[8,6,6,0]`, `[8,8,4,0]`:** Cohen's w = 0.583,
 0.600, and 0.663 respectively — all a **large** effect by Cohen's own
-convention (>= 0.5), now correctly failing. **Verified the regime
-transition does not make a conspicuously worse distribution easier to
-pass:** a comparable omission at `N=19` (structural regime, exact
-pigeonhole rule) fails; the same shape at `N=20` and `N=21` (statistical
-regime, Cohen's w) also fails. **Verified balanced N=20 distributions
-still pass comfortably:** `[5,5,5,5]` gives `w=0`; `[6,5,5,4]` gives
-`w=0.141`, both well under the 0.3 threshold. **Verified for 2- and
-3-option forms** at their own `REGIME_THRESHOLD(n)`, not only n=4.
-
-**Per-position directional reporting, retained as diagnostic detail, not
-the decision:** every position's own share is compared against
-`[expectedProportion - PRACTICAL_MARGIN, expectedProportion + PRACTICAL_MARGIN]`
-(the same `PRACTICAL_MARGIN` this file already uses elsewhere) and tagged
-`"over"`, `"under"`, or `"within-margin"` — so the report states not just
-*that* a material deviation exists (Cohen's w) but exactly *which*
-position(s) and in *which* direction, satisfying the requirement to
-report the complete observed distribution, expected distribution,
-practical effect measure and threshold, direction of every material
-deviation, and final decision, all together in one place
-(`evaluatePositionBalance()`'s `detail` object).
+convention (>= 0.5), now correctly failing. **Verified balanced N=20
+distributions still pass comfortably:** `[5,5,5,5]` gives `w=0`;
+`[6,5,5,4]` gives `w=0.141`, both well under the 0.3 threshold.
+**Verified for 2- and 3-option forms** at their own `REGIME_THRESHOLD(n)`,
+not only n=4. (The regime-transition behavior at the N=5n boundary —
+including a genuine, accepted, limited discontinuity this correction also
+found — is addressed precisely in section 4.3a's amended claim, not
+overstated here.)
 
 **Policy preserved:** statistical significance alone still does not
 automatically fail an educationally trivial deviation — section 4.6a's
 policy (practical effect authoritative, significance-alone raises a
 review flag) is unchanged by this correction; only what counts as "the
-practical effect" was corrected, from a single-cell share to the
-distribution-wide Cohen's w.
+practical effect," and how that effect is justified as a threshold
+choice, was corrected.
+
+### 4.3c Malformed aggregate/probability input rejection (added — a second independent review found the aggregate helpers trusted caller-supplied summaries)
+
+**Counterexamples reproduced:** the exported aggregate helpers previously
+trusted caller-supplied summaries without validating them. Confirmed
+directly:
+
+- `exactPigeonholeBalance([2,1,1], 4, 5)` — an array with only 3 entries
+  for 4 answer positions, summing to 4 rather than `N=5` — reported
+  `balanced: true`.
+- `poissonBinomialPMF([1.5, 0.5])` — an invalid probability (`1.5 > 1`) —
+  produced a **negative** probability mass, `pmf[0] = -0.25`.
+- `poissonBinomialTwoSidedPValue([0.5, 0.5], -1)` — an out-of-range
+  observed index — silently returned `0` instead of throwing.
+- A round-4 test fixture, `[16.8, 8, 7.6, 7.6]`, used fractional
+  "counts," even though real authored-question tallies are always
+  nonnegative integers.
+
+**Correction:** one reusable validation path per input shape (not
+duplicated formulas), the same discipline `assertValidQuestionShape()`
+already applies to question objects:
+
+- `assertValidPositionCounts(positionCounts, optionCount, N)` — used by
+  both `exactPigeonholeBalance()` and `evaluatePositionBalance()`:
+  `optionCount` an integer >= 2, `N` a positive integer, `positionCounts`
+  exactly `optionCount` entries, every entry a finite nonnegative integer,
+  and the entries summing exactly to `N`.
+- `assertValidProbabilities(probabilities)` — used by both
+  `poissonBinomialPMF()` and `poissonBinomialTwoSidedPValue()`: a
+  nonempty array of finite numbers in `[0,1]`.
+- `assertValidObservedIndex(observed, N)` — used by
+  `poissonBinomialTwoSidedPValue()`: an integer in `[0, N]`.
+- `assertValidLengthAssociationItem(item, index)` — used by
+  `evaluateLengthAssociation()`: `correctAtMax` a boolean,
+  `nullProbabilityCorrectAtMax` a finite number in `[0,1]` — exactly the
+  two fields that function actually reads, so a manually constructed
+  (not `classifyCue()`-derived) test item with a malformed field cannot
+  silently produce a misleading pass.
+
+Every malformed case above now throws a descriptive `TypeError` instead
+of returning a pass, fail, or misleading numeric result. Round 4's
+fractional-count fixture is replaced with a valid integer fixture
+(`N=20`, `n=4`, `[8,4,4,4]`, `w ≈ 0.346`) that tests the identical policy
+(a meaningful effect fails even when statistically underpowered) without
+an impossible input. Verified directly: every valid fixture used
+elsewhere in this file's own tests (including the full live 153-question
+bank) passes validation without throwing — this correction rejects only
+genuinely malformed input, and does not change any normal live-bank
+result.
+
+### 4.3d Directionally explainable distribution-wide failures (added — a second independent review found aggregate failures could be unexplained)
+
+**Counterexample reproduced:** `N=100`, `n=4`, `positionCounts=[38,24,19,19]`
+— `chiSquare = 9.68`, Cohen's `w = sqrt(9.68/100) ≈ 0.3111`, correctly
+**failing** the `w >= 0.30` threshold. However, every individual share
+(38%, 24%, 19%, 19%) falls inside the separately retained per-cell
+diagnostic interval `[10%, 40%]`, so the prior report's
+`materialDeviations` was **empty** and every cell was labeled only
+`"within-margin"` — the report declared a distribution-wide practical
+failure with **no explanation of which position(s) or direction(s) drove
+it**. This also risked implying Cohen's `w` itself has a direction; it
+does not — it is a nonnegative magnitude.
+
+**Correction:** every position now reports its full diagnostic record in
+`evaluatePositionBalance()`'s `positionDeviations`:
+
+| Field | Meaning |
+| --- | --- |
+| `position` | the answer-position index |
+| `observedCount`, `observedProportion` | this position's actual count/share |
+| `expectedCount`, `expectedProportion` | the uniform-chance count/share |
+| `countDeviation`, `proportionDeviation` | SIGNED deviation (observed − expected) |
+| `direction` | `"above"`, `"below"`, or `"equal"` — derived purely from the sign of `proportionDeviation`, never conflated with the separate diagnostic-margin flag |
+| `chiSquareContribution` | this position's own `(observed − expected)² / expected` term — its share of the aggregate effect |
+| `exceedsDiagnosticMargin` | the renamed former "material deviation" concept — an explicitly **diagnostic-only** per-cell flag (reusing the existing `PRACTICAL_MARGIN`), never the decision rule |
+
+`materialDeviations` is the filtered subset with `exceedsDiagnosticMargin: true`
+(kept, accurately re-scoped as a per-cell diagnostic list, not the
+aggregate decision). A new `primaryContributors` field identifies the
+position(s) responsible for the aggregate effect regardless of whether
+any individual cell exceeds the diagnostic margin: positions sorted by
+`chiSquareContribution` descending, accumulated until a **majority**
+(> 50%) of the total chi-square is accounted for — a non-arbitrary
+criterion ("the position(s) responsible for most of the effect") that
+adapts to option count rather than an invented fixed "top N."
+
+**When Cohen's w fails, the human-readable reason names the dominant
+contributor(s) and their direction(s)** even when no individual cell
+exceeds the diagnostic margin — verified directly for the `[38,24,19,19]`
+counterexample: `primaryContributors` identifies position 0 alone
+(69.8% of the total chi-square, `direction: "above"`), and the reported
+reason text names it explicitly. The aggregate effect decision (Cohen's
+w) and the per-cell diagnostic status remain conceptually and
+structurally separate — a distribution can fail the aggregate check with
+zero per-cell diagnostic violations (the counterexample above), or
+exhibit both simultaneously (verified: `N=20`, `[8,8,4,0]`), and the
+report distinguishes the two cases explicitly rather than conflating
+them. Verified equivalently for 2- and 3-option groups, not only 4-option,
+and confirmed byte-identical deterministic JSON output with the full
+schema present.
+
+### 4.3e The N=5n regime-transition boundary: a narrowed, accurate claim (corrected — a second independent review found the "no easier to pass" claim was overstated)
+
+**Counterexample reproduced (a genuine, accepted, limited discontinuity,
+not a defect):** an earlier version of this document (and its
+corresponding test) claimed the regime transition at `N = REGIME_THRESHOLD(n)`
+"does not make a conspicuously worse distribution easier to pass,"
+verified only against SEVERE, comparable-shape (zero-position) omissions
+at `N=19/20/21`. That claim does not generalize to every possible
+distribution. Confirmed directly, `n=4`:
+
+- `N=19`, `positionCounts=[6,5,4,4]` — the small-N structural regime's
+  exact pigeonhole rule (`floor=4`, `ceil=5`) rejects it: `6 > ceil`,
+  **fail**.
+- `N=20`, `positionCounts=[7,5,4,4]` — the large-N statistical regime's
+  Cohen's-w rule (`w ≈ 0.245`, below the `0.30` threshold) **passes** it —
+  despite a **larger** raw maximum count (`7 > 6`) than the N=19 example
+  that failed.
+
+**This is an intentional, accepted consequence of using two DIFFERENT
+standards by design, not a bug to patch with an arbitrary extra
+threshold** (no threshold was added or tuned to force this specific
+example to fail — doing so would itself violate this document's own
+"no free/tunable parameter fit to a specific case" requirement, section
+4.2):
+
+- The **small-N structural regime** demands an EXACT, near-perfect
+  authoring allocation (every position within one of `floor(N/n)`/
+  `ceil(N/n)`) — appropriate when there are few items and few
+  opportunities to demonstrate balance, so the bar is maximally strict
+  and mechanically achievable by deliberate rotation.
+- The **large-N statistical regime** tolerates a genuinely small,
+  practically trivial deviation from perfect uniformity (Cohen's w below
+  the adopted medium-effect threshold) — appropriate once there is enough
+  data that ordinary authoring variation, not a real cueing pattern,
+  can plausibly explain a modest imbalance.
+
+**The regime transition is therefore NOT globally monotonic in raw
+count terms** — a distribution that would fail the small-N regime's exact
+allocation rule can, at a slightly larger N, pass the large-N regime's
+effect-size rule, because the two regimes are answering genuinely
+different questions ("is this the best achievable allocation" vs. "is
+this deviation practically meaningful"), not applying the same standard
+at different sample sizes.
+
+**The verified N=19/20/21 "fails at every one of these sizes" result
+(section 4.3b) applies specifically to SEVERE, comparable-shape
+(zero-position) omissions** — the maximally extreme case, which fails
+under both regimes' own standards independently. It is not, and this
+correction no longer claims it to be, evidence of universal monotonicity
+across every possible distribution. Both the severe-omission result and
+the genuine discontinuity above are independently verified in
+`tests/assessment-cue-audit.mjs`, side by side, so neither claim can
+silently overwrite the other. Valid integer fixtures at `N=19`, `20`, and
+`21` are verified for both severe (all fail) and near-balanced (all pass)
+shapes.
+
+**Achievable complete-Gate passes for 5-, 6-, 7-, 8-, 9-, and 13-item
+forms (section 4.3a) are unaffected by this correction** — all fall below
+`REGIME_THRESHOLD(4)=20` and use the small-N structural regime exclusively.
 
 ### 4.4 Length association (corrected — tie-aware, not a flat 1/n on the uniquely-longest rate alone)
 
@@ -986,72 +1205,105 @@ round-3 correction's own stated intent to "report the statistical result
 and p-value separately."
 
 **Correction:** `chiSquareUpperTailPValue(chiSquareStat, df)` computes the
-EXACT upper-tail chi-square p-value, `P(X >= chiSquareStat)`, via the
-closed-form relationship between the chi-square survival function and the
-regularized upper incomplete gamma function, `Q(df/2, chiSquareStat/2)`.
-Implemented as a standard series/continued-fraction evaluation of the
-incomplete gamma function (Numerical Recipes, 3rd ed., section 6.2) —
-`upperRegularizedIncompleteGamma(a, x)`, exported and independently
-usable. This is not limited to any small, tabulated df range (the prior
-critical-value table stopped at df=7, i.e. 8-option items); it is valid
+upper-tail chi-square p-value, `P(X >= chiSquareStat)`, via the closed-form
+relationship between the chi-square survival function and the regularized
+upper incomplete gamma function, `Q(df/2, chiSquareStat/2)`. Implemented
+as a standard series-and-continued-fraction evaluation of the incomplete
+gamma function — `upperRegularizedIncompleteGamma(a, x)`, exported and
+independently usable. Not limited to any small, tabulated df range (the
+retired critical-value table stopped at df=7, i.e. 8-option items); valid
 for any positive df.
 
-**Verified against an independently-sourced reference**, not derived from
-this implementation: a standard published chi-square critical-value table
-(the same one this file's own now-non-authoritative reference table
-records) gives, at α=0.01, critical values 6.635 (df=1) through 18.475
-(df=7); `chiSquareUpperTailPValue()` evaluated AT each published critical
-value returns ≈0.01000 at every one, and returns ≈0.05000 at the published
-α=0.05 critical values for df=1-3 — matching to 4-5 significant figures.
-**Coverage-gap correction during mutation testing:** an initial boundary
-test only checked that the reported p-value's significant/not-significant
-CLASSIFICATION agreed with a placeholder computation, which a mutated,
-non-numeric placeholder value could still satisfy by construction (it
-preserved the same threshold comparison without computing a real
-p-value) — a genuine test-coverage gap, closed with a permanent test
-asserting the exact NUMERIC p-value for a known chi-square/df pair against
-an independently hand-computed expected value (`chiSquare=120, df=3` →
-`pValue ≈ 7.71679×10⁻²⁶`), not merely its relationship to alpha.
+**Terminology, corrected precisely (round 5 — two distinct approximation
+questions, previously conflated by calling the result "EXACT" without
+qualification):**
 
-**One consistent alpha comparison everywhere:** `statisticalResult` is now
+1. The chi-square survival function itself is mathematically defined,
+   exactly, via the regularized upper incomplete gamma function — a
+   closed form, not an approximation. This implementation NUMERICALLY
+   EVALUATES that closed form using finite-precision floating-point
+   arithmetic; the returned floating-point number is a numerical
+   evaluation of the exact value, not claimed to carry zero error.
+2. Separately, and upstream of this function: the chi-square
+   GOODNESS-OF-FIT TEST assumes observed multinomial counts are
+   well-approximated by a continuous chi-square distribution, valid only
+   when every expected cell count is reasonably large (conventionally
+   `>= 5`, `CHI_SQUARE_MIN_EXPECTED_PER_CELL`) — the same condition
+   `REGIME_THRESHOLD(n)` already guarantees for every call site. The
+   function itself does not enforce this condition; it is the caller's
+   (`evaluatePositionBalance()`'s large-N branch) responsibility.
+
+**Algorithm provenance, corrected (round 5):** the series-and-continued-
+fraction technique for evaluating the incomplete gamma function is a
+standard, widely-documented numerical method, not exclusive to any one
+text. An earlier version of this document attributed the specific
+implementation to "Numerical Recipes, 3rd ed., section 6.2" without
+having directly inspected that section's actual content. Re-checked for
+this correction: the official bookreader at
+<https://numerical.recipes/book.html> is subscription-gated; only its
+table of contents was directly inspected, confirming a corresponding
+section ("6.2 Incomplete Gamma Function and Error Function," page 259)
+exists in that text — the algorithmic content itself (the specific
+coefficient set, series/continued-fraction structure) was **not**
+inspected and is **not** attributed to that source.
+
+**Verified instead against two genuinely independent authorities, neither
+of which shares this function's own recurrence:**
+
+1. **Analytically reducible special cases**, derived by hand from the
+   chi-square distribution's own definition (not this implementation):
+   `df=2` gives the closed form `P(X>=x) = exp(-x/2)` (chi-square with 2
+   degrees of freedom is Exponential(mean=2)); `df=4` gives
+   `P(X>=x) = exp(-x/2)*(1 + x/2)` (chi-square with 4 degrees of freedom
+   is Gamma(shape=2, scale=2)). Verified directly at `x=10`:
+   `df=2 -> 0.006737946999085467`; `df=4 -> 0.0404276819945128`, both
+   matching this implementation to at least 9 decimal places.
+2. **An authoritative published table**, directly fetched and
+   transcribed: NIST/SEMATECH e-Handbook of Statistical Methods, "1.3.6.7.4.
+   Critical Values of the Chi-Square Distribution," National Institute of
+   Standards and Technology,
+   <https://www.itl.nist.gov/div898/handbook/eda/section3/eda3674.htm>,
+   verified 2026-08-08. `chiSquareUpperTailPValue()` evaluated AT each
+   published critical value returns ≈0.01000 (α=0.01, df=1-7) and
+   ≈0.05000 (α=0.05, df=1-7) — matching to 4-5 significant figures.
+
+**Coverage-gap correction during round-4 mutation testing (retained
+history):** an initial boundary test only checked that the reported
+p-value's significant/not-significant CLASSIFICATION agreed with a
+placeholder computation, which a mutated, non-numeric placeholder value
+could still satisfy by construction. Closed with a permanent test
+asserting the exact NUMERIC p-value for a known chi-square/df pair
+(`chiSquare=120, df=3` → `pValue ≈ 7.71679×10⁻²⁶`) — and round 5 confirmed
+this same class of gap: a coarser table-based check alone did not catch a
+deliberately introduced small numerical error in the underlying gamma-
+function coefficients during round-5 mutation testing, but the tighter
+analytic (`df=2`/`df=4`) fixtures above did, demonstrating exactly why an
+independent, tight-tolerance oracle is more than a formality.
+
+**One consistent alpha comparison everywhere:** `statisticalResult` is
 derived from `pValue < SIGNIFICANCE_ALPHA` for position balance, exactly
-the same comparison length association already used — replacing the
-previous `chiSquare > criticalValue` comparison. The critical-value table
-is retained, renamed
-`CHI_SQUARE_CRITICAL_ALPHA_01_REFERENCE`, purely as an independently-
-sourced cross-check for tests and for optional display; it drives no
-decision.
-
-**Approximation and applicability, stated honestly:** `chiSquareUpperTailPValue()`
-computes the chi-square survival function exactly, given a
-chi-square-distributed statistic — no approximation happens in that step.
-The approximation that matters is upstream: the chi-square goodness-of-fit
-TEST assumes observed multinomial counts are well-approximated by a
-continuous chi-square distribution, valid only when every expected cell
-count is reasonably large (conventionally >= 5,
-`CHI_SQUARE_MIN_EXPECTED_PER_CELL`) — the same condition
-`REGIME_THRESHOLD(n)` already guarantees for every call site. The
-function itself does not enforce this condition; it is the caller's
-(`evaluatePositionBalance()`'s large-N branch, reached only when the
-condition holds) responsibility.
+the same comparison length association uses. The retired critical-value
+table is retained, renamed `CHI_SQUARE_CRITICAL_ALPHA_01_REFERENCE`,
+purely as an independently-sourced cross-check for tests and optional
+display; it drives no decision.
 
 **Deterministic JSON output preserved:** `chiSquareUpperTailPValue()` and
 `cohensW()` are pure functions of their numeric inputs, with no
 randomness or wall-clock dependency — verified directly, `--json` output
-remains byte-identical across repeated runs with every round-4 field
-(`pValue`, `practicalEffect`, `positionDeviations`, `formOrderCheck`)
-present.
+remains byte-identical across repeated runs with every field present.
 
 ### 4.7 Current result: the bank fails Gate A
 
 **Whole-bank overall: FAIL.** Position balance (statistical regime at
 N=153: 90.8% at position B against a 40% threshold; Cohen's w = 1.524, an
 enormous effect far past the medium-effect threshold of 0.3, section
-4.3b; chi-square 355.52, exact p-value ≈ 9.5×10⁻⁷⁷ via
-`chiSquareUpperTailPValue()`, section 4.6b — this exceeds the practical
-effect-size threshold outright, so section 4.6a's policy correction does
-not change this result: `reviewFlag.required` is `false` here, exactly as
-intended, since review flags exist only for an otherwise-passing scope)
+4.3b; `primaryContributors` (section 4.3d) identifies position 1 alone as
+accounting for 74.6% of the total chi-square, direction `"above"`; chi-square
+355.52, p-value ≈ 9.5×10⁻⁷⁷ via `chiSquareUpperTailPValue()`, section
+4.6b — this exceeds the practical effect-size threshold outright, so
+section 4.6a's policy correction does not change this result:
+`reviewFlag.required` is `false` here, exactly as intended, since review
+flags exist only for an otherwise-passing scope)
 and length association (86.9% longest-or-tied against a tie-aware
 expected rate of 32.0% and a 47.0% allowed maximum; exact two-sided
 Poisson-binomial p-value ≈ 6.1×10⁻⁵⁰ under the corrected

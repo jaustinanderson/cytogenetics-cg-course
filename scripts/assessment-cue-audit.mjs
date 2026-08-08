@@ -455,13 +455,19 @@ export function REGIME_THRESHOLD(n) {
 // ordinary sampling variation alone.
 export const SIGNIFICANCE_ALPHA = 0.01;
 
-// Reference chi-square critical values at alpha=0.01, indexed by degrees
-// of freedom (df = optionCount - 1). NOT used to drive any decision below
-// (corrected -- docs/ASSESSMENT_VALIDITY.md section 4.6b): retained only
-// as an independently-sourced, well-known reference table for
-// cross-checking chiSquareUpperTailPValue() below in tests, and for
-// display alongside the computed p-value. Covers option counts 2-8; the
-// p-value function itself is not limited to this range.
+// Reference chi-square critical values at alpha=0.01 and alpha=0.05,
+// indexed by degrees of freedom (df = optionCount - 1). NOT used to drive
+// any decision below (docs/ASSESSMENT_VALIDITY.md section 4.6b): retained
+// only as an independently-sourced reference table for cross-checking
+// chiSquareUpperTailPValue() in tests, and for display alongside the
+// computed p-value. Source, directly fetched and transcribed (round 5,
+// replacing the previously unsourced "standard published table"
+// language): NIST/SEMATECH e-Handbook of Statistical Methods,
+// "1.3.6.7.4. Critical Values of the Chi-Square Distribution," National
+// Institute of Standards and Technology,
+// <https://www.itl.nist.gov/div898/handbook/eda/section3/eda3674.htm>,
+// verified 2026-08-08. Covers option counts 2-8; the p-value function
+// itself is not limited to this range.
 const CHI_SQUARE_CRITICAL_ALPHA_01_REFERENCE = { 1: 6.635, 2: 9.210, 3: 11.345, 4: 13.277, 5: 15.086, 6: 16.812, 7: 18.475 };
 
 // ----------------------------------------------------------------------------
@@ -472,23 +478,58 @@ const CHI_SQUARE_CRITICAL_ALPHA_01_REFERENCE = { 1: 6.635, 2: 9.210, 3: 11.345, 
 // p-value, and the round-3 correction's own stated policy ("report the
 // statistical result and p-value separately") was not actually followed
 // for position balance (length association already computed a genuine
-// p-value via the exact Poisson-binomial method). This computes the
-// EXACT upper-tail chi-square p-value via the regularized upper
-// incomplete gamma function Q(df/2, chiSquare/2) -- the standard,
-// closed-form relationship between the chi-square distribution's survival
-// function and the incomplete gamma function (not an approximation of a
-// different kind; the approximation here is the same one the chi-square
-// GOODNESS-OF-FIT TEST ITSELF makes, i.e. that the discrete multinomial
-// counts are well-approximated by the continuous chi-square distribution,
-// which REGIME_THRESHOLD(n)'s minimum-expected-cell-count rule already
-// exists to keep valid -- see the "Approximation and applicability" note
-// below). Implemented as a standard series/continued-fraction evaluation
-// of the incomplete gamma function (Numerical Recipes 3rd ed., section
-// 6.2), verified directly against the independently-sourced reference
-// critical-value table above at both alpha=0.01 and alpha=0.05 (matches
-// to 4-5 significant figures at every tabulated (df, critical-value)
-// pair, tests/assessment-cue-audit.mjs) -- this is NOT limited to the
-// 2-8 option-count range the table happens to cover.
+// p-value via the exact Poisson-binomial method).
+//
+// Terminology, stated precisely (corrected -- round 5): the chi-square
+// distribution's survival function P(X >= x) is MATHEMATICALLY DEFINED,
+// exactly, through the regularized upper incomplete gamma function
+// Q(df/2, x/2) -- a closed-form relationship, not an approximation. This
+// JavaScript implementation NUMERICALLY EVALUATES that function using
+// finite-precision floating-point arithmetic (a standard series expansion
+// for the argument range where it converges quickly, and a standard
+// continued-fraction expansion otherwise) -- the computed floating-point
+// RESULT is not called "exact" without that qualification, since any
+// finite-precision numerical evaluation carries some (here, extremely
+// small -- see the verification below) numerical error. This is a
+// separate matter from the chi-square GOODNESS-OF-FIT TEST's own
+// well-known statistical approximation -- that the discrete multinomial
+// counts are well-approximated by a continuous chi-square distribution in
+// the first place, valid only when every expected cell count is
+// reasonably large -- which REGIME_THRESHOLD(n)'s minimum-expected-cell
+// rule exists to keep satisfied (see the "Approximation and
+// applicability" note on chiSquareUpperTailPValue() below for both
+// distinctions stated together).
+//
+// Algorithm provenance (corrected -- round 5): the series-and-continued-
+// fraction technique for evaluating the incomplete gamma function is a
+// standard, widely-documented numerical method, not exclusive to any one
+// text. An earlier version of this comment attributed the specific
+// implementation to "Numerical Recipes, 3rd ed., section 6.2" without
+// having directly inspected that section's actual content -- the official
+// bookreader at <https://numerical.recipes/book.html> is subscription-
+// gated; only its table of contents was directly inspected (confirming a
+// corresponding section, "6.2 Incomplete Gamma Function and Error
+// Function," page 259, exists in that text), not the algorithmic content
+// itself, so the specific coefficient set and series/continued-fraction
+// structure below are NOT attributed to that source. This implementation
+// is instead verified directly against two genuinely independent
+// authorities, neither of which shares this function's own recurrence:
+//   1. Two ANALYTICALLY REDUCIBLE special cases, derived independently
+//      by hand from the chi-square distribution's own definition (not
+//      this implementation): df=2 gives the closed form P(X>=x) =
+//      exp(-x/2) (chi-square with 2 degrees of freedom is Exponential(
+//      mean=2)); df=4 gives P(X>=x) = exp(-x/2)*(1 + x/2) (chi-square
+//      with 4 degrees of freedom is Gamma(shape=2, scale=2)). Both
+//      verified directly at x=10 (tests/assessment-cue-audit.mjs):
+//      df=2 -> 0.006737946999085467; df=4 -> 0.0404276819945128.
+//   2. The published critical-value table below (α=0.01) and its
+//      α=0.05 counterpart, both cross-checked directly against the NIST/
+//      SEMATECH e-Handbook of Statistical Methods, "1.3.6.7.4. Critical
+//      Values of the Chi-Square Distribution," National Institute of
+//      Standards and Technology, <https://www.itl.nist.gov/div898/handbook/eda/section3/eda3674.htm>,
+//      directly fetched and its table transcribed, verified 2026-08-08.
+// This is NOT limited to the 2-8 option-count range the reference table
+// happens to cover.
 // ----------------------------------------------------------------------------
 
 /** Lanczos approximation of ln(Gamma(x)), standard g=7/n=9 coefficient set. */
@@ -554,24 +595,33 @@ export function upperRegularizedIncompleteGamma(a, x) {
 }
 
 /**
- * Exact upper-tail (right-tail) p-value of the chi-square distribution:
+ * Upper-tail (right-tail) p-value of the chi-square distribution:
  * P(X >= chiSquareStat) for X ~ chi-square(df). This is the accurately
  * named p-value for a chi-square goodness-of-fit test's statistic --
  * NOT a critical-value-table lookup, and not limited to any small,
  * tabulated set of df values.
  *
- * Approximation and applicability (stated honestly, not left implicit):
- * this function computes the chi-square SURVIVAL FUNCTION exactly, given
- * a chi-square-distributed statistic -- there is no approximation in this
- * step. The approximation that matters is upstream of this function: the
- * chi-square goodness-of-fit TEST assumes the observed multinomial counts
- * are well-approximated by a continuous chi-square distribution, which is
- * only reasonable when every expected cell count is reasonably large
- * (conventionally >= 5, `CHI_SQUARE_MIN_EXPECTED_PER_CELL`). This
- * function does not itself enforce that condition -- callers (currently
- * only `evaluatePositionBalance()`'s large-N regime, which is reached
- * exactly when `N >= REGIME_THRESHOLD(n)` guarantees it) are responsible
- * for only calling it where the approximation is valid.
+ * Two distinct approximation questions, both stated honestly, not left
+ * implicit (corrected -- round 5, precise terminology):
+ *   1. The chi-square survival function ITSELF is mathematically defined,
+ *      exactly, via the regularized upper incomplete gamma function --
+ *      that relationship is a closed form, not an approximation. This
+ *      function NUMERICALLY EVALUATES that closed form using
+ *      finite-precision floating-point arithmetic; the returned
+ *      floating-point number is a numerical evaluation of the exact
+ *      mathematical value, not claimed to be that value with zero error
+ *      (verified to agree with independent analytic and published-table
+ *      references to at least 4-5 significant figures --
+ *      tests/assessment-cue-audit.mjs).
+ *   2. Separately, and upstream of this function: the chi-square
+ *      GOODNESS-OF-FIT TEST assumes the observed multinomial counts are
+ *      well-approximated by a continuous chi-square distribution, which
+ *      is only reasonable when every expected cell count is reasonably
+ *      large (conventionally >= 5, `CHI_SQUARE_MIN_EXPECTED_PER_CELL`).
+ *      This function does not itself enforce that condition -- callers
+ *      (currently only `evaluatePositionBalance()`'s large-N regime,
+ *      reached exactly when `N >= REGIME_THRESHOLD(n)` guarantees it) are
+ *      responsible for only calling it where that approximation is valid.
  */
 export function chiSquareUpperTailPValue(chiSquareStat, df) {
   if (df <= 0) { throw new RangeError("chiSquareUpperTailPValue: df must be positive"); }
@@ -593,33 +643,184 @@ export function chiSquareUpperTailPValue(chiSquareStat, df) {
 // single-max-share rule, since no individual share exceeded 40%.
 //
 // Cohen's w = sqrt(chiSquare / N) is the standard multinomial/chi-square
-// effect size (Cohen, J. (1988). Statistical Power Analysis for the
-// Behavioral Sciences, 2nd ed., chapter 7) -- unlike the raw chi-square
-// statistic itself (which grows with N and is therefore a SIGNIFICANCE
-// measure, not a practical-effect measure), w is scale-free: it measures
-// the MAGNITUDE of the deviation pattern across the WHOLE distribution,
-// independent of sample size, so a single fixed threshold is meaningful
-// at any N in the large-N regime. It is symmetric to over- AND
-// under-representation by construction, since it is derived from the same
-// squared-deviation sum every position contributes to. Cohen's own
-// published convention for a "medium" effect (0.3) is adopted here as the
-// practical-fail threshold -- an independently-sourced, non-arbitrary
-// number, not tuned to this bank or to make any specific counterexample
-// fail (verified: for n=4, a single position exactly at the OLD single-
-// position margin boundary, `1/n + PRACTICAL_MARGIN`, with every other
-// position exactly at its own expected value, produces w exactly equal to
-// this same 0.3 threshold by the underlying algebra -- the two
-// definitions agree at the single-cell boundary case for n=4, which is
-// reassuring consistency, not a coincidence engineered to reach 0.3).
+// effect size. Source, directly inspected (round 5 -- an earlier version
+// of this comment and docs/ASSESSMENT_VALIDITY.md claimed an "algebraic
+// agreement" between the old single-cell margin and w=0.3 by describing a
+// distribution [0.40, 0.25, 0.25, 0.25] -- summing to 1.15, not 1, so not
+// a valid multinomial distribution at all; that claim is FALSE and has
+// been removed):
+//
+//   Jacob Cohen, "Statistical Power Analysis for the Behavioral
+//   Sciences," 2nd edition, Lawrence Erlbaum Associates, Publishers,
+//   1988. Chapter 7 "Chi-Square Tests for Goodness of Fit and
+//   Contingency Tables," section 7.2.3 "'Small,' 'Medium,' and 'Large'
+//   w Values," printed pages 224-227. Directly inspected via the
+//   publicly hosted scan at
+//   <https://utstat.utoronto.ca/brunner/oldclass/378f16/readings/CohenPower.pdf>,
+//   verified 2026-08-08 against the title page (confirms 2nd edition,
+//   same publisher) and section 7.2.3's own printed text.
+//
+// Cohen's own m=4 (four-category) medium-effect (w=.30) illustration,
+// quoted verbatim from page 226: H0 = .250 .250 .250 .250 (equiprobable);
+// H1 = .380 .207 .207 .207 ("a w = .30 departure from equiprobability in
+// which the effect is concentrated in the first category, the remainder
+// being equiprobable"). This distribution IS valid: .380+.207+.207+.207 =
+// 1.001 (rounds to 1 -- Cohen's own printed 3-decimal values). Cohen also
+// gives an equally-spaced m=4 medium-effect H1 on page 225:
+// .149 .216 .284 .351 (sums to 1.000). Both independently verified here
+// to produce w ≈ 0.30 via this file's own cohensW()/chiSquare formula
+// (tests/assessment-cue-audit.mjs), consistent with Cohen's stated value.
+//
+// Unlike the raw chi-square statistic itself (which grows with N and is
+// therefore a SIGNIFICANCE measure, not a practical-effect measure), w is
+// scale-free: it measures the MAGNITUDE of the deviation pattern across
+// the WHOLE distribution, independent of sample size, so a single fixed
+// threshold is meaningful at any N in the large-N regime. It is symmetric
+// to over- AND under-representation by construction, since it is derived
+// from the same squared-deviation sum every position contributes to.
+//
+// ADOPTED, NOT UNIQUELY CORRECT: Cohen's own words (page 224) are explicit
+// that his small/medium/large conventions are offered "to serve as
+// conventions for these qualitative adjectives," that their use "requires
+// particular caution," and that "the investigator is best advised to use
+// the conventional definitions as a general frame of reference for ES and
+// not to take them too literally." This project ADOPTS w=0.30 ("medium
+// effect," Cohen's own conventional reference point) as a deliberately
+// CONSERVATIVE, project-defined operational release gate for Gate A's
+// large-N regime -- not a claim that 0.30 is the uniquely correct
+// threshold, not an item-validity result, and not mathematically
+// equivalent to the prior single-cell margin rule it replaced (see the
+// counterexample this correction fixes, docs/ASSESSMENT_VALIDITY.md
+// section 4.3b, for exactly why the two rules are NOT equivalent).
+//
+// Limitations and false-positive/false-negative risk, stated honestly:
+// a fixed w threshold does not itself indicate WHICH position(s) or in
+// WHICH direction a distribution deviates (see evaluatePositionBalance()'s
+// positionDeviations/primaryContributors below, docs/ASSESSMENT_VALIDITY.md
+// section 4.3d, added for exactly this reason); at very large N, a w just
+// under 0.30 can still be statistically significant (an intentional,
+// separately-handled case -- section 4.6a's review-flag policy); Cohen
+// himself notes w's relationship to other association measures (e.g.
+// Cramer's C, phi) varies with table size, so a "medium" effect by this
+// convention is not directly comparable across differently-shaped
+// contingency tables.
 // ----------------------------------------------------------------------------
 
 export const COHENS_W_MEDIUM_EFFECT = 0.3;
+
+// Cohen's own printed m=4 (four-category) illustrative H0/H1 pairs
+// (page references above), transcribed verbatim for direct, executable
+// verification (tests/assessment-cue-audit.mjs) that every fixture used
+// in this file's own rationale is a genuinely normalized probability
+// distribution (sums to 1) and reproduces Cohen's own stated w value --
+// this is the reusable, checkable record the prior impossible
+// [0.40,0.25,0.25,0.25] claim never was.
+export const COHENS_M4_ILLUSTRATIVE_EXAMPLES = Object.freeze([
+  Object.freeze({ label: "small (w=.10), page 224", w: 0.10, h0: Object.freeze([0.250, 0.250, 0.250, 0.250]), h1: Object.freeze([0.216, 0.239, 0.261, 0.284]) }),
+  Object.freeze({ label: "medium (w=.30), equally-spaced, page 225", w: 0.30, h0: Object.freeze([0.250, 0.250, 0.250, 0.250]), h1: Object.freeze([0.149, 0.216, 0.284, 0.351]) }),
+  Object.freeze({ label: "medium (w=.30), concentrated in one category, page 226", w: 0.30, h0: Object.freeze([0.250, 0.250, 0.250, 0.250]), h1: Object.freeze([0.380, 0.207, 0.207, 0.207]) }),
+  Object.freeze({ label: "large (w=.50), page 225", w: 0.50, h0: Object.freeze([0.250, 0.250, 0.250, 0.250]), h1: Object.freeze([0.082, 0.194, 0.306, 0.418]) }),
+]);
 
 /** Cohen's w multinomial effect size: sqrt(chiSquare / N). Scale-free (does not grow with N), unlike chiSquare itself. */
 export function cohensW(chiSquare, N) {
   if (N <= 0) { throw new RangeError("cohensW: N must be positive"); }
   if (chiSquare < 0) { throw new RangeError("cohensW: chiSquare must be non-negative"); }
   return Math.sqrt(chiSquare / N);
+}
+
+// ----------------------------------------------------------------------------
+// Aggregate/probability input validation (new -- docs/ASSESSMENT_VALIDITY.md
+// section 4.3c). CORRECTED: the aggregate helpers below previously trusted
+// caller-supplied summaries without validating them, so a malformed
+// positionCounts array (wrong length, sum != N, fractional or negative
+// counts) or an invalid probability (outside [0,1], non-finite) could
+// silently reach formulas that assume a valid multinomial count vector or
+// probability, producing a misleading pass/fail/numeric result instead of
+// a descriptive error. Confirmed directly:
+// exactPigeonholeBalance([2,1,1], 4, 5) -- an array with only 3 entries
+// for 4 positions, summing to 4 rather than N=5 -- reported
+// `balanced: true`; poissonBinomialPMF([1.5, 0.5]) produced a NEGATIVE
+// probability mass (-0.25) with no error; poissonBinomialTwoSidedPValue()
+// with an out-of-range observed index returned a silently wrong number
+// instead of throwing.
+//
+// ONE reusable validation path per input shape (not duplicated formulas)
+// is used everywhere the corresponding shape is accepted, exactly the
+// same discipline assertValidQuestionShape() already applies to question
+// objects above.
+// ----------------------------------------------------------------------------
+
+/**
+ * Validates a position-count summary as used by exactPigeonholeBalance()
+ * and evaluatePositionBalance(): optionCount an integer >= 2, N a
+ * positive integer, positionCounts an array of exactly optionCount
+ * entries, every entry a finite nonnegative integer, and the entries
+ * summing exactly to N (real authored answer counts are always
+ * nonnegative integers that partition the total item count).
+ */
+export function assertValidPositionCounts(positionCounts, optionCount, N) {
+  if (!Number.isInteger(optionCount) || optionCount < 2) {
+    throw new TypeError(`assertValidPositionCounts: optionCount must be an integer >= 2 (got ${optionCount})`);
+  }
+  if (!Number.isInteger(N) || N <= 0) {
+    throw new TypeError(`assertValidPositionCounts: N must be a positive integer (got ${N})`);
+  }
+  if (!Array.isArray(positionCounts) || positionCounts.length !== optionCount) {
+    throw new TypeError(`assertValidPositionCounts: positionCounts must have exactly optionCount=${optionCount} entries (got ${Array.isArray(positionCounts) ? positionCounts.length : typeof positionCounts})`);
+  }
+  positionCounts.forEach((c, i) => {
+    if (typeof c !== "number" || !Number.isFinite(c) || !Number.isInteger(c) || c < 0) {
+      throw new TypeError(`assertValidPositionCounts: positionCounts[${i}] must be a finite nonnegative integer (got ${c})`);
+    }
+  });
+  const sum = positionCounts.reduce((a, b) => a + b, 0);
+  if (sum !== N) {
+    throw new TypeError(`assertValidPositionCounts: positionCounts ${JSON.stringify(positionCounts)} sum to ${sum}, expected exactly N=${N}`);
+  }
+}
+
+/**
+ * Validates a per-item null-probability array for the Poisson-binomial
+ * functions below: a nonempty array of finite probabilities in [0,1]
+ * (a probability outside this range, or non-finite, cannot correspond to
+ * any real Bernoulli trial).
+ */
+export function assertValidProbabilities(probabilities) {
+  if (!Array.isArray(probabilities) || probabilities.length === 0) {
+    throw new TypeError("assertValidProbabilities: probabilities must be a nonempty array");
+  }
+  probabilities.forEach((p, i) => {
+    if (typeof p !== "number" || !Number.isFinite(p) || p < 0 || p > 1) {
+      throw new TypeError(`assertValidProbabilities: probabilities[${i}] must be a finite number in [0,1] (got ${p})`);
+    }
+  });
+}
+
+/** Validates an observed-success count against the trial count N: an integer in [0, N]. */
+export function assertValidObservedIndex(observed, N) {
+  if (!Number.isInteger(observed) || observed < 0 || observed > N) {
+    throw new TypeError(`assertValidObservedIndex: observed must be an integer in [0, ${N}] (got ${observed})`);
+  }
+}
+
+/**
+ * Validates a single classifyCue()-shaped item as consumed by
+ * evaluateLengthAssociation(): `correctAtMax` a boolean, and
+ * `nullProbabilityCorrectAtMax` a finite number in [0,1] -- exactly the
+ * two fields that function actually reads, so a manually constructed
+ * (not classifyCue()-derived) test item with a missing or malformed
+ * field cannot silently produce a misleading pass/fail.
+ */
+export function assertValidLengthAssociationItem(item, index) {
+  const where = Number.isInteger(index) ? ` (item index ${index})` : "";
+  if (!item || typeof item !== "object") { throw new TypeError(`assertValidLengthAssociationItem: item must be an object${where}`); }
+  if (typeof item.correctAtMax !== "boolean") {
+    throw new TypeError(`assertValidLengthAssociationItem: correctAtMax must be a boolean${where} (got ${JSON.stringify(item.correctAtMax)})`);
+  }
+  if (typeof item.nullProbabilityCorrectAtMax !== "number" || !Number.isFinite(item.nullProbabilityCorrectAtMax) || item.nullProbabilityCorrectAtMax < 0 || item.nullProbabilityCorrectAtMax > 1) {
+    throw new TypeError(`assertValidLengthAssociationItem: nullProbabilityCorrectAtMax must be a finite number in [0,1]${where} (got ${item.nullProbabilityCorrectAtMax})`);
+  }
 }
 
 /**
@@ -639,6 +840,7 @@ export function cohensW(chiSquare, N) {
  * exit criteria need.
  */
 export function exactPigeonholeBalance(positionCounts, n, N) {
+  assertValidPositionCounts(positionCounts, n, N);
   const lo = Math.floor(N / n);
   const hi = Math.ceil(N / n);
   const outOfRange = positionCounts.filter((c) => c < lo || c > hi);
@@ -651,6 +853,7 @@ export function exactPigeonholeBalance(positionCounts, n, N) {
  */
 export function evaluatePositionBalance(group) {
   const { optionCount: n, total: N, positionCounts } = group;
+  assertValidPositionCounts(positionCounts, n, N);
   if (N < n) {
     return { status: "inconclusive", regime: "insufficient-data", reasons: [`only ${N} item(s) for ${n} answer positions -- fewer items than positions, no judgment possible`], reviewFlag: { required: false, reason: null }, detail: { n, N, positionCounts } };
   }
@@ -697,27 +900,75 @@ export function evaluatePositionBalance(group) {
   const w = cohensW(chiSquare, N);
   const practicalFail = w >= COHENS_W_MEDIUM_EFFECT;
 
-  // Per-position directional reporting (descriptive/diagnostic only --
-  // this does NOT itself drive the pass/fail decision, which is Cohen's w
-  // above; it exists so every material deviation's direction is visible
-  // in the report, not just the aggregate effect size). Reuses the
-  // existing PRACTICAL_MARGIN proportion, applied to EVERY position, not
-  // only the largest.
+  // Per-position directional/contribution reporting (corrected -- round 5,
+  // docs/ASSESSMENT_VALIDITY.md section 4.3d, "directionally explainable
+  // aggregate failures"). CORRECTED: Cohen's w is a nonnegative MAGNITUDE
+  // with no direction of its own, and the prior per-cell reporting only
+  // labeled a position "over"/"under"/"within-margin" against the
+  // separate diagnostic PRACTICAL_MARGIN -- so a distribution that fails
+  // Cohen's w while every individual cell stays inside that margin
+  // reported ZERO explanation of which position(s) or direction(s) drove
+  // the aggregate failure. Confirmed directly: N=100, n=4,
+  // positionCounts=[38,24,19,19] -- chiSquare=9.68, w=sqrt(9.68/100)=
+  // 0.3111 (fails the 0.30 threshold) -- yet every share (38%, 24%, 19%,
+  // 19%) falls inside [10%,40%], so the prior `materialDeviations` was
+  // empty and every cell was labeled only "within-margin," with no
+  // indication that position 0 (38% vs 25% expected) was the dominant
+  // driver.
+  //
+  // Every position now reports its FULL diagnostic record: observed
+  // count/proportion, expected count/proportion, SIGNED count and
+  // proportion deviation, a `direction` derived purely from the sign of
+  // that deviation (`"above"`/`"below"`/`"equal"` -- never conflated with
+  // the separate per-cell diagnostic-margin flag), its own contribution to
+  // the chi-square/Cohen's-w total, and `exceedsDiagnosticMargin` (the
+  // renamed former "material deviation" concept -- explicitly a
+  // DIAGNOSTIC-ONLY per-cell flag, never the decision rule; Cohen's w
+  // above remains the sole authoritative decision).
   const maxAllowedShare = Math.min(1, expectedProportion + PRACTICAL_MARGIN);
   const minAllowedShare = Math.max(0, expectedProportion - PRACTICAL_MARGIN);
   const positionDeviations = positionCounts.map((count, position) => {
-    const proportion = count / N;
-    const direction = proportion > maxAllowedShare ? "over" : proportion < minAllowedShare ? "under" : "within-margin";
-    return { position, count, proportion, direction };
+    const observedProportion = count / N;
+    const countDeviation = count - expectedCount;
+    const proportionDeviation = observedProportion - expectedProportion;
+    const direction = proportionDeviation > 0 ? "above" : proportionDeviation < 0 ? "below" : "equal";
+    const chiSquareContribution = (count - expectedCount) ** 2 / expectedCount;
+    const exceedsDiagnosticMargin = observedProportion > maxAllowedShare || observedProportion < minAllowedShare;
+    return {
+      position, observedCount: count, observedProportion,
+      expectedCount, expectedProportion,
+      countDeviation, proportionDeviation, direction,
+      chiSquareContribution, exceedsDiagnosticMargin,
+    };
   });
-  const materialDeviations = positionDeviations.filter((d) => d.direction !== "within-margin");
+  const materialDeviations = positionDeviations.filter((d) => d.exceedsDiagnosticMargin);
+
+  // Primary contributors to the aggregate effect: sorted by
+  // chiSquareContribution descending, accumulated until a MAJORITY
+  // (> 50%) of the total chi-square is accounted for -- a non-arbitrary
+  // criterion ("the position(s) responsible for most of the effect") that
+  // adapts to option count, rather than an invented fixed "top N."
+  // Always computed (used to explain a Cohen's-w failure even when no
+  // individual cell exceeds the separate diagnostic margin).
+  const sortedByContribution = [...positionDeviations].sort((a, b) => b.chiSquareContribution - a.chiSquareContribution);
+  const primaryContributors = [];
+  let cumulativeContribution = 0;
+  for (const d of sortedByContribution) {
+    if (d.chiSquareContribution <= 0) break;
+    primaryContributors.push(d);
+    cumulativeContribution += d.chiSquareContribution;
+    if (chiSquare > 0 && cumulativeContribution >= chiSquare / 2) break;
+  }
 
   const reasons = [];
   if (practicalFail) {
-    reasons.push(`Cohen's w = ${w.toFixed(3)} meets or exceeds the medium-effect threshold (${COHENS_W_MEDIUM_EFFECT}) for the complete position distribution ${JSON.stringify(positionCounts)} against the expected uniform distribution (${expectedCount.toFixed(2)} per position) -- a practically material deviation, not merely a statistically detectable one`);
+    const contributorSummary = primaryContributors
+      .map((d) => `position ${d.position} (observed ${(d.observedProportion * 100).toFixed(1)}% vs expected ${(d.expectedProportion * 100).toFixed(1)}%, ${d.direction} expectation, ${chiSquare > 0 ? ((d.chiSquareContribution / chiSquare) * 100).toFixed(1) : "0.0"}% of the total chi-square)`)
+      .join("; ");
+    reasons.push(`Cohen's w = ${w.toFixed(3)} meets or exceeds the medium-effect threshold (${COHENS_W_MEDIUM_EFFECT}) for the complete position distribution ${JSON.stringify(positionCounts)} against the expected uniform distribution (${expectedCount.toFixed(2)} per position) -- a practically material DISTRIBUTION-WIDE deviation. Cohen's w is a nonnegative magnitude with no direction of its own; the position(s) accounting for a majority of this effect are: ${contributorSummary}`);
   }
   materialDeviations.forEach((d) => {
-    reasons.push(`position ${d.position} is materially ${d.direction}-represented: ${(d.proportion * 100).toFixed(1)}% of ${N} items (expected ${(expectedProportion * 100).toFixed(1)}%, margin [${(minAllowedShare * 100).toFixed(1)}%, ${(maxAllowedShare * 100).toFixed(1)}%])`);
+    reasons.push(`position ${d.position} individually exceeds the separate per-cell DIAGNOSTIC margin (${d.direction} expectation, informational only, not the decision rule): ${(d.observedProportion * 100).toFixed(1)}% of ${N} items (expected ${(d.expectedProportion * 100).toFixed(1)}%, diagnostic margin [${(minAllowedShare * 100).toFixed(1)}%, ${(maxAllowedShare * 100).toFixed(1)}%])`);
   });
 
   // STATISTICAL SIGNIFICANCE (corroboration/review-flag only -- see
@@ -744,7 +995,7 @@ export function evaluatePositionBalance(group) {
     reviewFlag: { required: reviewRequired, reason: reviewReason },
     detail: {
       n, N, positionCounts, expectedCount, expectedProportion,
-      positionDeviations, materialDeviations,
+      positionDeviations, materialDeviations, primaryContributors,
       practicalEffect: { method: "cohens-w", w, threshold: COHENS_W_MEDIUM_EFFECT, practicalFail },
       // Retained for backward-readability/comparison only -- no longer the fail driver.
       maxAllowedShare, minAllowedShare,
@@ -770,6 +1021,7 @@ export function evaluatePositionBalance(group) {
  * each step, never accumulated as a long product of small numbers).
  */
 export function poissonBinomialPMF(probabilities) {
+  assertValidProbabilities(probabilities);
   let pmf = [1];
   for (const p of probabilities) {
     const next = new Array(pmf.length + 1).fill(0);
@@ -823,6 +1075,8 @@ export function poissonBinomialPMF(probabilities) {
  * not claimed to be the only possible one.
  */
 export function poissonBinomialTwoSidedPValue(probabilities, observed) {
+  assertValidProbabilities(probabilities);
+  assertValidObservedIndex(observed, probabilities.length);
   const pmf = poissonBinomialPMF(probabilities);
   const observedP = pmf[observed];
   const epsilon = 1e-9;
@@ -885,6 +1139,7 @@ export function evaluateLengthAssociation(items) {
   if (!Array.isArray(items) || items.length === 0) {
     return { status: "inconclusive", reasons: ["no items in scope"], reviewFlag: { required: false, reason: null }, detail: null };
   }
+  items.forEach((it, i) => assertValidLengthAssociationItem(it, i));
   const N = items.length;
   const probabilities = items.map((it) => it.nullProbabilityCorrectAtMax);
   const observed = items.filter((it) => it.correctAtMax).length;

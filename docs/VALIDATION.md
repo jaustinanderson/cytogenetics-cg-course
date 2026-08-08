@@ -3182,6 +3182,83 @@ No `QUESTION_GOVERNANCE` field populated; all 153 questions remain
 whole bank and every one of its 17 forms. See `docs/QUALITY_LOG.md`
 QL-039 and `docs/ASSESSMENT_VALIDITY.md` for the full record.
 
+### Correction — the Cohen's-w rationale rested on an impossible distribution; aggregate failures could be reported unexplained; malformed input was trusted; the "independent" p-value oracle was not independent; the regime-transition claim was overstated, added 2026-08-08
+
+A fourth independent review, before merge, found five further problems.
+**(1)** The Cohen's-w threshold's own justification cited a distribution
+`[0.40,0.25,0.25,0.25]` summing to 1.15 — not a valid probability
+distribution, so the claimed algebraic equivalence to the prior margin
+rule was false. Replaced with Cohen's own directly-quoted, verified-
+normalized m=4 illustrative examples (Cohen, 1988, chapter 7, section
+7.2.3, pages 224-227, directly inspected), with the threshold reframed
+explicitly as an adopted, conservative, project-defined operational gate
+— quoting Cohen's own caution against taking the conventions too
+literally — never as uniquely correct or an item-validity result.
+**(2)** A distribution-wide Cohen's-w failure (N=100, `[38,24,19,19]`,
+w≈0.311) could be reported with every individual cell inside the
+per-cell diagnostic margin, leaving no explanation of which position
+drove it. Every position now reports observed/expected count and
+proportion, signed deviation, `direction`, `chiSquareContribution`, and
+`exceedsDiagnosticMargin` (diagnostic only); a new `primaryContributors`
+field identifies the position(s) accounting for a majority of the
+aggregate effect. **(3)** The aggregate helpers trusted malformed
+caller-supplied input — `exactPigeonholeBalance([2,1,1],4,5)` reported
+`balanced:true` for a wrong-length, wrong-sum array;
+`poissonBinomialPMF([1.5,0.5])` produced a negative probability mass. One
+reusable validation function per input shape now rejects every such case
+with a descriptive error, and a fractional-count test fixture is replaced
+with a valid integer one (`N=20`, `[8,4,4,4]`). **(4)** The round-4
+"independent" p-value fixture reused the same incomplete-gamma recurrence
+as the implementation under test. Two genuinely independent analytic
+closed forms (df=2, df=4) and an extended NIST/SEMATECH critical-value
+cross-check (α=0.05 for df 1-7, directly fetched) are added; the
+Numerical Recipes attribution is removed (its bookreader is subscription-
+gated; only its table of contents, not its content, was actually
+inspected), and "exact" is no longer applied to the computed
+floating-point result without qualification. **(5)** The regime-
+transition "no easier to pass" claim was verified only for severe,
+zero-position omissions and did not hold universally — N=19 `[6,5,4,4]`
+fails while N=20 `[7,5,4,4]`, with a larger raw maximum, passes. This
+genuine, accepted, limited discontinuity is now explicitly documented
+(different regimes use deliberately different standards) rather than
+patched with an arbitrary added threshold.
+
+**Tests:** `tests/assessment-cue-audit.mjs` grew from 157 to 187
+dependency-free checks. `tests/e2e/assessment-cue-audit.spec.mjs` stays at
+7 (no new browser-specific behavior this round).
+
+**Mutation-tested (round 5):** 6 targeted, temporary, fully reverted
+reversions against `scripts/assessment-cue-audit.mjs` (never
+`index.html`), covering the impossible/unnormalized Cohen rationale;
+aggregate-failure contributor reporting; malformed position counts;
+malformed probability inputs; independent analytic p-value fixtures; and
+narrowed regime-transition claims. Each failed exactly its intended,
+directly-attributable test(s) and no others — no coverage gaps this
+round. Notably, a small Lanczos-coefficient perturbation was caught by
+the new tight-tolerance analytic fixtures but NOT by the coarser
+NIST-table cross-check, direct evidence the genuinely independent oracle
+added this round is not redundant with the prior round's check.
+
+**Mutation count, reconciled from retained evidence:** round 1 (QL-036):
+8. Round 2 (QL-037): 8. Round 3 (QL-038): 4. Round 4 (QL-039): 7. Round 5
+(QL-040, this entry): 6. **Cumulative total: 33.**
+
+**Full local validation:** `npm test` (172 dependency-free DOM-behavior
+checks + 70 governance checks + 187 assessment-cue checks + 5
+deployed-revision checks, all passing, including the `validate`
+structural/documentation check) and the complete `npx playwright test`
+suite run at a deterministic, fixed worker count (`--workers=2`) —
+**252 passed, 6 skipped, 0 failed**, a fully clean complete-suite result.
+`npm run audit:assessment-cues -- --json` run twice in immediate
+succession: byte-identical.
+
+No question, answer, rationale, distractor feedback, domain, topic,
+difficulty, or stable ID changed. `index.html` is byte-for-byte unchanged.
+No `QUESTION_GOVERNANCE` field populated; all 153 questions remain
+`draft`. QL-033 is not marked corrected. Gate A still correctly fails the
+whole bank and every one of its 17 forms. See `docs/QUALITY_LOG.md`
+QL-040 and `docs/ASSESSMENT_VALIDITY.md` for the full record.
+
 ## Gates still open
 
 ### Browser behavior

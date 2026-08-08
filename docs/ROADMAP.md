@@ -477,17 +477,22 @@ review status stable before adding 46 questions.
   not assumed here. Preserve the beta disclosure until this is resolved
   and independently verified.
   **Foundation delivered (Issue #24, Phase 0 steps 1-3, `docs/QUALITY_LOG.md`
-  QL-036 through QL-039, draft PR open, not yet merged):**
+  QL-036 through QL-040, draft PR open, not yet merged):**
   `docs/ASSESSMENT_VALIDITY.md` independently reproduces the baseline
   above, defines the Gate A bank/form-level statistical thresholds (with
   a directly-inspected, cited primary source; a secondary source is
   labeled accordingly, not overstated as directly verified), a
-  distribution-wide practical effect-size measure (Cohen's w) that
+  distribution-wide practical effect-size measure (Cohen's w, adopted as
+  an operational convention and justified with Cohen's own directly-quoted,
+  verified-normalized examples, not an invented or impossible one) that
   catches material answer-position underrepresentation as well as
-  overrepresentation, an answer-key sequence-predictability check separate
-  from aggregate balance and scoped to genuine learner-facing forms only,
-  and a practical-vs-statistical decision policy that never fails a scope
-  on statistical significance alone, and the Gate
+  overrepresentation with a directional, per-position explanation for
+  every aggregate failure, one reusable input-validation path rejecting
+  malformed aggregate/probability input, an answer-key
+  sequence-predictability check separate from aggregate balance and
+  scoped to genuine learner-facing forms only, and a practical-vs-
+  statistical decision policy that never fails a scope on statistical
+  significance alone, and the Gate
   B item-level review rubric, and selects a deterministic 13-question
   pilot batch — no question content changed, the bank and every one of
   its 17 forms still fails Gate A by design (now via a redesign that is

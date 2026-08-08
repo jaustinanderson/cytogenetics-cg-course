@@ -4949,3 +4949,198 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   populated by a stub that happens to match the one fixture every test
   exercises is invisible to those tests — cover the field with an input
   specifically constructed to differ from the trivial case.
+
+## QL-040 — the Cohen's-w rationale rested on an impossible probability distribution; aggregate failures could be reported unexplained; aggregate helpers trusted malformed input; the round-4 "independent" p-value oracle reused the same recurrence; the regime-transition claim was overstated (Issue #24, Phase 0 steps 1-3)
+
+- **Status:** Corrected on the same branch
+  (`claude/phase-0-ql033-foundation`), draft PR still open against `main`
+  for independent review, not yet merged. QL-033 itself remains confirmed
+  and unresolved; this entry corrects the QL-036 through QL-039 *tooling*
+  further, not the bank.
+- **Finding — five problems, each reproduced by direct construction
+  before any fix (full detail in `docs/ASSESSMENT_VALIDITY.md`):**
+  1. **The Cohen's-w rationale's own justification was mathematically
+     impossible.** The code comment and documentation claimed the
+     `w=0.30` threshold was algebraically equivalent, at its boundary, to
+     the prior single-cell margin rule, illustrated with a distribution
+     `[0.40, 0.25, 0.25, 0.25]`. Confirmed directly:
+     `0.40+0.25+0.25+0.25 = 1.15`, not a valid probability distribution
+     at all — the claimed equivalence was false.
+  2. **A distribution-wide practical failure could be reported with no
+     explanation of which position(s) drove it.** Confirmed directly:
+     `N=100`, `n=4`, `positionCounts=[38,24,19,19]` — chi-square=9.68,
+     Cohen's w≈0.3111, correctly **failing** — yet every individual share
+     fell inside the separately retained per-cell diagnostic margin, so
+     `materialDeviations` was empty and every cell was labeled only
+     "within-margin," with no indication position 0 (38% vs 25%
+     expected) was the dominant driver. Cohen's w itself has no
+     direction; only individual positions do.
+  3. **The aggregate helpers trusted caller-supplied summaries without
+     validating them.** Confirmed directly: `exactPigeonholeBalance([2,1,1],
+     4, 5)` — an array with only 3 entries for 4 positions, summing to 4
+     rather than N=5 — reported `balanced: true`; `poissonBinomialPMF([1.5,
+     0.5])` produced a NEGATIVE probability mass (`-0.25`); a round-3 test
+     fixture used fractional "counts" (`[16.8,8,7.6,7.6]`), which cannot
+     correspond to any real authored-question tally.
+  4. **The round-4 "independent" p-value verification was not genuinely
+     independent.** Its hand-computed expected value for `chiSquare=120,
+     df=3` was described as computed "via the same verified
+     incomplete-gamma algorithm" — the same recurrence as the
+     implementation under test, not a separate numerical oracle.
+  5. **The regime-transition "no easier to pass" claim was overstated.**
+     Verified only against severe, comparable-shape (zero-position)
+     omissions at N=19/20/21, but not shown to hold universally. Confirmed
+     directly: `N=19`, `[6,5,4,4]` fails (structural regime, exact
+     pigeonhole rule); `N=20`, `[7,5,4,4]` — with a LARGER raw maximum
+     count (7 > 6) — **passes** (statistical regime, Cohen's w ≈ 0.245).
+- **Impact:** None shipped — PR #26 remained draft/unmerged throughout;
+  found and fixed before merge.
+- **Correction (full detail, exact mathematics, and every reproduced
+  counterexample in `docs/ASSESSMENT_VALIDITY.md` sections 4.3b, 4.3c,
+  4.3d, 4.3e, 4.6b):**
+  1. **Cohen's-w rationale replaced with Cohen's own directly-quoted,
+     genuinely normalized illustrative examples.** Source directly
+     inspected: Jacob Cohen, *Statistical Power Analysis for the
+     Behavioral Sciences*, 2nd edition, Lawrence Erlbaum Associates,
+     1988, chapter 7, section 7.2.3, printed pages 224-227 (publicly
+     hosted scan, verified 2026-08-08 against the title page). Cohen's
+     own m=4 medium-effect (w=.30) illustration (page 226, verbatim):
+     H0=.250 .250 .250 .250, H1=.380 .207 .207 .207 ("a w=.30 departure
+     from equiprobability in which the effect is concentrated in the
+     first category") — sums to 1.001 (Cohen's own printed rounding),
+     a valid distribution. `COHENS_M4_ILLUSTRATIVE_EXAMPLES` (new)
+     transcribes this alongside Cohen's small (w=.10), equally-spaced
+     medium (w=.30), and large (w=.50) m=4 examples, each independently
+     verified to sum to 1 and reproduce Cohen's own stated w. The
+     threshold is now framed explicitly as an ADOPTED, conservative,
+     project-defined operational release gate — quoting Cohen's own
+     caution that the conventions are "a general frame of reference...
+     not to take them too literally" — never as uniquely correct,
+     an item-validity result, or mathematically forced.
+  2. **Full directional/contribution reporting added.** Every position in
+     `evaluatePositionBalance()`'s `positionDeviations` now reports
+     observed/expected count and proportion, SIGNED count/proportion
+     deviation, `direction` ("above"/"below"/"equal", derived purely from
+     the deviation's sign), `chiSquareContribution`, and
+     `exceedsDiagnosticMargin` (the renamed, accurately-scoped former
+     "material deviation" concept — diagnostic only, never the decision
+     rule). A new `primaryContributors` field identifies the position(s)
+     accounting for a majority (>50%) of the aggregate chi-square,
+     always populated when Cohen's w fails, even when no individual cell
+     exceeds the diagnostic margin. Verified: the `[38,24,19,19]`
+     counterexample's `primaryContributors` correctly identifies position
+     0 (69.8% of the total chi-square, direction "above").
+  3. **One reusable validation function per input shape added**, the same
+     discipline `assertValidQuestionShape()` already applies to question
+     objects: `assertValidPositionCounts()` (used by
+     `exactPigeonholeBalance()`/`evaluatePositionBalance()`),
+     `assertValidProbabilities()`/`assertValidObservedIndex()` (used by
+     both Poisson-binomial functions), and
+     `assertValidLengthAssociationItem()` (used by
+     `evaluateLengthAssociation()`). Every malformed case above now
+     throws a descriptive `TypeError`. The fractional-count test fixture
+     is replaced with a valid integer fixture (`N=20`, `[8,4,4,4]`,
+     w≈0.346) testing the identical policy without an impossible input.
+     Verified: every valid fixture used elsewhere in this file's own
+     tests, including the full live 153-question bank, passes validation
+     unchanged.
+  4. **Genuinely independent p-value verification added.** Two analytic
+     closed forms, derived by hand from the chi-square distribution's own
+     definition (not this implementation's recurrence): df=2 gives
+     `exp(-x/2)` (chi-square(2) is Exponential(mean=2)); df=4 gives
+     `exp(-x/2)*(1+x/2)` (chi-square(4) is Gamma(shape=2,scale=2)),
+     verified at x=10 to at least 9 decimal places. Also newly verified:
+     the published NIST/SEMATECH e-Handbook critical-value table
+     (National Institute of Standards and Technology, directly fetched
+     2026-08-08), extended to α=0.05 for df 1-7 (previously only df 1-3).
+     The Numerical Recipes attribution for the underlying algorithm is
+     removed: its official bookreader is subscription-gated, and only its
+     table of contents (confirming a corresponding section exists, not
+     its content) was actually inspected. Terminology corrected: the
+     computed p-value is a numerical evaluation of the exact mathematical
+     survival function, not itself called "exact" without that
+     qualification. Mutation-tested: a coarser table-based check alone
+     did not catch a deliberately introduced small numerical error in the
+     gamma-function coefficients, but the new tight-tolerance analytic
+     fixtures did — direct evidence the independent oracle is more than a
+     formality.
+  5. **The regime-transition claim narrowed to what the evidence actually
+     proves.** The N=19/20/21 "fails at every size" result is now stated
+     as applying specifically to severe, comparable-shape (zero-position)
+     omissions. A new, explicit statement records the genuine, ACCEPTED,
+     limited discontinuity (N=19 `[6,5,4,4]` fails; N=20 `[7,5,4,4]`
+     passes despite a larger raw maximum) as an intentional consequence
+     of the two regimes using deliberately different standards (an exact
+     authoring allocation for small forms vs. a practical effect-size
+     tolerance for large ones) — not a defect, and not patched with an
+     arbitrary added threshold. Both claims are verified side by side so
+     neither can silently overwrite the other.
+- **Tests:** `tests/assessment-cue-audit.mjs` grew from 157 to 187
+  dependency-free checks. New coverage: normalization and w-reproduction
+  checks for every `COHENS_M4_ILLUSTRATIVE_EXAMPLES` fixture (closing the
+  impossible-example gap); the `[38,24,19,19]` directional-explainability
+  counterexample and its `primaryContributors`; a perfectly uniform
+  distribution's all-"equal" report; a distribution with both aggregate
+  and per-cell violations; 2-/3-option directional-reporting equivalence;
+  deterministic-JSON schema coverage; malformed positionCounts (wrong
+  length, wrong sum, negative/non-finite/fractional counts, malformed
+  optionCount/N); malformed probabilities (out-of-range, non-finite) and
+  observed indices; malformed length-association items; live-bank
+  behavior preserved under the new validation; analytic df=2/df=4
+  fixtures; NIST α=0.01 and α=0.05 checks extended to df 1-7;
+  finite/monotonic sanity checks; the genuine N=19/20/21 discontinuity
+  alongside the narrowed severe-omission claim; valid integer fixtures at
+  5n-1/5n/5n+1 for both severe and near-balanced shapes.
+  `tests/e2e/assessment-cue-audit.spec.mjs` stays at 7 (no new
+  browser-specific behavior this round; re-run and reconfirmed passing).
+- **Mutation-tested (this round):** 6 targeted reversions against
+  `scripts/assessment-cue-audit.mjs` (never `index.html`), covering the
+  six required categories (the impossible/unnormalized Cohen rationale;
+  aggregate-failure contributor reporting; malformed position counts;
+  malformed probability inputs; independent analytic p-value fixtures;
+  narrowed regime-transition claims). Each failed exactly its intended,
+  directly-attributable test(s) and no others — no coverage gaps this
+  round (unlike prior rounds, where 2 of round 4's 7 mutations surfaced
+  gaps). Notably, the analytic-p-value mutation (a small perturbation to
+  a Lanczos coefficient) was caught by the new tight-tolerance analytic
+  fixtures while the coarser NIST-table cross-check did NOT catch it at
+  its looser tolerance — direct evidence the genuinely independent,
+  tighter oracle added by this round is not redundant with the round-4
+  table check. All 6 reverted to byte-identical via `diff` before
+  committing. See `docs/VALIDATION.md` for the full record.
+- **Mutation count, reconciled from retained evidence (not guessed):**
+  round 1 (QL-036): 8. Round 2 (QL-037): 8. Round 3 (QL-038): 4. Round 4
+  (QL-039): 7. Round 5 (this entry, QL-040): 6. **Cumulative total across
+  all five rounds: 33.**
+- **Full local validation:** `npm test` (172 dependency-free DOM-behavior
+  checks + 70 governance checks + 187 assessment-cue checks + 5
+  deployed-revision checks, all passing, including the `validate`
+  structural/documentation check) and the complete `npx playwright test`
+  suite run at a deterministic, fixed worker count (`--workers=2`).
+- **Scope:** No question, answer, rationale, distractor feedback, domain,
+  topic, difficulty, or stable ID changed; `index.html` is unmodified. No
+  `QUESTION_GOVERNANCE` field populated; all 153 questions remain `draft`.
+  QL-033 is not marked corrected. Phase 0 stays unchecked in
+  `docs/ROADMAP.md` and Issue #24. Steps 4-9 of the Phase 0 protocol were
+  not begun.
+- **Prevention:** A cited numeric example is a factual claim like any
+  other and must itself be verified (does this distribution sum to 1?)
+  before it is used to justify a threshold — an illustrative example that
+  fails its own domain's basic constraint undermines the argument it was
+  meant to support, regardless of how reasonable the adopted threshold
+  itself may be. A single scalar decision (a magnitude like Cohen's w)
+  is not automatically an explanation; when a report exists to inform a
+  human reviewer, the reviewer needs to know WHERE and in WHICH direction
+  a problem lies, not only THAT one exists. "Independently verified"
+  requires an oracle that does not share the implementation's own
+  recurrence, formula, or code path — reusing the same algorithm with
+  different inputs is cross-checking, not independent verification, and
+  the two catch genuinely different classes of error (this round's own
+  mutation-testing result — a coarse table check missing what a tight
+  analytic check caught — demonstrates the distinction is not academic).
+  A true, narrowly-scoped empirical claim ("fails for this specific
+  shape at these three sizes") must not be generalized into a broader
+  claim ("the transition is monotonic") the same evidence does not
+  support — and when a genuine exception is found, the right response is
+  usually to document the boundary precisely, not to add machinery whose
+  only purpose is making one known example come out differently.

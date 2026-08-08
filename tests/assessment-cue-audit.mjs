@@ -63,7 +63,12 @@ import {
   upperRegularizedIncompleteGamma,
   chiSquareUpperTailPValue,
   COHENS_W_MEDIUM_EFFECT,
+  COHENS_M4_ILLUSTRATIVE_EXAMPLES,
   cohensW,
+  assertValidPositionCounts,
+  assertValidProbabilities,
+  assertValidObservedIndex,
+  assertValidLengthAssociationItem,
 } from "../scripts/assessment-cue-audit.mjs";
 
 let passed = 0;
@@ -928,13 +933,15 @@ test("counterexample (issue 3) resolved: a large-N position deviation that is st
   assert.ok(result.reviewFlag.reason && result.reviewFlag.reason.length > 0);
 });
 
-test("counterexample (issue 3) resolved: a large-N position deviation that exceeds the practical effect-size threshold still FAILS regardless of statistical power (a predeclared meaningful effect fails even when underpowered)", () => {
+test("counterexample (issue 3) resolved: a large-N position deviation that exceeds the practical effect-size threshold still FAILS regardless of statistical power (a predeclared meaningful effect fails even when underpowered) -- valid INTEGER counts (round 5 correction: the prior fixture used fractional counts [16.8,8,7.6,7.6], which cannot correspond to any real authored-question tally)", () => {
   const n = 4;
-  const N = 40; // large-N regime for n=4 (REGIME_THRESHOLD=20), but small enough that power is limited
-  const counts = [40 * 0.42, 40 * 0.20, 40 * 0.19, 40 * 0.19]; // 42% share -- a meaningful effect, but a small enough N that chi-square may not reject
+  const N = 20; // exactly REGIME_THRESHOLD(4) -- large-N regime, smallest N in it, so power is limited
+  const counts = [8, 4, 4, 4]; // w ~= 0.346 -- fails the practical threshold; hand-verified statistically non-significant (underpowered) at this N
   const result = evaluatePositionBalance({ optionCount: n, total: N, positionCounts: counts });
+  assert.ok(Number.isInteger(counts[0]) && Number.isInteger(counts[1]) && Number.isInteger(counts[2]) && Number.isInteger(counts[3]), "counts must be valid integers -- real authored-question tallies are never fractional");
   assert.ok(result.detail.practicalEffect.w >= COHENS_W_MEDIUM_EFFECT);
   assert.equal(result.detail.practicalFail, true);
+  assert.equal(result.detail.statisticallySignificant, false, "underpowered at this N -- the practical effect must still be authoritative despite low statistical power");
   assert.equal(result.status, "fail", "the practical effect size must be authoritative regardless of the statistical result at this N");
 });
 
@@ -1073,11 +1080,11 @@ test("the method label accurately names the chosen convention, and states it is 
     const result = evaluatePositionBalance({ optionCount: 4, total: 20, positionCounts: counts });
     assert.equal(result.status, "fail");
     assert.ok(result.detail.practicalEffect.w >= COHENS_W_MEDIUM_EFFECT);
-    assert.ok(result.detail.materialDeviations.some((d) => d.position === 3 && d.direction === "under"));
+    assert.ok(result.detail.materialDeviations.some((d) => d.position === 3 && d.direction === "below"));
   });
 });
 
-test("counterexample (issue 1, round 4) resolved: the N=19/structural regime already rejected a comparable omission -- the regime transition at N=20 does not make a conspicuously worse distribution easier to pass", () => {
+test("counterexample (issue 1, round 4) resolved, claim NARROWED (round 5): for a comparable SEVERE zero-position omission specifically, N=19/20/21 all fail -- this is NOT a claim that the regime transition is universally monotonic (see the genuine limited-discontinuity counterexample below, which this test does not contradict)", () => {
   const r19 = evaluatePositionBalance({ optionCount: 4, total: 19, positionCounts: [6, 7, 6, 0] });
   assert.equal(r19.regime, "structural");
   assert.equal(r19.status, "fail");
@@ -1171,7 +1178,13 @@ test("position balance detail reports the complete observed distribution, expect
   assert.equal(result.detail.practicalEffect.method, "cohens-w");
   assert.ok(typeof result.detail.practicalEffect.w === "number");
   assert.equal(result.detail.practicalEffect.threshold, COHENS_W_MEDIUM_EFFECT);
-  assert.ok(result.detail.positionDeviations.every((d) => "position" in d && "count" in d && "proportion" in d && "direction" in d));
+  assert.ok(result.detail.positionDeviations.every((d) =>
+    "position" in d && "observedCount" in d && "observedProportion" in d &&
+    "expectedCount" in d && "expectedProportion" in d &&
+    "countDeviation" in d && "proportionDeviation" in d && "direction" in d &&
+    "chiSquareContribution" in d && "exceedsDiagnosticMargin" in d
+  ));
+  assert.ok(Array.isArray(result.detail.primaryContributors) && result.detail.primaryContributors.length > 0, "a Cohen's-w failure must identify at least one primary contributor even when no cell exceeds the per-cell diagnostic margin");
   assert.ok(result.detail.materialDeviations.length > 0);
   assert.ok(["pass", "fail"].includes(result.status));
 });
@@ -1423,6 +1436,325 @@ test("deterministic JSON output is preserved with all round-4 additions (Cohen's
   assert.equal(json1, json2);
   assert.ok(!json1.includes("generatedAt"));
   assert.ok(!/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(json1));
+});
+
+// ---------------------------------------------------------------------------
+// 14. Cohen's w rationale: normalized, directly-sourced fixtures only
+//     (issue 1, round 5). An earlier version of this file's own rationale
+//     comment claimed algebraic agreement between the old single-cell
+//     margin and w=0.3 using a distribution [0.40,0.25,0.25,0.25] --
+//     summing to 1.15, not a valid probability distribution at all. This
+//     is replaced with Cohen's own directly-inspected, verbatim m=4
+//     illustrative examples (COHENS_M4_ILLUSTRATIVE_EXAMPLES).
+// ---------------------------------------------------------------------------
+
+test("counterexample (issue 1, round 5) resolved: the OLD rationale's [0.40,0.25,0.25,0.25] example is confirmed impossible -- it does not sum to 1", () => {
+  const impossibleExample = [0.40, 0.25, 0.25, 0.25];
+  const sum = impossibleExample.reduce((a, b) => a + b, 0);
+  assert.notEqual(sum, 1, "this is the exact counterexample this correction fixes -- the OLD claim's distribution is confirmed invalid");
+  assert.ok(Math.abs(sum - 1) > 1e-9);
+});
+
+test("counterexample (issue 1, round 5) resolved: every COHENS_M4_ILLUSTRATIVE_EXAMPLES fixture is a genuinely normalized probability distribution (h0 and h1 both sum to 1, within Cohen's own printed 3-decimal rounding tolerance) -- this is the reusable, executable proof the impossible claim's replacement lacks", () => {
+  assert.ok(COHENS_M4_ILLUSTRATIVE_EXAMPLES.length >= 3, "at least small/medium/large examples required");
+  COHENS_M4_ILLUSTRATIVE_EXAMPLES.forEach((example) => {
+    const h0Sum = example.h0.reduce((a, b) => a + b, 0);
+    const h1Sum = example.h1.reduce((a, b) => a + b, 0);
+    assert.ok(Math.abs(h0Sum - 1) < 0.002, `${example.label}: h0 sums to ${h0Sum}, expected ~1`);
+    assert.ok(Math.abs(h1Sum - 1) < 0.002, `${example.label}: h1 sums to ${h1Sum}, expected ~1`);
+    assert.equal(example.h0.length, 4);
+    assert.equal(example.h1.length, 4);
+  });
+});
+
+test("counterexample (issue 1, round 5) resolved: every COHENS_M4_ILLUSTRATIVE_EXAMPLES fixture reproduces Cohen's own stated w value via this file's own chi-square/cohensW formula (proportions, not counts -- N is irrelevant to w's proportion-space definition)", () => {
+  COHENS_M4_ILLUSTRATIVE_EXAMPLES.forEach((example) => {
+    const chiSquareInProportionSpace = example.h0.reduce((sum, h0i, i) => {
+      const h1i = example.h1[i];
+      return sum + (h1i - h0i) ** 2 / h0i;
+    }, 0);
+    const computedW = Math.sqrt(chiSquareInProportionSpace);
+    assert.ok(Math.abs(computedW - example.w) < 0.005, `${example.label}: computed w=${computedW}, Cohen's stated w=${example.w}`);
+  });
+});
+
+test("valid, normalized four-category examples exist on both sides of the COHENS_W_MEDIUM_EFFECT threshold (small w=.10 below; large w=.50 above)", () => {
+  const small = COHENS_M4_ILLUSTRATIVE_EXAMPLES.find((e) => e.w === 0.10);
+  const large = COHENS_M4_ILLUSTRATIVE_EXAMPLES.find((e) => e.w === 0.50);
+  assert.ok(small && small.w < COHENS_W_MEDIUM_EFFECT);
+  assert.ok(large && large.w > COHENS_W_MEDIUM_EFFECT);
+});
+
+test("Cohen's own m=4 medium-effect (w=.30) H1 example, applied as actual COUNTS at a real N, is correctly classified by evaluatePositionBalance() as a practical failure -- connecting the proportion-space illustration to this file's own count-based decision", () => {
+  const medium = COHENS_M4_ILLUSTRATIVE_EXAMPLES.find((e) => e.label.includes("concentrated"));
+  const N = 1000; // large enough that h1 * N rounds to exact integers cleanly
+  // Cohen's own printed h1 values (3 decimals) sum to 1.001, not exactly 1
+  // -- round every entry but the last, then set the last to whatever
+  // makes the total exactly N, so this remains a VALID integer fixture
+  // (a real authored-question tally must sum exactly to N) while staying
+  // as close as possible to Cohen's own printed proportions.
+  const counts = medium.h1.slice(0, -1).map((p) => Math.round(p * N));
+  counts.push(N - counts.reduce((a, b) => a + b, 0));
+  assert.equal(counts.reduce((a, b) => a + b, 0), N, "must sum exactly to N for a valid test fixture");
+  const result = evaluatePositionBalance({ optionCount: 4, total: N, positionCounts: counts });
+  assert.ok(Math.abs(result.detail.practicalEffect.w - 0.30) < 0.01);
+  assert.equal(result.status, "fail", "Cohen's own medium-effect example, adopted as this project's threshold, is treated as a practical failure by design");
+});
+
+// ---------------------------------------------------------------------------
+// 15. Directionally explainable distribution-wide failures (issue 2,
+//     round 5). Cohen's w is a nonnegative MAGNITUDE; a failure must still
+//     be explainable by position and direction, even when no individual
+//     cell exceeds the separate per-cell diagnostic margin.
+// ---------------------------------------------------------------------------
+
+test("counterexample (issue 2, round 5) resolved: N=100, n=4, [38,24,19,19] fails Cohen's w while every individual share stays inside the diagnostic margin -- primaryContributors identifies position 0 as the dominant, above-expectation driver", () => {
+  const result = evaluatePositionBalance({ optionCount: 4, total: 100, positionCounts: [38, 24, 19, 19] });
+  assert.equal(result.status, "fail");
+  assert.ok(Math.abs(result.detail.chiSquare - 9.68) < 0.001);
+  assert.ok(Math.abs(result.detail.practicalEffect.w - 0.3111269837220809) < 1e-9);
+  assert.deepEqual(result.detail.materialDeviations, [], "every individual share stays inside the diagnostic margin -- this is the exact coverage gap this correction fixes");
+  assert.ok(result.detail.primaryContributors.length >= 1);
+  assert.equal(result.detail.primaryContributors[0].position, 0);
+  assert.equal(result.detail.primaryContributors[0].direction, "above");
+  assert.ok(result.detail.primaryContributors[0].chiSquareContribution / result.detail.chiSquare > 0.5, "position 0 alone accounts for a majority of the aggregate effect");
+  // The human-readable reason must name the dominant position, not just report an unexplained aggregate failure.
+  assert.ok(result.reasons.some((r) => r.includes("position 0") && /above/.test(r)));
+});
+
+test("a perfectly uniform distribution reports every position as direction 'equal' with zero chi-square contribution and no primary contributors", () => {
+  const result = evaluatePositionBalance({ optionCount: 4, total: 100, positionCounts: [25, 25, 25, 25] });
+  assert.equal(result.status, "pass");
+  assert.ok(result.detail.positionDeviations.every((d) => d.direction === "equal" && d.chiSquareContribution === 0));
+  assert.deepEqual(result.detail.primaryContributors, []);
+});
+
+test("a distribution with BOTH an aggregate Cohen's-w violation and an individual per-cell diagnostic-margin violation reports both, kept conceptually separate", () => {
+  const result = evaluatePositionBalance({ optionCount: 4, total: 20, positionCounts: [8, 8, 4, 0] });
+  assert.equal(result.status, "fail");
+  assert.ok(result.detail.practicalEffect.practicalFail, "aggregate Cohen's-w decision");
+  assert.ok(result.detail.materialDeviations.length > 0, "at least one cell also individually exceeds the separate diagnostic margin");
+  assert.ok(result.detail.primaryContributors.length > 0, "aggregate contributors are reported independently of the per-cell flag");
+  // Every materialDeviation must also carry the full directional/contribution record.
+  result.detail.materialDeviations.forEach((d) => {
+    assert.ok(["above", "below", "equal"].includes(d.direction));
+    assert.ok(typeof d.chiSquareContribution === "number");
+  });
+});
+
+test("directional/contribution reporting behaves equivalently for 2- and 3-option groups, not only 4-option", () => {
+  // 2-option: N=50, one position dominant but within old-style margin at the aggregate level is not applicable here -- use a clean two-cell case.
+  const r2 = evaluatePositionBalance({ optionCount: 2, total: 50, positionCounts: [35, 15] });
+  assert.ok(r2.detail.positionDeviations.every((d) => "chiSquareContribution" in d && "direction" in d));
+  assert.ok(["above", "below"].includes(r2.detail.positionDeviations[0].direction));
+
+  // 3-option: N=90, a distribution-wide effect with no single dominant outlier.
+  const r3 = evaluatePositionBalance({ optionCount: 3, total: 90, positionCounts: [42, 24, 24] });
+  assert.ok(r3.detail.positionDeviations.every((d) => "chiSquareContribution" in d && "direction" in d));
+  assert.equal(r3.detail.positionDeviations[0].direction, "above");
+  assert.equal(r3.detail.positionDeviations[1].direction, "below");
+});
+
+test("deterministic JSON output includes the full directional/contribution schema, byte-identical across repeated calls", () => {
+  const build = () => evaluatePositionBalance({ optionCount: 4, total: 100, positionCounts: [38, 24, 19, 19] });
+  const json1 = JSON.stringify(build());
+  const json2 = JSON.stringify(build());
+  assert.equal(json1, json2);
+  assert.ok(json1.includes("primaryContributors"));
+  assert.ok(json1.includes("chiSquareContribution"));
+  assert.ok(json1.includes("exceedsDiagnosticMargin"));
+});
+
+// ---------------------------------------------------------------------------
+// 16. Malformed aggregate/probability input rejection (issue 3, round 5).
+// ---------------------------------------------------------------------------
+
+test("counterexample (issue 3, round 5) resolved: exactPigeonholeBalance/evaluatePositionBalance reject a positionCounts array with the wrong length instead of silently reporting balanced", () => {
+  assert.throws(() => exactPigeonholeBalance([2, 1, 1], 4, 5), TypeError);
+  assert.throws(() => evaluatePositionBalance({ optionCount: 4, total: 5, positionCounts: [2, 1, 1] }), TypeError);
+});
+
+test("counterexample (issue 3, round 5) resolved: a positionCounts array summing to something other than N is rejected", () => {
+  assert.throws(() => exactPigeonholeBalance([2, 1, 1, 0], 4, 5), TypeError); // sums to 3, not 5
+  assert.throws(() => evaluatePositionBalance({ optionCount: 4, total: 5, positionCounts: [2, 1, 1, 5] }), TypeError); // sums to 9
+});
+
+test("assertValidPositionCounts rejects negative, non-finite, and fractional counts", () => {
+  assert.throws(() => assertValidPositionCounts([3, -1, 1, 2], 4, 5), TypeError);
+  assert.throws(() => assertValidPositionCounts([3, Infinity, 1, 1], 4, 6), TypeError);
+  assert.throws(() => assertValidPositionCounts([3, NaN, 1, 1], 4, 6), TypeError);
+  assert.throws(() => assertValidPositionCounts([2.5, 1.5, 1, 0], 4, 5), TypeError, "fractional counts cannot correspond to real authored questions");
+});
+
+test("assertValidPositionCounts rejects a malformed optionCount or N", () => {
+  assert.throws(() => assertValidPositionCounts([1, 1], 1, 2), TypeError); // optionCount < 2
+  assert.throws(() => assertValidPositionCounts([1, 1], 2.5, 2), TypeError); // non-integer optionCount
+  assert.throws(() => assertValidPositionCounts([1, 1], 2, 0), TypeError); // N <= 0
+  assert.throws(() => assertValidPositionCounts([1, 1], 2, -3), TypeError);
+});
+
+test("assertValidPositionCounts accepts every valid live-bank-shaped fixture used elsewhere in this file without throwing", () => {
+  assert.doesNotThrow(() => assertValidPositionCounts([7, 5, 4, 4], 4, 20));
+  assert.doesNotThrow(() => assertValidPositionCounts([25, 25, 25, 25], 4, 100));
+  assert.doesNotThrow(() => assertValidPositionCounts([1, 1], 2, 2));
+});
+
+test("counterexample (issue 3, round 5) resolved: poissonBinomialPMF/poissonBinomialTwoSidedPValue reject probabilities outside [0,1] instead of silently producing a negative probability mass", () => {
+  assert.throws(() => poissonBinomialPMF([1.5, 0.5]), TypeError, "the OLD behavior produced pmf[0]=-0.25, a negative probability mass -- confirmed impossible before this fix");
+  assert.throws(() => poissonBinomialPMF([-0.1, 0.5]), TypeError);
+  assert.throws(() => poissonBinomialPMF([0.5, NaN]), TypeError);
+  assert.throws(() => poissonBinomialPMF([0.5, Infinity]), TypeError);
+  assert.throws(() => poissonBinomialTwoSidedPValue([1.5, 0.5], 1), TypeError);
+});
+
+test("counterexample (issue 3, round 5) resolved: poissonBinomialTwoSidedPValue rejects an out-of-range or non-integer observed index instead of silently returning a wrong number", () => {
+  assert.throws(() => poissonBinomialTwoSidedPValue([0.5, 0.5], -1), TypeError, "the OLD behavior silently returned 0 for observed=-1 -- confirmed before this fix");
+  assert.throws(() => poissonBinomialTwoSidedPValue([0.5, 0.5], 3), TypeError); // N=2, observed must be in [0,2]
+  assert.throws(() => poissonBinomialTwoSidedPValue([0.5, 0.5], 1.5), TypeError);
+});
+
+test("assertValidProbabilities/assertValidObservedIndex accept every valid fixture used elsewhere in this file without throwing", () => {
+  assert.doesNotThrow(() => assertValidProbabilities([0.9, 0.5, 0.5]));
+  assert.doesNotThrow(() => assertValidProbabilities([0, 0.5, 1]));
+  assert.doesNotThrow(() => assertValidObservedIndex(0, 5));
+  assert.doesNotThrow(() => assertValidObservedIndex(5, 5));
+});
+
+test("counterexample (issue 3, round 5) resolved: evaluateLengthAssociation() rejects a manually constructed item with a malformed correctAtMax or nullProbabilityCorrectAtMax instead of silently producing a misleading pass", () => {
+  const validItems = [];
+  for (let i = 0; i < 5; i += 1) { validItems.push(classifyCue(q("v" + i, ["short", "the correct longer option"], 1), historicalLength)); }
+
+  const missingBoolean = [...validItems, { ...validItems[0], id: "bad1", correctAtMax: "yes" }];
+  assert.throws(() => evaluateLengthAssociation(missingBoolean), TypeError);
+
+  const badProbability = [...validItems, { ...validItems[0], id: "bad2", nullProbabilityCorrectAtMax: 1.5 }];
+  assert.throws(() => evaluateLengthAssociation(badProbability), TypeError);
+
+  const negativeProbability = [...validItems, { ...validItems[0], id: "bad3", nullProbabilityCorrectAtMax: -0.1 }];
+  assert.throws(() => evaluateLengthAssociation(negativeProbability), TypeError);
+
+  const nanProbability = [...validItems, { ...validItems[0], id: "bad4", nullProbabilityCorrectAtMax: NaN }];
+  assert.throws(() => evaluateLengthAssociation(nanProbability), TypeError);
+});
+
+test("assertValidLengthAssociationItem accepts every real classifyCue() output without throwing (normal live-bank behavior preserved)", () => {
+  const items = liveQuestions.slice(0, 20).map((it) => classifyCue(it, canonicalLength));
+  items.forEach((item, i) => assert.doesNotThrow(() => assertValidLengthAssociationItem(item, i)));
+});
+
+test("malformed-input rejection does not change any normal live-bank Gate A result -- the live bank's evaluateGateA() still reports FAIL exactly as before this correction", () => {
+  const metrics = computeCueMetrics(liveQuestions, { lengthFn: canonicalLength });
+  const gate = evaluateGateA(metrics, { sequenceApplicable: false });
+  assert.equal(gate.overall, "fail");
+});
+
+// ---------------------------------------------------------------------------
+// 17. Genuinely independent p-value oracle and corrected provenance
+//     (issue 4, round 5). The round-4 fixture's "independent" hand
+//     computation reused the same incomplete-gamma recurrence as the
+//     implementation under test -- not a genuinely separate oracle.
+// ---------------------------------------------------------------------------
+
+test("counterexample (issue 4, round 5) resolved: analytically reducible df=2 case (chi-square(2) is Exponential(mean=2), survival = exp(-x/2)), a closed form derived independently of this file's incomplete-gamma recurrence", () => {
+  const analyticDf2 = (x) => Math.exp(-x / 2);
+  [1, 5, 10, 20].forEach((x) => {
+    const expected = analyticDf2(x);
+    const actual = chiSquareUpperTailPValue(x, 2);
+    assert.ok(Math.abs(actual - expected) < 1e-9, `x=${x}: analytic=${expected}, implementation=${actual}`);
+  });
+  // Exact literal value at x=10, computed independently (not by calling this implementation): 0.006737946999085467
+  assert.ok(Math.abs(chiSquareUpperTailPValue(10, 2) - 0.006737946999085467) < 1e-12);
+});
+
+test("counterexample (issue 4, round 5) resolved: analytically reducible df=4 case (chi-square(4) is Gamma(shape=2,scale=2), survival = exp(-x/2)*(1+x/2)), independently derived by integrating the Gamma(2,2) density", () => {
+  const analyticDf4 = (x) => Math.exp(-x / 2) * (1 + x / 2);
+  [1, 5, 10, 20].forEach((x) => {
+    const expected = analyticDf4(x);
+    const actual = chiSquareUpperTailPValue(x, 4);
+    assert.ok(Math.abs(actual - expected) < 1e-9, `x=${x}: analytic=${expected}, implementation=${actual}`);
+  });
+  // Exact literal value at x=10, computed independently: 6*exp(-5) = 0.0404276819945128
+  assert.ok(Math.abs(chiSquareUpperTailPValue(10, 4) - 0.0404276819945128) < 1e-12);
+});
+
+test("counterexample (issue 4, round 5) resolved: chiSquareUpperTailPValue matches the NIST/SEMATECH e-Handbook's published critical values at alpha=0.01 for df 1-7 (directly fetched 2026-08-08, https://www.itl.nist.gov/div898/handbook/eda/section3/eda3674.htm)", () => {
+  const nistAlpha01 = { 1: 6.635, 2: 9.210, 3: 11.345, 4: 13.277, 5: 15.086, 6: 16.812, 7: 18.475 };
+  Object.entries(nistAlpha01).forEach(([df, critical]) => {
+    const p = chiSquareUpperTailPValue(critical, Number(df));
+    assert.ok(Math.abs(p - 0.01) < 0.0005, `df=${df}: expected p~=0.01 at NIST's published critical value ${critical}, got ${p}`);
+  });
+});
+
+test("counterexample (issue 4, round 5) resolved: chiSquareUpperTailPValue matches the NIST/SEMATECH e-Handbook's published critical values at alpha=0.05 for df 1-7 (extended from df 1-3 in the prior round)", () => {
+  const nistAlpha05 = { 1: 3.841, 2: 5.991, 3: 7.815, 4: 9.488, 5: 11.070, 6: 12.592, 7: 14.067 };
+  Object.entries(nistAlpha05).forEach(([df, critical]) => {
+    const p = chiSquareUpperTailPValue(critical, Number(df));
+    assert.ok(Math.abs(p - 0.05) < 0.0005, `df=${df}: expected p~=0.05 at NIST's published critical value ${critical}, got ${p}`);
+  });
+});
+
+test("chiSquareUpperTailPValue is finite and monotonically non-increasing in the statistic, over the ranges this audit actually uses (df 1-7, statistic 0-1000)", () => {
+  for (let df = 1; df <= 7; df += 1) {
+    let previous = 1;
+    for (const x of [0, 1, 5, 10, 20, 50, 100, 500, 1000]) {
+      const p = chiSquareUpperTailPValue(x, df);
+      assert.ok(Number.isFinite(p), `df=${df}, x=${x}: expected finite, got ${p}`);
+      assert.ok(p <= previous + 1e-12, `df=${df}, x=${x}: p-value must be non-increasing as the statistic grows`);
+      previous = p;
+    }
+  }
+});
+
+test("upperRegularizedIncompleteGamma rejects invalid domain (a<=0, x<0) rather than returning a silently wrong number", () => {
+  assert.throws(() => upperRegularizedIncompleteGamma(0, 1), RangeError);
+  assert.throws(() => upperRegularizedIncompleteGamma(-1, 1), RangeError);
+  assert.throws(() => upperRegularizedIncompleteGamma(1, -1), RangeError);
+});
+
+// ---------------------------------------------------------------------------
+// 18. N=5n regime-transition claim, narrowed and corrected (issue 5,
+//     round 5). The retained evidence proves severe, comparable-shape
+//     omissions fail at N=19/20/21 -- it does NOT prove universal
+//     monotonicity across every possible distribution.
+// ---------------------------------------------------------------------------
+
+test("counterexample (issue 5, round 5) resolved: a genuine, accepted, limited discontinuity exists at the N=5n boundary -- N=19 [6,5,4,4] fails (structural) while N=20 [7,5,4,4], with a LARGER raw maximum count, passes (statistical, Cohen's w)", () => {
+  const r19 = evaluatePositionBalance({ optionCount: 4, total: 19, positionCounts: [6, 5, 4, 4] });
+  assert.equal(r19.regime, "structural");
+  assert.equal(r19.status, "fail", "N=19's exact pigeonhole rule: floor=4, ceil=5 -- 6 exceeds ceil");
+
+  const r20 = evaluatePositionBalance({ optionCount: 4, total: 20, positionCounts: [7, 5, 4, 4] });
+  assert.equal(r20.regime, "statistical");
+  assert.equal(r20.status, "pass", "N=20's Cohen's-w rule tolerates this despite a LARGER raw maximum (7 > 6)");
+  assert.ok(Math.abs(r20.detail.practicalEffect.w - 0.2449489742783178) < 1e-9);
+
+  // This is NOT a defect: the two regimes intentionally use different
+  // standards (exact authoring allocation vs. a practical effect-size
+  // tolerance) -- see docs/ASSESSMENT_VALIDITY.md section 4.3a for the
+  // explicit policy statement this test verifies is actually implemented.
+});
+
+test("the N=19/20/21 'no easier to pass' claim holds specifically for SEVERE, comparable-shape (zero-position) omissions -- verified again here alongside the genuine discontinuity above, so neither claim is allowed to silently overwrite the other", () => {
+  const severeAt19 = evaluatePositionBalance({ optionCount: 4, total: 19, positionCounts: [6, 7, 6, 0] });
+  const severeAt20 = evaluatePositionBalance({ optionCount: 4, total: 20, positionCounts: [7, 7, 6, 0] });
+  const severeAt21 = evaluatePositionBalance({ optionCount: 4, total: 21, positionCounts: [7, 7, 7, 0] });
+  assert.equal(severeAt19.status, "fail");
+  assert.equal(severeAt20.status, "fail");
+  assert.equal(severeAt21.status, "fail");
+});
+
+test("valid integer fixtures at 5n-1, 5n, and 5n+1 (n=4: N=19,20,21) for BOTH severe and near-balanced distributions all behave as documented", () => {
+  // Near-balanced: all three pass.
+  const nearBalanced19 = evaluatePositionBalance({ optionCount: 4, total: 19, positionCounts: [5, 5, 5, 4] });
+  const nearBalanced20 = evaluatePositionBalance({ optionCount: 4, total: 20, positionCounts: [5, 5, 5, 5] });
+  const nearBalanced21 = evaluatePositionBalance({ optionCount: 4, total: 21, positionCounts: [6, 5, 5, 5] });
+  assert.equal(nearBalanced19.status, "pass");
+  assert.equal(nearBalanced20.status, "pass");
+  assert.equal(nearBalanced21.status, "pass");
+  // Severe (zero-position): all three fail (verified in the dedicated test above too).
+  assert.equal(evaluatePositionBalance({ optionCount: 4, total: 19, positionCounts: [6, 7, 6, 0] }).status, "fail");
+  assert.equal(evaluatePositionBalance({ optionCount: 4, total: 20, positionCounts: [7, 7, 6, 0] }).status, "fail");
+  assert.equal(evaluatePositionBalance({ optionCount: 4, total: 21, positionCounts: [7, 7, 7, 0] }).status, "fail");
 });
 
 // ---------------------------------------------------------------------------

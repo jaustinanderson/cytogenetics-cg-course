@@ -1983,6 +1983,46 @@ run at a deterministic fixed worker count (`--workers=2`) produced a
 fully clean result: 252 passed, 6 skipped, 0 failed. See
 `docs/QUALITY_LOG.md` QL-039 for the full record.
 
+**A fifth independent review (same PR, before merge) found the Cohen's-w
+rationale's own justification cited a mathematically impossible
+distribution, that aggregate failures could be reported with no
+explanation of which position drove them, that the aggregate helpers
+trusted malformed input, that the round-4 "independent" p-value
+verification reused the same recurrence as the implementation under
+test, and that the regime-transition claim was overstated.** The
+threshold's justification claimed `[0.40,0.25,0.25,0.25]` (summing to
+1.15, not 1) was algebraically equivalent to the prior margin rule --
+false. Replaced with Cohen's own directly-quoted, verified-normalized
+m=4 examples (Cohen, 1988, pages 224-227, directly inspected via a
+publicly hosted scan), reframed explicitly as an adopted operational
+threshold, not a uniquely correct or item-validity result. A
+distribution-wide Cohen's-w failure (N=100, `[38,24,19,19]`) could report
+zero explanation when every cell stayed inside the separate per-cell
+diagnostic margin -- every position now reports its full directional and
+chi-square-contribution record, and a new `primaryContributors` field
+names the position(s) responsible for a majority of the aggregate effect.
+The aggregate helpers previously trusted malformed input --
+`exactPigeonholeBalance([2,1,1],4,5)` reported `balanced:true` for a
+wrong-length, wrong-sum array; `poissonBinomialPMF([1.5,0.5])` produced a
+negative probability mass -- now rejected by one reusable validation
+function per input shape, with the prior fractional-count test fixture
+replaced by a valid integer one. The round-4 p-value "independent" oracle
+reused the same incomplete-gamma recurrence as the implementation under
+test -- replaced with two genuinely independent analytic closed forms
+(df=2, df=4) and an NIST/SEMATECH critical-value cross-check extended to
+alpha=0.05 for df 1-7; the Numerical Recipes attribution is removed since
+its bookreader is subscription-gated and only its table of contents, not
+its content, was actually inspected. The N=19/20/21 "no easier to pass"
+claim was verified only for severe zero-position omissions -- a genuine,
+accepted, limited discontinuity is now documented explicitly (N=19
+`[6,5,4,4]` fails; N=20 `[7,5,4,4]`, with a larger raw maximum, passes),
+since the two regimes use deliberately different standards by design.
+Mutation count reconciled across all five rounds: 8+8+4+7+6 = **33**, with
+no coverage gaps in round 5's own 6 mutations. A complete `npx playwright
+test` run at a deterministic fixed worker count (`--workers=2`) produced
+another fully clean result: 252 passed, 6 skipped, 0 failed. See
+`docs/QUALITY_LOG.md` QL-040 for the full record.
+
 **Nothing here is a correction to product code or scientific content.**
 `index.html` is unmodified; no question, answer, rationale, distractor
 feedback, domain, topic, difficulty, or stable ID changed; no
