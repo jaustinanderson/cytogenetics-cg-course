@@ -1921,6 +1921,33 @@ color, with the University of Illinois CITL source (fully, directly
 verified) as the sole basis for every numeric threshold. See
 `docs/QUALITY_LOG.md` QL-037 for the full record.
 
+**A third independent review (same PR, before merge) found that QL-037's
+own tests only ever proved position balance in isolation, not the
+combined Gate A; that aggregate balance alone missed mechanically
+predictable answer-key sequences; that a statistically significant but
+practically trivial deviation could fail Gate A by itself; and that the
+exact two-sided p-value convention was unnamed.** The size-loop tests
+never constructed a full question form and asserted
+`evaluateGateA(...).overall === "pass"`, including the length component —
+now directly proven at every required size via independently constructed
+full forms with position-only and length-only perturbations each
+isolated. A literal `A,B,C,D,A,B,C,D,A` key satisfies exact pigeonhole
+balance perfectly while being an obvious repeating cycle — a new
+deterministic sequence-pattern detector (not a statistical test) now
+catches repeating cycles, palindromes, and excessive runs, reported
+separately from position and length. A large-N scope with a maximum
+observed position share of 25.5% (far inside the 40% practical margin)
+previously still failed because chi-square exceeded its critical value —
+the practical margin is now the sole authoritative fail driver, with
+significance-alone raising an explicit review flag instead. The exact
+two-sided Poisson-binomial p-value switched from an unnamed
+doubled-minimum-tail convention to the precisely-named probability-
+ordering convention, verified against independently hand-computed
+fixtures. Mutation count reconciled from retained evidence across all
+three rounds: 8 + 8 + 4 = **20** (an earlier PR-body draft undercounted
+this as "8 across two rounds"). See `docs/QUALITY_LOG.md` QL-038 for the
+full record.
+
 **Nothing here is a correction to product code or scientific content.**
 `index.html` is unmodified; no question, answer, rationale, distractor
 feedback, domain, topic, difficulty, or stable ID changed; no

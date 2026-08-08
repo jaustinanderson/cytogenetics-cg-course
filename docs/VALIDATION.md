@@ -3018,7 +3018,9 @@ tie-aware length association, rendering-accurate length measurement,
 input-order-independent pilot selection, exact-id replacement detection,
 and deterministic JSON output), each failed exactly its intended,
 directly-attributable test(s) and no others, reverted to byte-identical
-via `diff` before committing.
+via `diff` before committing. **Count precision (corrected retroactively):**
+this is round 2's count specifically; see the next correction below for
+round 1's own 8 and round 3's 4, and the reconciled cumulative total.
 
 **Full local validation:** `npm test` (172 dependency-free DOM-behavior
 checks + 70 governance checks + 82 assessment-cue checks + 5
@@ -3035,6 +3037,77 @@ weakened to make the present bank pass; the fix was making Gate A
 *achievable* for well-authored content, not easier for badly-authored
 content. See `docs/QUALITY_LOG.md` QL-037 and
 `docs/ASSESSMENT_VALIDITY.md` for the full record.
+
+### Correction — QL-037's tests only proved position balance, not the combined Gate A; sequence predictability, practical-vs-statistical policy, and the exact p-value convention, added 2026-08-08
+
+A second independent review, before merge, found four further problems in
+the same assessment-cue tooling. **(1)** QL-037's own size-loop tests, and
+the documentation table they supported, called `evaluatePositionBalance()`
+directly and never constructed a full question form proving the COMBINED
+`evaluateGateA(...).overall === "pass"`, including the tie-aware length
+component — a test/documentation coverage gap, confirmed directly by
+constructing genuinely independent full-form fixtures for every required
+size (5, 6, 7, 8, 9, 13) that DO prove the combined gate passes, with
+position-only and length-only perturbations each isolated to prove which
+component drives a given failure. **(2)** Aggregate position balance alone
+does not catch a mechanically predictable answer-key sequence — confirmed
+directly: `A,B,C,D,A,B,C,D,A` (N=9, n=4) satisfies exact pigeonhole
+balance perfectly while being an obvious repeating cycle. A new,
+deterministic (non-statistical) sequence-pattern detector
+(`detectAnswerSequencePatterns()`/`evaluateAnswerSequence()`) now catches
+exact repeating cycles, whole-sequence palindromes, and excessive
+identical-position runs, reported as `evaluateGateA().sequence`, separate
+from position and length but still contributing to `overall`. **(3)** A
+statistically significant but practically trivial large-N deviation could
+fail Gate A on significance alone — confirmed directly: N=100,000, a
+maximum observed position share of 25.5% (far inside the 40% practical
+threshold) still failed because chi-square (13.33) exceeded the α=0.01
+critical value (11.345). The decision policy is corrected so the
+practical/effect-size margin is the sole authoritative fail driver;
+significance alone now raises an explicit review flag
+(`reviewFlag: {required, reason}`) instead of failing, while a genuine
+practical-margin violation still fails regardless of statistical power.
+**(4)** The exact two-sided Poisson-binomial p-value convention was
+unnamed and not the only defensible one — the prior implementation used a
+doubled-minimum-tail convention without stating so. Switched to the
+probability-ordering convention, precisely named
+(`"exact-poisson-binomial-two-sided-probability-ordering"`), verified
+against independently hand-computed (not implementation-derived) fixtures
+that diverge from the prior convention at every non-modal outcome for an
+asymmetric probability vector `[0.9, 0.5, 0.5]`.
+
+**Tests:** `tests/assessment-cue-audit.mjs` grew from 82 to 127
+dependency-free checks. `tests/e2e/assessment-cue-audit.spec.mjs` remains
+at 7 real-browser checks (unchanged this round, re-run and reconfirmed
+passing) — every corrected behavior this round is pure computation over
+already browser-verified rendered/measured data, not a new
+rendering-dependent claim.
+
+**Mutation-tested (round 3):** 4 targeted, temporary, fully reverted
+reversions against `scripts/assessment-cue-audit.mjs` (never
+`index.html`), covering the four required categories (full-Gate-vs-
+position-only coverage, sequence-pattern detection, practical/statistical
+decision separation, the exact two-sided calculation), each failed
+exactly its intended, directly-attributable test(s) and no others,
+reverted to byte-identical via `diff` before committing.
+
+**Mutation count, reconciled from retained evidence:** round 1
+(`docs/QUALITY_LOG.md` QL-036): 8. Round 2 (QL-037): 8. Round 3 (QL-038,
+this entry): 4. **Cumulative total: 20.**
+
+**Full local validation:** `npm test` (172 dependency-free DOM-behavior
+checks + 70 governance checks + 127 assessment-cue checks + 5
+deployed-revision checks) and the complete `npx playwright test` suite,
+both green except pre-existing, already-documented flakes confirmed
+transient by isolated re-run.
+
+No question, answer, rationale, distractor feedback, domain, topic,
+difficulty, or stable ID changed. `index.html` is byte-for-byte
+unchanged. No `QUESTION_GOVERNANCE` field populated; all 153 questions
+remain `draft`. QL-033 is not marked corrected. Gate A still correctly
+fails the whole bank and every one of its 17 forms. See
+`docs/QUALITY_LOG.md` QL-038 and `docs/ASSESSMENT_VALIDITY.md` for the
+full record.
 
 ## Gates still open
 

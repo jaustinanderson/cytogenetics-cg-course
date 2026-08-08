@@ -4290,21 +4290,29 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   an exact match to QL-033's original figures, confirmed by a dedicated
   test that would fail if the bank or the measurement diverged from the
   frozen record.
-- **Length-measurement finding:** QL-033's original metric was
-  independently identified (by testing candidate metrics until one
-  reproduced the recorded counts, not assumed) as plain JavaScript
+- **Length-measurement finding (superseded — QL-037):** this entry
+  originally claimed QL-033's original metric was "independently
+  identified" as plain JavaScript `.length`. **That overstated the
+  evidence — see QL-037: reproducing the frozen counts is evidence the
+  original method was character-count-shaped, not proof of exactly which
+  implementation was used; no original script survives to check.** QL-033's
+  metric was independently identified (by testing candidate metrics until
+  one reproduced the recorded counts, not assumed) as plain JavaScript
   `.length` (raw UTF-16 code units) — confirmed distinct from a word-count
   metric, which produces different counts (89/153, 138/153) on the same
   data. A more robust canonical metric (`canonicalLength()`: strip literal
   markup, decode HTML entities, NFC-normalize, collapse whitespace, strip
   one trailing decorative punctuation mark, count grapheme clusters) was
-  defined for future use; it currently reproduces the identical counts to
-  the historical metric on every one of the 153 questions' options (no
-  markup, entities, irregular whitespace, or non-BMP characters exist in
-  the current bank), so no divergence from the frozen baseline exists yet
-  — but the historical numbers are preserved as an immutable record
-  (`ORIGINAL_BASELINE`, `Object.freeze()`d) regardless, so a future
-  divergence, if one ever occurs, can never silently overwrite them.
+  defined for future use **(superseded — QL-037: this design measured a
+  different string than `index.html` actually renders to learners; see
+  QL-037 for the corrected metric)**; it currently reproduces the identical
+  counts to the historical metric on every one of the 153 questions'
+  options (no markup, entities, irregular whitespace, or non-BMP
+  characters exist in the current bank), so no divergence from the frozen
+  baseline exists yet — but the historical numbers are preserved as an
+  immutable record (`ORIGINAL_BASELINE`, `Object.freeze()`d) regardless, so
+  a future divergence, if one ever occurs, can never silently overwrite
+  them.
 - **A genuine implementation bug found and fixed during this same
   work, before any test asserted the wrong behavior as correct:** an
   early version of `canonicalLength()` decoded HTML entities before
@@ -4551,7 +4559,13 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   `scripts/assessment-cue-audit.mjs` (never `index.html`), covering every
   required category, each failed exactly its intended, directly-attributable
   test(s) and no others, reverted to byte-identical via `diff` before
-  committing. See `docs/VALIDATION.md` for the full record.
+  committing. See `docs/VALIDATION.md` for the full record. **Count
+  precision (corrected retroactively — QL-038):** this is this round's
+  (round 2's) count specifically, separate from round 1's (QL-036's) own 8
+  mutations and round 3's (QL-038's) 4 — see QL-038 for the reconciled,
+  cumulative total across all three rounds. An earlier PR-body draft
+  described "8 mutations across two rounds," which undercounted the actual
+  total; that wording has been corrected in the PR body.
 - **Full local validation:** `npm test` (172 dependency-free DOM-behavior
   checks + 70 governance checks + 82 assessment-cue checks + 5
   deployed-revision checks) and the complete `npx playwright test` suite,
@@ -4569,3 +4583,177 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   counterexample (a synthetic fixture proven to pass, or proven to evade
   detection) before being trusted, not only a check against the one
   already-known-bad real bank.
+
+## QL-038 — QL-037's own tests only proved position balance in isolation, not the combined Gate A; aggregate balance alone missed predictable answer-key sequences; statistical significance alone could fail a practically trivial deviation; the exact two-sided p-value convention was unnamed (Issue #24, Phase 0 steps 1-3)
+
+- **Status:** Corrected on the same branch
+  (`claude/phase-0-ql033-foundation`), draft PR still open against `main`
+  for independent review, not yet merged. QL-033 itself remains confirmed
+  and unresolved; this entry corrects the QL-036/QL-037 *tooling* further,
+  not the bank.
+- **Finding — four problems, each reproduced by direct construction before
+  any fix (full detail in `docs/ASSESSMENT_VALIDITY.md`):**
+  1. **QL-037's own size-loop tests, and the documentation table they
+     supported, only ever exercised `evaluatePositionBalance()` directly.**
+     No test constructed a full question form and asserted
+     `evaluateGateA(...).overall === "pass"`, including the tie-aware
+     length component. This was a test/documentation coverage gap — the
+     underlying `evaluateGateA()` was independently confirmed, by direct
+     construction, to already support a full-Gate pass at every required
+     size once a genuinely decoupled fixture was used; an initial naive
+     fixture construction was found to accidentally introduce its own
+     length cue and, separately, to use a plain `i % n` rotation that is
+     itself a repeating cycle (see Finding 2) — both caught before being
+     used as "proof," not shipped as false evidence.
+  2. **Aggregate position balance does not detect a predictable answer-key
+     sequence.** Confirmed directly: `A,B,C,D,A,B,C,D,A` (N=9, n=4)
+     satisfies `exactPigeonholeBalance()` perfectly
+     (`positionCounts=[3,2,2,2]`, `balanced: true`) while being an
+     obviously learnable cycle; nothing in Gate A examined sequence order
+     before this correction.
+  3. **A statistically significant but practically trivial large-N
+     deviation could fail Gate A on significance alone.** Confirmed
+     directly: `N=100,000`, `n=4`, position counts
+     `[25,500, 24,834, 24,834, 24,832]` — maximum observed share 25.5%,
+     far inside the 40% practical threshold — yet chi-square (13.33)
+     exceeds the α=0.01 critical value (11.345), so the prior
+     `practicalFail || statisticalResult === "rejects-uniform"` decision
+     failed this scope on statistical significance alone. The same defect
+     existed in length association's decision rule.
+  4. **The exact two-sided Poisson-binomial p-value convention was
+     unnamed, and not the only defensible one.** The prior
+     `poissonBinomialTwoSidedPValue()` used a doubled-minimum-tail
+     convention (`2 * min(P(X<=obs), P(X>=obs))`, clipped to 1) without
+     stating so, and without acknowledging that "two-sided" is not
+     self-defining for an asymmetric discrete distribution (this
+     Poisson-binomial generally is asymmetric, since per-item null
+     probabilities differ item to item).
+- **Impact:** None shipped — PR #26 remained draft/unmerged throughout;
+  found and fixed before merge.
+- **Correction (full detail, exact mathematics, and every reproduced
+  counterexample in `docs/ASSESSMENT_VALIDITY.md` sections 4.3a, 4.4a,
+  4.6a, 4.10):**
+  1. **Full-Gate achievability directly proven**, not merely
+     position-balance achievability: for every required size (5, 6, 7, 8,
+     9, 13), three independently constructed full forms — one fully
+     balanced/non-cyclic/non-cued (proven `overall: pass`), one with ONLY
+     position perturbed (proven `overall: fail` via position specifically,
+     length and sequence unaffected), one with ONLY length perturbed
+     (proven `overall: fail` via length specifically, position and
+     sequence unaffected) — using a construction (`buildIndependentItem()`)
+     that gives independent control over which slot is correct and
+     whether that slot is the item's own length-max slot, so a passing
+     fixture cannot be a lucky coincidence of the two properties. A mixed
+     2-/3-/4-option scope, each group sized for a definitive small-N
+     result, also reaches a complete `pass` with no group, nor length, nor
+     sequence, inconclusive. Every "Gate A passes" claim in the PR and
+     documentation is now stated precisely as either the full combined
+     result or explicitly labeled position-only.
+  2. **New answer-key sequence detection** (`detectAnswerSequencePatterns()`,
+     `evaluateAnswerSequence()`), reported as its own field
+     (`evaluateGateA().sequence`), separate from position balance and
+     length association but still contributing to `overall`. Deterministic
+     structural detection, not a statistical test (an inferential test
+     over the space of balanced sequences at N=5-13 would itself claim
+     statistical meaning from one short, static sample — rejected for
+     exactly the reason Finding 3/Correction 3 rejects that elsewhere):
+     exact short repeating cycles (period `1..min(n, floor(N/2))`,
+     confirmed at least twice), whole-sequence palindromes (`N>=4`), and
+     excessive identical-position runs (`>= n` consecutive). A detected
+     finding is `fail` (an exact cycle/palindrome/run is unambiguous, not
+     something for a reviewer to adjudicate); `inconclusive` only for
+     `N < n`. Does not demand a mechanically rotating key — a rotating key
+     is exactly what the repeating-cycle check flags.
+  3. **Practical-vs-statistical decision policy corrected**, applied
+     identically to position balance's large-N regime and to length
+     association: the practical/effect-size margin is now the SOLE
+     authoritative driver of `fail`; a statistically significant result
+     that stays within the practical margin no longer fails the gate by
+     itself, and instead raises an explicit `reviewFlag` (`{required,
+     reason}`), aggregated onto `evaluateGateA()`'s own `reviewRequired` /
+     `reviewFlaggedComponents`. A genuine practical-margin violation still
+     fails regardless of statistical power (this was already true in the
+     small-N structural regime, which never attempts a statistic; it is
+     now equally true in the large-N regime). Verified: the exact
+     boundary counterexample above now returns `pass` with
+     `reviewFlag.required: true`; a margin-exceeding-but-underpowered
+     scope still fails; a scope that both exceeds the margin and is
+     significant fails with `reviewFlag.required: false` (a fail is never
+     softened into a review).
+  4. **Poisson-binomial two-sided p-value switched to the
+     PROBABILITY-ORDERING convention** (the sum of every outcome no more
+     likely than the one observed), precisely named
+     (`"exact-poisson-binomial-two-sided-probability-ordering"`) and
+     explicitly documented as one defensible convention among several, not
+     the only one. Verified against independently hand-computed (not
+     implementation-derived) fixtures: probabilities `[0.9, 0.5, 0.5]`
+     give hand-derived `pmf = [0.025, 0.275, 0.475, 0.225]`; the
+     probability-ordering p-values `[0.025, 0.525, 1.0, 0.25]` differ from
+     the prior doubled-minimum-tail convention's `[0.05, 0.6, 1.0, 0.45]`
+     at every non-modal outcome and coincide only at the mode. Boundary
+     (`p=0`, `p=1`) and fully degenerate all-tied cases independently
+     hand-verified. The live bank's length-association p-value moved from
+     ≈1.2×10⁻⁴⁹ (prior convention) to ≈6.1×10⁻⁵⁰ (corrected convention) —
+     both astronomically significant; the convention change does not
+     change any pass/fail conclusion for the live bank.
+- **Tests:** `tests/assessment-cue-audit.mjs` grew from 82 to 127
+  dependency-free checks. New coverage: 18 full-form fixtures (3 per
+  required size × 6 sizes) proving complete-Gate-A pass/fail with each
+  perturbation isolated; a mixed-option-count complete-Gate-A pass
+  fixture; the literal cyclic/alternating/mirrored/excessive-run
+  counterexamples from the task, each independently verified caught; a
+  hand-verified balanced-non-cyclic order for every required size proving
+  a genuinely non-obvious key is not penalized; sequence
+  inconclusive-only-below-N-behavior and its non-statistical-claim
+  property; the exact large-N practical-vs-statistical boundary
+  counterexample for both position and length, plus the
+  margin-exceeds-but-underpowered and margin-exceeds-and-significant
+  cases; nine hand-computed Poisson-binomial p-value fixtures (asymmetric
+  divergence, symmetric coincidence, modal agreement, both single-item
+  boundary probabilities, degenerate all-tie). No existing e2e coverage
+  needed new browser-specific tests — every corrected behavior is pure
+  computation over already-verified rendered/measured data, not a new
+  rendering-dependent claim, so the existing 7 real-browser checks in
+  `tests/e2e/assessment-cue-audit.spec.mjs` (unchanged this round) remain
+  sufficient and were re-run and reconfirmed passing.
+- **Mutation-tested (this round):** 4 targeted reversions against
+  `scripts/assessment-cue-audit.mjs` (never `index.html`), covering the
+  four required categories (full-Gate-vs-position-only coverage,
+  sequence-pattern detection, practical/statistical decision separation,
+  the exact two-sided calculation), each failed exactly its intended,
+  directly-attributable test(s) and no others, reverted to byte-identical
+  via `diff` before committing. See `docs/VALIDATION.md` for the full
+  record.
+- **Mutation count, reconciled from retained evidence (not guessed):**
+  round 1 (QL-036, this PR's first commit): **8**. Round 2 (QL-037, this
+  PR's second commit): **8**. Round 3 (this entry, this PR's third
+  commit): **4**. **Cumulative total across all three rounds: 20.** The
+  PR body's prior "8 mutations across two rounds" wording undercounted
+  round 2 alone and omitted round 1 entirely; corrected in the current PR
+  body to state the reconciled per-round and cumulative counts explicitly.
+- **Full local validation:** `npm test` (172 dependency-free DOM-behavior
+  checks + 70 governance checks + 127 assessment-cue checks + 5
+  deployed-revision checks) and the complete `npx playwright test` suite,
+  both green except pre-existing, already-documented flakes confirmed
+  transient by isolated re-run.
+- **Scope:** No question, answer, rationale, distractor feedback, domain,
+  topic, difficulty, or stable ID changed; `index.html` is unmodified. No
+  `QUESTION_GOVERNANCE` field populated; all 153 questions remain `draft`.
+  QL-033 is not marked corrected. Phase 0 stays unchecked in
+  `docs/ROADMAP.md` and Issue #24. Steps 4-9 of the Phase 0 protocol were
+  not begun.
+- **Prevention:** Position/length balance alone is not the full claim a
+  "Gate A pass" makes — a test suite (and the documentation drawn from it)
+  must exercise the exact aggregate object callers actually consult
+  (`evaluateGateA()`), not only a lower-level helper it happens to call,
+  or a coverage gap can silently persist behind an otherwise-real fix.
+  Aggregate distributional balance and sequence predictability are
+  genuinely different properties of the same data and must be checked
+  separately — one can hold without the other. "Statistically detectable"
+  and "practically meaningful" are also different claims; conflating them
+  in a single fail condition guarantees a large enough sample will
+  eventually manufacture a failure out of noise. An "exact" statistical
+  convention is not automatically unique; asymmetric distributions in
+  particular can support more than one defensible p-value definition, and
+  the choice deserves a name and a stated rationale, not silent
+  application.

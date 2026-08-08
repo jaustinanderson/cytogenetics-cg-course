@@ -308,7 +308,7 @@ export function computeCueMetrics(questions, { lengthFn = canonicalLength } = {}
     const cue = classifyCue(q, lengthFn);
     if (cue.cueClass === "uniquely-longest") { uniquelyLongest += 1; longestOrTied += 1; }
     else if (cue.cueClass === "tied-longest") { longestOrTied += 1; }
-    items.push({ id: q.id, ...cue });
+    items.push({ id: q.id, answerPosition: q.a, ...cue });
   });
 
   return {
@@ -411,7 +411,7 @@ export function exactPigeonholeBalance(positionCounts, n, N) {
 export function evaluatePositionBalance(group) {
   const { optionCount: n, total: N, positionCounts } = group;
   if (N < n) {
-    return { status: "inconclusive", regime: "insufficient-data", reasons: [`only ${N} item(s) for ${n} answer positions -- fewer items than positions, no judgment possible`], detail: { n, N, positionCounts } };
+    return { status: "inconclusive", regime: "insufficient-data", reasons: [`only ${N} item(s) for ${n} answer positions -- fewer items than positions, no judgment possible`], reviewFlag: { required: false, reason: null }, detail: { n, N, positionCounts } };
   }
 
   const threshold = REGIME_THRESHOLD(n);
@@ -428,6 +428,7 @@ export function evaluatePositionBalance(group) {
       status: pigeonhole.balanced ? "pass" : "fail",
       regime: "structural",
       reasons,
+      reviewFlag: { required: false, reason: null },
       detail: { n, N, positionCounts, floorAllowed: pigeonhole.floorAllowed, ceilAllowed: pigeonhole.ceilAllowed, statisticalResult: "not-computed-small-n-structural-regime-applies" },
     };
   }
@@ -454,17 +455,42 @@ export function evaluatePositionBalance(group) {
   const df = n - 1;
   const critical = CHI_SQUARE_CRITICAL_ALPHA_01[df];
   let statisticalResult = "not-computed";
+  let statisticallySignificant = false;
   if (critical !== undefined) {
     statisticalResult = chiSquare > critical ? "rejects-uniform" : "fails-to-reject-uniform";
-    if (statisticalResult === "rejects-uniform") {
-      reasons.push(`chi-square goodness-of-fit statistic ${chiSquare.toFixed(2)} exceeds the critical value ${critical} (df=${df}, alpha=${SIGNIFICANCE_ALPHA}) -- position distribution is statistically distinguishable from uniform`);
-    }
+    statisticallySignificant = statisticalResult === "rejects-uniform";
   } else {
     reasons.push(`degrees of freedom ${df} exceeds this module's chi-square critical-value table -- statistical corroboration not available for this option count, practical threshold remains authoritative`);
   }
 
-  const status = practicalFail || statisticalResult === "rejects-uniform" ? "fail" : "pass";
-  return { status, regime: "statistical", reasons, detail: { n, N, positionCounts, maxProportion, expectedProportion, maxAllowedShare, chiSquare, statisticalResult } };
+  // DECISION POLICY (corrected -- docs/ASSESSMENT_VALIDITY.md section 4.6a,
+  // "practical vs. statistical significance"). The practical/effect-size
+  // margin is the SOLE, AUTHORITATIVE driver of pass/fail in this regime:
+  // exceeding it fails regardless of statistical significance or power (a
+  // predeclared, educationally meaningful effect can fail even under a
+  // small sample's low statistical power). Statistical significance
+  // ALONE, without exceeding the practical margin, NEVER fails the gate
+  // by itself -- with enough items, an educationally trivial deviation
+  // becomes statistically detectable purely because N is large, and
+  // detectability is not the same as a substantive cueing defect. It
+  // still surfaces, explicitly, as a separate review flag, so a real
+  // statistical signal is never silently discarded either.
+  let reviewRequired = false;
+  let reviewReason = null;
+  if (statisticallySignificant && !practicalFail) {
+    reviewRequired = true;
+    reviewReason = `chi-square goodness-of-fit statistic ${chiSquare.toFixed(2)} exceeds the critical value ${critical} (df=${df}, alpha=${SIGNIFICANCE_ALPHA}) -- statistically distinguishable from uniform -- even though the observed share (${(maxProportion * 100).toFixed(2)}%) stays within the practical margin (allowed max ${(maxAllowedShare * 100).toFixed(1)}%); flagged for human review, not failed, since statistical significance alone does not establish an educationally meaningful cueing defect`;
+    reasons.push(reviewReason);
+  } else if (statisticallySignificant) {
+    reasons.push(`chi-square goodness-of-fit statistic ${chiSquare.toFixed(2)} exceeds the critical value ${critical} (df=${df}, alpha=${SIGNIFICANCE_ALPHA}) -- position distribution is statistically distinguishable from uniform, corroborating the practical-margin failure above`);
+  }
+
+  const status = practicalFail ? "fail" : "pass";
+  return {
+    status, regime: "statistical", reasons,
+    reviewFlag: { required: reviewRequired, reason: reviewReason },
+    detail: { n, N, positionCounts, maxProportion, expectedProportion, maxAllowedShare, practicalFail, chiSquare, statisticalResult, statisticallySignificant },
+  };
 }
 
 // ----------------------------------------------------------------------------
@@ -495,12 +521,55 @@ export function poissonBinomialPMF(probabilities) {
   return pmf;
 }
 
-/** Exact two-sided Poisson-binomial p-value for observing exactly `observed` successes given per-item null probabilities. */
+/**
+ * Exact two-sided Poisson-binomial p-value for observing exactly
+ * `observed` successes given per-item null probabilities, using the
+ * PROBABILITY-ORDERING convention (corrected -- docs/ASSESSMENT_VALIDITY.md
+ * section 4.4a; also called the "minimum-likelihood" or "outcome-ranking"
+ * convention): the sum of P(k) over every possible outcome k whose
+ * probability is no greater than the observed outcome's own probability
+ * (a small relative epsilon tolerance guards against excluding the
+ * observed outcome itself due to floating-point rounding).
+ *
+ * "Two-sided p-value" is not self-defining for an ASYMMETRIC discrete
+ * distribution -- this Poisson-binomial is generally asymmetric, since
+ * per-item probabilities differ item to item, so more than one convention
+ * is defensible. This function previously (before this correction) used a
+ * DOUBLED-MINIMUM-TAIL convention instead (`2 * min(P(X<=observed),
+ * P(X>=observed))`, clipped to 1). Probability-ordering was chosen over
+ * it, and named precisely rather than left as an unstated assumption,
+ * because:
+ *
+ *   - It directly answers "how surprising is this outcome" by summing the
+ *     probability of every outcome AT LEAST AS SURPRISING as (no more
+ *     likely than) the one observed -- well-defined and self-consistent
+ *     for any distribution shape, symmetric or not, with no post-hoc
+ *     clipping needed to stay <= 1 (the doubled-tail convention needs
+ *     exactly that clipping, a sign it is not directly answering the same
+ *     question for a skewed distribution).
+ *   - It is the same convention underlying the standard two-sided exact
+ *     test for other asymmetric discrete distributions (e.g. Fisher's
+ *     exact test), so it is not a bespoke choice invented for this file.
+ *   - For a SYMMETRIC probability vector the two conventions coincide
+ *     exactly at the distribution's mode and are close elsewhere, but can
+ *     diverge substantially away from the mode for a genuinely asymmetric
+ *     one -- demonstrated with hand-computed (not implementation-derived)
+ *     fixtures in tests/assessment-cue-audit.mjs, probabilities
+ *     `[0.9, 0.5, 0.5]`.
+ *
+ * This is a deliberate, precisely-named choice among multiple valid exact
+ * two-sided conventions for an asymmetric discrete distribution -- it is
+ * not claimed to be the only possible one.
+ */
 export function poissonBinomialTwoSidedPValue(probabilities, observed) {
   const pmf = poissonBinomialPMF(probabilities);
-  const upperTail = pmf.slice(observed).reduce((a, b) => a + b, 0);
-  const lowerTail = pmf.slice(0, observed + 1).reduce((a, b) => a + b, 0);
-  return Math.min(1, 2 * Math.min(upperTail, lowerTail));
+  const observedP = pmf[observed];
+  const epsilon = 1e-9;
+  let total = 0;
+  for (let k = 0; k < pmf.length; k += 1) {
+    if (pmf[k] <= observedP * (1 + epsilon)) { total += pmf[k]; }
+  }
+  return Math.min(1, total);
 }
 
 /**
@@ -522,13 +591,21 @@ export function poissonBinomialTwoSidedPValue(probabilities, observed) {
  * different probabilities) -- not a single binomial, since p can differ
  * item to item purely because of how many ties happen to exist.
  *
- * Decision: BOTH a practical effect-size margin AND the exact
- * Poisson-binomial two-sided p-value are computed; either failing fails
- * the scope. The exact test is well-defined at any N >= 1, so no
- * separate small-N/large-N regime or "not computed" state is needed for
- * this check (unlike position balance, which needs the chi-square-vs-
- * structural split because chi-square specifically requires a large-cell
- * approximation this exact method does not).
+ * Decision (corrected -- docs/ASSESSMENT_VALIDITY.md section 4.6a,
+ * "practical vs. statistical significance"): the practical effect-size
+ * margin is the SOLE, AUTHORITATIVE driver of pass/fail -- exceeding it
+ * fails regardless of what the exact p-value says. The exact
+ * Poisson-binomial p-value is always computed and reported, but
+ * statistical significance ALONE, without exceeding the practical margin,
+ * never fails the scope by itself; it surfaces instead as an explicit,
+ * separate review flag (`reviewFlag`), since a large enough item count can
+ * make an educationally trivial association statistically detectable
+ * without it being a substantive cueing defect. The exact test is
+ * well-defined at any N >= 1, so no separate small-N/large-N regime or
+ * "not computed" state is needed for this check (unlike position balance,
+ * which needs the chi-square-vs-structural split because chi-square
+ * specifically requires a large-cell approximation this exact method does
+ * not).
  *
  * Symmetric treatment, explicitly: an association that is either
  * significantly ABOVE or significantly BELOW the null rate fails. A rate
@@ -545,7 +622,7 @@ export function poissonBinomialTwoSidedPValue(probabilities, observed) {
  */
 export function evaluateLengthAssociation(items) {
   if (!Array.isArray(items) || items.length === 0) {
-    return { status: "inconclusive", reasons: ["no items in scope"], detail: null };
+    return { status: "inconclusive", reasons: ["no items in scope"], reviewFlag: { required: false, reason: null }, detail: null };
   }
   const N = items.length;
   const probabilities = items.map((it) => it.nullProbabilityCorrectAtMax);
@@ -568,19 +645,181 @@ export function evaluateLengthAssociation(items) {
 
   const pValue = poissonBinomialTwoSidedPValue(probabilities, observed);
   const statisticalResult = pValue < SIGNIFICANCE_ALPHA ? "rejects-null" : "fails-to-reject-null";
-  if (statisticalResult === "rejects-null") {
-    reasons.push(`exact two-sided Poisson-binomial p-value ${pValue.toExponential(3)} is below alpha=${SIGNIFICANCE_ALPHA} -- the max-length-set association is statistically distinguishable from the tie-aware null model`);
+  const statisticallySignificant = statisticalResult === "rejects-null";
+
+  // Same decision policy as evaluatePositionBalance's large-N regime:
+  // practical margin is authoritative; significance alone (without
+  // exceeding the margin) only raises a review flag, never a fail.
+  let reviewRequired = false;
+  let reviewReason = null;
+  if (statisticallySignificant && !practicalFail) {
+    reviewRequired = true;
+    reviewReason = `exact two-sided Poisson-binomial p-value ${pValue.toExponential(3)} is below alpha=${SIGNIFICANCE_ALPHA} -- statistically distinguishable from the tie-aware null model -- even though the observed rate (${(observedRate * 100).toFixed(2)}%) stays within the practical margin (allowed [${(minAllowedShare * 100).toFixed(1)}%, ${(maxAllowedShare * 100).toFixed(1)}%]); flagged for human review, not failed, since statistical significance alone does not establish an educationally meaningful cueing defect`;
+    reasons.push(reviewReason);
+  } else if (statisticallySignificant) {
+    reasons.push(`exact two-sided Poisson-binomial p-value ${pValue.toExponential(3)} is below alpha=${SIGNIFICANCE_ALPHA} -- the max-length-set association is statistically distinguishable from the tie-aware null model, corroborating the practical-margin failure above`);
   }
 
-  const status = practicalFail || statisticalResult === "rejects-null" ? "fail" : "pass";
+  const status = practicalFail ? "fail" : "pass";
   return {
     status,
     reasons,
+    reviewFlag: { required: reviewRequired, reason: reviewReason },
     detail: {
       N, observed, observedRate, expectedMean, expectedRate, maxAllowedShare, minAllowedShare,
-      pValue, statisticalResult, method: "exact-poisson-binomial-two-sided",
+      practicalFail, pValue, statisticalResult, statisticallySignificant,
+      method: "exact-poisson-binomial-two-sided-probability-ordering",
     },
   };
+}
+
+// ----------------------------------------------------------------------------
+// Answer-key sequence pattern detection (new -- docs/ASSESSMENT_VALIDITY.md
+// section 4.10). Aggregate position BALANCE (above) is necessary but not
+// sufficient: a key such as A,B,C,D,A,B,C,D satisfies the exact pigeonhole
+// rule perfectly (every position appears an equally achievable number of
+// times) while still exposing an obvious, mechanically learnable pattern
+// to anyone who takes the form once. This is a DIFFERENT property from
+// aggregate balance and is evaluated, and reported, separately.
+//
+// Design choice, compared against the alternatives docs/ASSESSMENT_VALIDITY.md
+// section 4.2 lists: this uses fully DETERMINISTIC structural detection
+// (exact short repeating cycles, whole-sequence mirroring/palindromes, and
+// excessive identical-position runs) rather than a statistical test. A
+// repeating cycle, a palindrome, or a long identical run is a fact about
+// the sequence that is true or false with no probabilistic ambiguity --
+// unlike position/length BALANCE, which needs a null-hypothesis framework
+// to separate "expected sampling noise" from "a real deviation," a
+// mechanically detectable pattern needs no such framework, and this
+// function makes no claim of statistical randomness from a short static
+// sequence. Because detection here is exact rather than inferential, a
+// detected pattern is reported as `fail`, not `review-required` or
+// `inconclusive` -- there is nothing for a human reviewer to adjudicate
+// about whether an exact repeating cycle exists; it either does or does
+// not. `inconclusive` is reserved, as with position balance, for `N < n`
+// (too few items to say anything about sequence structure at all).
+// ----------------------------------------------------------------------------
+
+/**
+ * Detects mechanically learnable structure in a sequence of answer
+ * positions (encounter order -- the literal order a learner sees the
+ * items in, per `index.html`'s `buildQuiz()`, which renders `QUIZZES[key]`
+ * in array order with no shuffling of questions or options). `n` is the
+ * largest option count among the items being checked (for a mixed
+ * option-count scope, using the largest keeps the cycle/run thresholds
+ * conservative rather than tuned to whichever group is smallest).
+ *
+ * Three deterministic pattern classes, each independently checked and
+ * independently reported (docs/ASSESSMENT_VALIDITY.md section 4.10 lists
+ * why these three and not, e.g., a fully enumerative small-sample
+ * likelihood-rank method, which would require exactly the kind of
+ * "statistical randomness from one short sequence" claim this function
+ * deliberately avoids):
+ *
+ *   1. repeating-cycle: the sequence exactly repeats some period
+ *      `1 <= p <= min(n, floor(N/2))` (so the repeat is confirmed at
+ *      least twice) for its ENTIRE length -- covers the literal
+ *      "A,B,C,D,A,B,C,D" example, and its `p=2` case covers a pure
+ *      alternating key like "A,B,A,B,A,B".
+ *   2. mirrored: the sequence is an exact palindrome across all N items
+ *      (only checked for N >= 4, where a palindrome is a non-trivial
+ *      structural coincidence rather than an unavoidable feature of very
+ *      short sequences) -- covers "A,B,C,D,D,C,B,A".
+ *   3. excessive-run: any single answer position repeats
+ *      `runLength >= n` times consecutively -- at least as many times in
+ *      a row as there are distinct positions to choose from, which is
+ *      already a conspicuous clustering no well-mixed key should exhibit
+ *      -- covers "A,A,A,B,C,D,B,C,D"-style clustering (a run of length 3
+ *      when n=3).
+ *
+ * A well-authored key that is balanced but NOT mechanically patterned
+ * (the actual bar this function sets) triggers none of the three and is
+ * reported `pass` -- this function does not, and must not, demand a
+ * mechanically rotating key to satisfy it; a rotating key is exactly
+ * what pattern (1) flags.
+ */
+export function detectAnswerSequencePatterns(positions, n) {
+  const N = positions.length;
+  const findings = [];
+
+  const maxPeriod = Math.min(n, Math.floor(N / 2));
+  for (let p = 1; p <= maxPeriod; p += 1) {
+    let isCycle = true;
+    for (let i = 0; i < N; i += 1) {
+      if (positions[i] !== positions[i % p]) { isCycle = false; break; }
+    }
+    if (isCycle) {
+      findings.push({
+        type: "repeating-cycle",
+        period: p,
+        detail: `the answer-position sequence exactly repeats its first ${p} item(s) for the entire ${N}-item sequence -- a learner who notices the first ${p} answers can predict every remaining one`,
+      });
+      break; // the smallest period found is the most conspicuous; larger multiples of it are implied, not additional information
+    }
+  }
+
+  if (N >= 4) {
+    let isPalindrome = true;
+    for (let i = 0; i < N; i += 1) {
+      if (positions[i] !== positions[N - 1 - i]) { isPalindrome = false; break; }
+    }
+    if (isPalindrome) {
+      findings.push({
+        type: "mirrored",
+        detail: `the answer-position sequence is an exact palindrome across all ${N} items (reads identically forwards and backwards) -- a learner who reaches the midpoint can predict every remaining answer from the ones already seen`,
+      });
+    }
+  }
+
+  let runStart = 0;
+  for (let i = 1; i <= N; i += 1) {
+    if (i === N || positions[i] !== positions[runStart]) {
+      const runLength = i - runStart;
+      if (runLength >= n) {
+        findings.push({
+          type: "excessive-run",
+          position: positions[runStart],
+          runLength,
+          startIndex: runStart,
+          detail: `answer position ${positions[runStart]} repeats ${runLength} times consecutively (items ${runStart + 1}-${i}), at least as many times in a row as there are answer positions in play (${n})`,
+        });
+      }
+      runStart = i;
+    }
+  }
+
+  return findings;
+}
+
+/**
+ * Evaluates answer-key sequence predictability for a computeCueMetrics()
+ * `items` array, which preserves the scope's original encounter order
+ * (docs/ASSESSMENT_VALIDITY.md section 4.10). Kept as a SEPARATE result
+ * from position balance (`evaluateGateA().position`) and length
+ * association (`.length`) rather than merged into either -- aggregate
+ * balance and sequence predictability are different properties, and a
+ * form can have one without the other (a perfectly balanced key can still
+ * be a repeating cycle; a non-repeating key can still be imbalanced).
+ */
+export function evaluateAnswerSequence(items) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return { status: "inconclusive", findings: [], reasons: ["no items in scope"], detail: null };
+  }
+  const N = items.length;
+  const n = Math.max(...items.map((it) => it.n));
+  if (N < n) {
+    return {
+      status: "inconclusive",
+      findings: [],
+      reasons: [`only ${N} item(s) in scope for up to ${n} answer positions in play -- too few to assess sequence structure`],
+      detail: { N, n },
+    };
+  }
+  const positions = items.map((it) => it.answerPosition);
+  const findings = detectAnswerSequencePatterns(positions, n);
+  const reasons = findings.map((f) => f.detail);
+  const status = findings.length > 0 ? "fail" : "pass";
+  return { status, findings, reasons, detail: { N, n, positions } };
 }
 
 /**
@@ -589,12 +828,15 @@ export function evaluateLengthAssociation(items) {
  * option-count-homogeneous scopes); length association is evaluated
  * ONCE over every item in the scope regardless of option count
  * (corrected -- no longer disabled/inconclusive merely because more than
- * one option-count group is present).
+ * one option-count group is present); answer-key sequence predictability
+ * (new) is evaluated once over every item in the scope's original
+ * encounter order, reported separately from both.
  *
  * Gate A is a purely STRUCTURAL/STATISTICAL judgment about answer
- * position and length distribution. It never inspects, and can never
- * establish, scientific correctness, item plausibility, or any other
- * Gate B property -- see docs/ASSESSMENT_VALIDITY.md.
+ * position and length distribution (and, now, sequence predictability).
+ * It never inspects, and can never establish, scientific correctness,
+ * item plausibility, or any other Gate B property -- see
+ * docs/ASSESSMENT_VALIDITY.md.
  */
 export function evaluateGateA(metrics) {
   const positionByOptionCount = metrics.byOptionCount.map((group) => ({
@@ -604,6 +846,7 @@ export function evaluateGateA(metrics) {
   }));
 
   const length = evaluateLengthAssociation(metrics.items);
+  const sequence = evaluateAnswerSequence(metrics.items);
 
   // Diagnostic-only summary, retained per docs/ASSESSMENT_VALIDITY.md's
   // requirement to keep a clearly defined unique-longest figure visible
@@ -614,10 +857,23 @@ export function evaluateGateA(metrics) {
     rate: metrics.total > 0 ? metrics.uniquelyLongestCorrect / metrics.total : null,
   };
 
-  const allStatuses = [...positionByOptionCount.map((g) => g.position.status), length.status];
+  const allStatuses = [...positionByOptionCount.map((g) => g.position.status), length.status, sequence.status];
   const overall = allStatuses.includes("fail") ? "fail" : allStatuses.includes("inconclusive") ? "inconclusive" : "pass";
 
-  return { overall, positionByOptionCount, length, uniquelyLongestDiagnostic };
+  // Aggregated, explicit review flag (docs/ASSESSMENT_VALIDITY.md section
+  // 4.6a): a scope can PASS while still carrying a statistically
+  // significant-but-practically-trivial signal worth a human's attention.
+  // This is surfaced here so it is never silently dropped, without ever
+  // being conflated with an actual `fail`.
+  const reviewFlaggedComponents = [
+    ...positionByOptionCount
+      .filter((g) => g.position.reviewFlag && g.position.reviewFlag.required)
+      .map((g) => ({ component: `position (${g.optionCount}-option items)`, reason: g.position.reviewFlag.reason })),
+    ...(length.reviewFlag && length.reviewFlag.required ? [{ component: "length", reason: length.reviewFlag.reason }] : []),
+  ];
+  const reviewRequired = reviewFlaggedComponents.length > 0;
+
+  return { overall, positionByOptionCount, length, sequence, uniquelyLongestDiagnostic, reviewRequired, reviewFlaggedComponents };
 }
 
 // ============================================================================

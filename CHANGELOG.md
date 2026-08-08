@@ -11,15 +11,23 @@ All notable repository changes are recorded here.
   PR): the QL-033 assessment-cue foundation. Independently reproduces the
   frozen QL-033 baseline (position counts 11/139/3/0, uniquely-longest
   114/153, longest-or-tied 133/153) directly against the live authored
-  bank; identifies QL-033's original length metric as raw JavaScript
-  `.length` and defines a more robust canonical metric (entity decoding,
-  tag stripping, NFC normalization, whitespace/punctuation handling,
-  grapheme-cluster counting) that currently reproduces identical counts
-  on the unchanged bank; defines Gate A (bank/form-level statistical
-  position- and length-balance thresholds, with two cited, directly
-  inspected sources, an explicit numeric margin, and a documented
-  inconclusive state for small forms) and Gate B (a 17-point item-level
-  human-review rubric); and selects a deterministic, cherry-pick-resistant
+  bank; **(superseded below — see "Corrected (QL-037)": this reproduces
+  the frozen results, it does not prove what the original one-off script
+  actually did)** identifies QL-033's original length metric as raw
+  JavaScript `.length` and defines a more robust canonical metric
+  **(superseded below — the entity-decoding/tag-stripping/punctuation-
+  stripping design measured a different string than `index.html` actually
+  renders to learners)** (entity decoding, tag stripping, NFC
+  normalization, whitespace/punctuation handling, grapheme-cluster
+  counting) that currently reproduces identical counts on the unchanged
+  bank; defines Gate A (bank/form-level statistical position- and
+  length-balance thresholds, with two cited, directly inspected sources
+  **(superseded below — only one source was actually directly verified;
+  see "Corrected (QL-037)")**, an explicit numeric margin, and a
+  documented inconclusive state for small forms **(superseded below —
+  this state made every real small form and the pilot unable to ever
+  pass)**) and Gate B (a 17-point item-level human-review rubric); and
+  selects a deterministic, cherry-pick-resistant
   13-question pilot batch. `scripts/assessment-cue-audit.mjs` is the
   single implementation behind the new `npm run audit:assessment-cues`
   CLI, `tests/assessment-cue-audit.mjs` (53 new dependency-free checks,
@@ -65,6 +73,33 @@ All notable repository changes are recorded here.
   the bank and every form, still QL-033 not marked corrected. See
   `docs/QUALITY_LOG.md` QL-037 and `docs/ASSESSMENT_VALIDITY.md` for the
   full record.
+  **Corrected (QL-038):** a second independent review found QL-037's own
+  size-loop tests only ever proved `evaluatePositionBalance()` in
+  isolation, never the combined `evaluateGateA()` (including the
+  tie-aware length component) — now directly proven for every required
+  size via independently constructed full-form fixtures with position-only
+  and length-only perturbations each isolated. Aggregate position balance
+  alone was found not to catch a mechanically predictable answer-key
+  sequence (`A,B,C,D,A,B,C,D,A` satisfies exact pigeonhole balance
+  perfectly) — a new deterministic (not statistical) sequence-pattern
+  detector now catches repeating cycles, palindromes, and excessive runs,
+  reported separately from position and length. A statistically
+  significant but practically trivial large-N deviation was found able to
+  fail Gate A on significance alone — the practical margin is now the
+  sole authoritative fail driver, with significance-alone raising an
+  explicit review flag instead. The exact two-sided Poisson-binomial
+  p-value convention was found unnamed and not the only defensible one —
+  switched to the precisely-named probability-ordering convention,
+  verified against independently hand-computed fixtures. Mutation count
+  reconciled from retained evidence: round 1 (QL-036) 8, round 2 (QL-037)
+  8, round 3 (QL-038) 4 — **cumulative 20**, correcting an earlier PR-body
+  draft that undercounted this as "8 across two rounds."
+  `tests/assessment-cue-audit.mjs` grew from 82 to 127 dependency-free
+  checks; `tests/e2e/assessment-cue-audit.spec.mjs` stayed at 7 (no new
+  browser-specific behavior this round). Still no question content
+  changed, still Gate A correctly fails the bank and every form, still
+  QL-033 not marked corrected. See `docs/QUALITY_LOG.md` QL-038 and
+  `docs/ASSESSMENT_VALIDITY.md` for the full record.
 - Added `docs/LEARNING_PLATFORM_ROADMAP.md`, a durable planning document
   (Issue #24, carried by PR #25): a long-term roadmap toward a
   trustworthy, adaptive, subject-independent learning platform — guiding

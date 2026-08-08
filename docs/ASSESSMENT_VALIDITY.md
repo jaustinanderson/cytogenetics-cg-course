@@ -13,10 +13,17 @@ selection, and citation handling were substantially corrected after
 independent review found the original draft version made real course forms
 and the pilot batch structurally unable to ever pass Gate A, measured a
 different string than the one actually rendered to learners, and made
-several other reproducibility and provenance errors. Every counterexample
-that prompted a correction is recorded in the relevant section below, along
-with the fix and why it is now correct. See `docs/QUALITY_LOG.md` QL-037 for
-the full correction record.
+several other reproducibility and provenance errors (`docs/QUALITY_LOG.md`
+QL-037). A **second** independent review, before merge, found that no test
+or documented claim had actually exercised the COMBINED Gate A (only
+position balance in isolation), that aggregate position balance alone does
+not catch a mechanically predictable answer-key sequence, that a
+statistically significant but practically trivial large-N deviation could
+fail the gate by itself, and that the exact two-sided p-value convention
+was unnamed and not the only defensible one (`docs/QUALITY_LOG.md`
+QL-038). Every counterexample that prompted a correction, from either
+review, is recorded in the relevant section below, along with the fix and
+why it is now correct.
 
 **What this document does NOT do:**
 
@@ -392,6 +399,12 @@ are this document's own operationalization, justified in section 4.3.
 | A flat 1/n null rate for length cueing, ignoring tie structure | Yes | **No — corrected.** A bank could key the correct answer to a tied-maximum-length option without ever being "uniquely longest," evading a check that only looks at the uniquely-longest rate. See 4.4's tie-aware correction |
 | An exact, always-valid small-sample test for length cueing (Poisson-binomial) | Yes | **Yes** — valid at any N, requires no separate small/large-N split, and is exactly correct for item-specific tie probabilities (4.4) |
 | A deterministic, mathematically-derived structural rule for small-N position balance | Yes | **Yes** — the "exact pigeonhole" rule, 4.3, with no free parameter to tune |
+| Statistical significance alone fails the large-N regime (either practical margin OR p-value) | Yes | **No — corrected.** With enough items a trivial deviation becomes statistically detectable without being educationally meaningful; the practical margin is now the sole authoritative fail driver, with significance-alone raising a review flag instead. See 4.6a |
+| A likelihood-rank/exact-enumeration statistical test over the space of balanced answer-key sequences | Yes | **No** — at N=5–13 this would claim statistical meaning from one short, static, non-repeated sample, the same problem 4.6a rejects in a different context. See 4.10 |
+| Human-review-only flag for answer-key sequence patterns (no automated detection) | Yes | **No** — the target patterns (exact repeating cycles, palindromes, excessive runs) are unambiguous, mechanically checkable facts with nothing for a reviewer to adjudicate. See 4.10 |
+| Deterministic structural detection (cycle/palindrome/run) for answer-key sequence patterns | Yes | **Yes** — no statistical claim made, exact at any N, and does not demand a mechanically rotating key (a rotating key is itself flagged). See 4.10 |
+| Doubled-minimum-tail convention for the exact two-sided Poisson-binomial p-value | Yes | **No — corrected.** Not self-defining for an asymmetric distribution and requires post-hoc clipping to stay <= 1. See 4.4a |
+| Probability-ordering convention for the exact two-sided Poisson-binomial p-value | Yes | **Yes** — well-defined for any distribution shape, the same convention underlying other asymmetric exact tests (e.g. Fisher's), precisely named as one defensible choice among several. See 4.4a |
 
 ### 4.3 Adopted rules — position balance (corrected: a two-regime model with one shared threshold)
 
@@ -429,9 +442,14 @@ attempted at all** (not "attempted but suppressed" — genuinely not needed):
 This has **no free or tunable parameter** — it is fully derived from N
 and n, never fit to make any particular bank pass. It is always achievable
 by an author who deliberately rotates the correct-answer position across a
-small quiz. Directly verified for every size this correction requires:
+small quiz. Directly verified for every size this correction requires —
+**this table exercises `evaluatePositionBalance()` in isolation, i.e. the
+POSITION-ONLY result; section 4.3a below independently proves the
+COMPLETE, COMBINED `evaluateGateA()` (position, length, and sequence
+together) also reaches `pass` for a full, realistic question form at
+every one of these sizes, which this table alone does not show**:
 
-| N (4-option) | Balanced example | Result | Imbalanced example | Result |
+| N (4-option) | Balanced example (position only) | Result | Imbalanced example | Result |
 | ---: | --- | --- | --- | --- |
 | 5 | `[2,1,1,1]` | **pass** | `[5,0,0,0]` | **fail** |
 | 6 | `[2,2,1,1]` | **pass** | `[6,0,0,0]` | **fail** |
@@ -439,6 +457,67 @@ small quiz. Directly verified for every size this correction requires:
 | 8 | `[2,2,2,2]` | **pass** | `[8,0,0,0]` | **fail** |
 | 9 | `[3,2,2,2]` | **pass** | `[9,0,0,0]` | **fail** |
 | 13 (pilot size) | `[4,3,3,3]` | **pass** | `[13,0,0,0]` | **fail** |
+
+### 4.3a Complete Gate A achievability, not position balance alone (added — a second independent review found a coverage gap, not an implementation defect)
+
+**Coverage mismatch reproduced and recorded, distinctly from an
+implementation defect:** section 4.3's table above, and the corresponding
+test-file size loop it was drawn from, called `evaluatePositionBalance()`
+directly. Neither ever constructed a full question form and asserted
+`evaluateGateA(...).overall === "pass"`, including the tie-aware length
+component and (after this same correction round) the new sequence check.
+The underlying implementation was independently confirmed, by direct
+construction, to already support a full-Gate pass at every required size —
+this was a **test- and documentation-coverage gap**, not a bug in
+`evaluateGateA()` itself, and is recorded and closed as such rather than
+conflated with a design defect.
+
+**Fixture discipline, to rule out a merely coincidental pass:** an initial
+naive construction (rotating which physical option slot held the longest
+text using the SAME modulus as the position rotation) accidentally
+produced a genuine, undetected length cue — the "pass" was a coincidence
+of the construction, not evidence of a truly non-cued form. The corrected
+fixture (`buildIndependentItem()` /
+`tests/assessment-cue-audit.mjs`) gives **independent, decoupled control**
+over (a) which slot is correct, for position, and (b) whether that slot is
+also the item's own length-max slot, for length — using a
+multiplicative-hash selector for (b) so it is not a simple function of (a)
+— verified directly to land close to the tie-aware expected rate rather
+than assumed. A second, distinct construction issue was found the same
+way: the initially-used "balanced" position order was a plain `i % n`
+rotation, which is itself an exact repeating cycle — see section 4.10 —
+so it would have been flagged as a sequence failure by this same
+correction's own new check. The final fixtures use a hand-verified,
+balanced, non-cyclic, non-palindromic, run-free order for each required
+size instead (`BALANCED_NONCYCLIC_ORDERS`,
+`tests/assessment-cue-audit.mjs`).
+
+Directly verified, for every required size, with three independently
+constructed forms per size — full detail and the exact orders used are in
+`tests/assessment-cue-audit.mjs` section 12:
+
+| N (4-option) | Fully independent, balanced, non-cyclic, non-cued form | Position-only perturbation (length/sequence held fixed) | Length-only perturbation (position/sequence held fixed) |
+| ---: | --- | --- | --- |
+| 5 | **overall: pass** (position pass, length pass, sequence pass) | **overall: fail** (position fail; length pass; sequence pass) | **overall: fail** (length fail; position pass; sequence pass) |
+| 6 | **pass** | **fail** (position) | **fail** (length) |
+| 7 | **pass** | **fail** (position) | **fail** (length) |
+| 8 | **pass** | **fail** (position) | **fail** (length) |
+| 9 | **pass** | **fail** (position) | **fail** (length) |
+| 13 (pilot size) | **pass** | **fail** (position) | **fail** (length) |
+
+Each perturbation changes exactly one property while leaving the other two
+unaffected (confirmed directly in the perturbed result, not assumed from
+the construction alone) — isolating which component drove a given `fail`,
+and confirming no component silently reports `inconclusive` in any of
+these eighteen forms. A separate mixed 2-/3-/4-option scope, with enough
+items in every group to leave the small-N structural regime unambiguous
+(`n*2+1` items per group), also reaches a complete `pass` with none of its
+three option-count groups, nor the length or sequence check, inconclusive.
+
+Every documentation and PR claim that "Gate A passes" for a given size is
+now stated precisely as either the full, combined result (as this section
+proves) or explicitly labeled a position-only result (section 4.3's
+table) — the two are never used interchangeably.
 
 **Large-N statistical regime, `N >= REGIME_THRESHOLD(n)`:** the practical
 margin plus chi-square approach, unchanged in spirit from before this
@@ -493,16 +572,20 @@ it requires no large-sample approximation, so **no separate small-N/
 large-N regime or "not computed" state is needed for this check.**
 
 **Decision rule** (`evaluateLengthAssociation()`), symmetric, both
-directions:
+directions, and see section 4.6a for exactly how the two parts below
+combine (corrected there — the practical margin is now the sole
+authoritative fail driver; see 4.6a for why):
 
-- **Practical/effect-size margin (primary):** observed rate `X/N`
+- **Practical/effect-size margin (authoritative):** observed rate `X/N`
   (`X` = count of items where the correct answer is in *its own* maximum
   set — this is exactly `longestOrTiedCorrect`) compared against the
   tie-aware expected rate `μ/N` (`μ` = sum of every item's own `k_i/n_i`),
   with the same `PRACTICAL_MARGIN = 0.15`. Fails if the observed rate
   exceeds `expected + margin` **or** falls below `expected - margin`.
 - **Exact statistical corroboration:** the two-sided Poisson-binomial
-  p-value, fails if `< α = 0.01`.
+  p-value (section 4.4a for exactly which "two-sided" convention and why),
+  significant if `< α = 0.01` — corroborates a practical-margin failure,
+  or raises a standalone review flag if significant without one (4.6a).
 
 **Symmetric treatment, and why:** a rate significantly *below* the
 tie-aware null (the correct answer disproportionately *avoids* the
@@ -527,6 +610,54 @@ items in the same scope have.
 any item's scientific validity, and it never claims to fix a distractor —
 see Gate B (section 5) for the required human review of any specific
 flagged item or pattern.
+
+### 4.4a Exact two-sided p-value convention (added — a second independent review found the convention was unnamed and not the only defensible one)
+
+**Issue identified:** `poissonBinomialTwoSidedPValue()` previously (before
+this correction) computed `2 * min(P(X<=observed), P(X>=observed))`,
+clipped to 1 — the **doubled-minimum-tail** convention. "Exact two-sided
+p-value" is not self-defining for an **asymmetric** discrete distribution
+(this Poisson-binomial generally is asymmetric, since per-item null
+probabilities differ item to item), so more than one convention is
+defensible, and the prior text did not name which one was in use or
+acknowledge the alternative.
+
+**Corrected convention: probability-ordering** (also called
+"minimum-likelihood" or "outcome-ranking"): the sum of `P(k)` over every
+possible outcome `k` whose probability is no greater than the observed
+outcome's own probability (a small relative epsilon guards only against
+excluding the observed outcome itself due to floating-point rounding).
+Chosen over the doubled-minimum-tail convention, and named precisely
+rather than left implicit, because:
+
+- It directly answers "how surprising is this outcome" by summing every
+  outcome at least as surprising as (no more likely than) the one
+  observed — well-defined for any distribution shape, with no post-hoc
+  clipping needed to stay `<= 1` (the doubled-tail convention needs
+  exactly that clipping, itself a sign it does not directly answer the
+  same question for a skewed distribution).
+- It is the same convention underlying the standard two-sided exact test
+  for other asymmetric discrete distributions (e.g. Fisher's exact test),
+  not a bespoke choice invented for this file.
+- For a symmetric probability vector the two conventions coincide exactly
+  at the distribution's mode and are close elsewhere, but diverge
+  substantially away from the mode for a genuinely asymmetric one.
+
+**Verified by independent, hand-computed fixtures** (not derived by
+calling the implementation under test — `tests/assessment-cue-audit.mjs`
+section 12c): for probabilities `[0.9, 0.5, 0.5]`, hand-derived
+`pmf = [0.025, 0.275, 0.475, 0.225]`; the probability-ordering p-values
+`[0.025, 0.525, 1.0, 0.25]` for observed `= 0, 1, 2, 3` respectively
+**differ** from the doubled-minimum-tail values `[0.05, 0.6, 1.0, 0.45]`
+at every non-modal outcome, and coincide only at the mode (`observed=2`,
+where both give exactly 1). Boundary probabilities (`p=0`, `p=1` for a
+single item) and a fully degenerate all-tied case
+(`probabilities = [1,1,1,1,1]`) are also independently hand-verified.
+
+**This is a deliberate, precisely-named choice among multiple valid exact
+two-sided conventions — it is not claimed to be the only possible one.**
+The `method` field in `evaluateLengthAssociation()`'s detail object is
+named accordingly: `"exact-poisson-binomial-two-sided-probability-ordering"`.
 
 ### 4.5 Mixed option-count evaluation (corrected)
 
@@ -589,21 +720,99 @@ computed.** Both regimes make this explicit: the structural regime's
 (`"not-computed-small-n-structural-regime-applies"`), never conflated with
 `"fails-to-reject-uniform"` (an actual computed non-significant result).
 
+### 4.6a Practical vs. statistical significance (added — a second independent review found the two could conflict)
+
+**Counterexample reproduced:** the large-N regime (both position balance
+and length association) previously failed a scope when EITHER the
+practical margin was exceeded OR the statistical test rejected its null —
+with enough items, a tiny, educationally meaningless deviation becomes
+statistically significant purely because of sample size, even while
+remaining deep inside the declared 15-percentage-point practical margin.
+Constructed directly: `N=100,000`, `n=4`, position counts
+`[25,500, 24,834, 24,834, 24,832]` — a maximum observed share of 25.5%,
+nowhere near the 40% practical fail threshold, yet chi-square = 13.33
+exceeds the α=0.01 critical value of 11.345. **Under the prior design this
+scope FAILED Gate A on statistical significance alone**, despite a
+deviation of barely half a percentage point above the 25% null rate. This
+conflicted with documentation language that called the statistical test
+"corroboration" while sometimes also treating it as an independent fail
+trigger.
+
+**Corrected decision policy**, applied identically to both position
+balance's large-N regime and length association (`evaluatePositionBalance()`,
+`evaluateLengthAssociation()`):
+
+| Practical margin | Statistical result | Gate decision | Review flag |
+| --- | --- | --- | --- |
+| Exceeded | Significant | **fail** | not raised (a fail is not softened into a review) |
+| Exceeded | Not significant | **fail** | not raised (the practical margin is authoritative regardless of power) |
+| Within margin | Significant | **pass** | **raised** — statistically distinguishable from the null, but not an educationally meaningful effect by itself |
+| Within margin | Not significant | **pass** | not raised |
+
+The **practical/effect-size margin is the sole, authoritative driver of
+`fail`.** Statistical significance alone, without exceeding the practical
+margin, never fails the gate by itself — it surfaces instead as an
+explicit `reviewFlag` (`{required, reason}`) on the relevant component,
+and is aggregated onto `evaluateGateA()`'s own `reviewRequired` /
+`reviewFlaggedComponents`, so a real statistical signal is never silently
+discarded even though it does not, by itself, fail anything.
+
+This achieves every part of the required policy simultaneously:
+
+- **A predeclared, educationally meaningful effect can fail even under low
+  statistical power** — exceeding the practical margin fails regardless of
+  the statistical result (this was already true for the small-N structural
+  regime, which never attempts a statistic at all; it is now equally true
+  in the large-N regime).
+- **Statistical significance alone does not automatically convert a
+  trivial effect into a substantive cueing defect** — the boundary
+  counterexample above now returns `pass`.
+- **Statistical evidence still triggers a documented review warning** —
+  `reviewFlag.reason` states the exact statistic, critical value or
+  p-value, and margin comparison that produced it.
+- **Neither the thresholds (`PRACTICAL_MARGIN`, `SIGNIFICANCE_ALPHA`) nor
+  this policy were tuned to make the current bank pass** — the live bank's
+  90.8%-at-one-position and 86.9%-longest-or-tied results grossly exceed
+  the practical margin regardless of this policy change, so the bank and
+  every one of its 17 forms still fails Gate A (section 4.7) exactly as
+  before this correction.
+
+Directly verified: the boundary counterexample above now reports `pass`
+with `reviewFlag.required: true`; a corresponding scope that exceeds the
+practical margin at a SMALL enough N that chi-square lacks the power to
+reject still correctly reports `fail` (practical margin authoritative
+regardless of power); a scope that both exceeds the margin AND is
+statistically significant reports `fail` with `reviewFlag.required: false`
+(a fail is never also flagged for review — review flags exist only for
+otherwise-passing scopes).
+
 ### 4.7 Current result: the bank fails Gate A
 
 **Whole-bank overall: FAIL.** Position balance (statistical regime at
 N=153: 90.8% at position B against a 40% threshold; chi-square 355.52
-against a critical value of 11.345) and length association (86.9%
-longest-or-tied against a tie-aware expected rate of 32.0% and a 47.0%
-allowed maximum; exact two-sided Poisson-binomial p-value ≈ 1.2×10⁻⁴⁹)
-both fail. **Every one of the 17 individual forms also currently fails**
-(reproduced by `npm run audit:assessment-cues`; exact per-form detail in
-its `--json` output) — now via a mix of the small-N structural rule
-(position) and the always-exact length association test, both of which
-are, unlike before this correction, actually capable of reporting `pass`
-for a well-authored small form. This is expected and correct — no
-threshold was weakened to make the present bank pass; the bank's failure
-here reflects the bank, not an unreachable bar.
+against a critical value of 11.345 — this exceeds the practical margin
+outright, so section 4.6a's policy correction does not change this
+result: `reviewFlag.required` is `false` here, exactly as intended, since
+review flags exist only for an otherwise-passing scope) and length
+association (86.9% longest-or-tied against a tie-aware expected rate of
+32.0% and a 47.0% allowed maximum; exact two-sided Poisson-binomial
+p-value ≈ 6.1×10⁻⁵⁰ under the corrected probability-ordering convention,
+section 4.4a — the prior doubled-tail convention's ≈1.2×10⁻⁴⁹ was in the
+same overwhelming-significance range; the convention change does not
+change any pass/fail conclusion for this bank) both fail. **The whole-bank
+sequence check (section 4.10) also fails** — a direct, expected
+consequence of the same 90.8%-at-one-position skew already established
+above: severe position imbalance necessarily produces long runs of the
+dominant position (the longest observed run is 32 consecutive items at
+position B), not an independent third defect. **Every one of the 17
+individual forms also currently fails** (reproduced by `npm run
+audit:assessment-cues`; exact per-form detail in its `--json` output) —
+now via a mix of the small-N structural rule (position), the always-exact
+length association test, and the sequence check, all three of which are,
+unlike before this correction, actually capable of reporting `pass` for a
+well-authored small form (section 4.3a). This is expected and correct —
+no threshold was weakened to make the present bank pass; the bank's
+failure here reflects the bank, not an unreachable bar.
 
 ### 4.8 What Gate A is not
 
@@ -633,6 +842,91 @@ here reflects the bank, not an unreachable bar.
   design. The whole-bank evaluation, always run alongside every per-form
   one, catches a pattern spread thinly enough to individually clear each
   small form's bar while still being visible in aggregate.
+
+### 4.10 Answer-key sequence pattern detection (added — a second independent review found aggregate balance alone is not sufficient)
+
+**Counterexample reproduced:** aggregate position BALANCE (section 4.3) is
+necessary but not sufficient. A key such as `A,B,C,D,A,B,C,D,A` (N=9, n=4)
+satisfies the exact pigeonhole rule perfectly (`positionCounts = [3,2,2,2]`,
+which `exactPigeonholeBalance()` reports `balanced: true`) while exposing
+an obvious, mechanically learnable cue — confirmed directly: prior to this
+correction, nothing in Gate A examined sequence order at all, so this key
+passed position balance outright.
+
+**Candidate approaches compared** (docs/ASSESSMENT_VALIDITY.md section
+4.2's table extends to this decision): an inferential/statistical test
+over the space of balanced sequences (e.g. ranking the observed sequence's
+likelihood against all balanced permutations) was considered and rejected
+— at N=5–13 the space of balanced sequences is small enough that any such
+ranking would amount to claiming statistical meaning from a single short,
+static, non-repeated sample, which this document's own design principles
+(section 4.6a) already reject for the SAME reason in a different context.
+A human-review-only flag was considered and rejected as the SOLE
+mechanism, because the patterns this section targets (an exact repeating
+cycle, a whole-sequence palindrome, an excessive identical-position run)
+are unambiguous, mechanically checkable facts — there is nothing for a
+reviewer to adjudicate about whether an exact cycle exists.
+
+**Adopted: deterministic structural detection, not a statistical test.**
+`detectAnswerSequencePatterns(positions, n)` checks, over the scope's
+actual encounter order (the literal array order `index.html`'s
+`buildQuiz()` renders `QUIZZES[key]` in — confirmed directly: no shuffling
+of questions or options occurs anywhere in the rendering path):
+
+1. **Repeating cycle** — the sequence exactly repeats some period
+   `1 <= p <= min(n, floor(N/2))` (confirmed at least twice) for its
+   entire length. Covers the literal counterexample above (`period=4`)
+   and a pure alternating key (`period=2`).
+2. **Mirrored** — the sequence is an exact palindrome across all N items
+   (checked only for `N >= 4`, where it is a non-trivial coincidence
+   rather than an unavoidable feature of very short sequences). Covers
+   `A,B,C,D,D,C,B,A`.
+3. **Excessive run** — any single position repeats `>= n` times
+   consecutively — at least as many times in a row as there are distinct
+   positions to choose from. Covers `A,A,A,B,C,D,B,C,D`-style clustering.
+
+**Decision, justified precisely:** `evaluateAnswerSequence()` returns
+`fail` if ANY finding is present, `pass` if none is, and `inconclusive`
+only for `N < n` (mirroring position balance's own precise meaning of
+inconclusive, section 4.3). **Not `review-required`:** unlike statistical
+significance (section 4.6a), where a real ambiguity exists between
+"detectable" and "educationally meaningful," a detected repeating cycle,
+palindrome, or excessive run is either present or not, with no
+probabilistic middle ground — a deterministic `fail` is the honest
+report, not an over-claim. **Not a claim of statistical randomness:** the
+result and its `detail` object contain no p-value, no alpha, and no
+inference about "how random" a passing sequence is — only the concrete
+facts checked and whether any was found.
+
+**Reported separately from aggregate position balance and length
+association**, never merged into either — `evaluateGateA()` exposes
+`sequence` as its own top-level field, alongside `positionByOptionCount`
+and `length`, though a `sequence` failure does contribute to the overall
+`fail`/`pass` decision exactly as the other two do (`docs/ASSESSMENT_VALIDITY.md`
+requires that Phase 0 cannot treat a form as eligible while an obvious
+answer-key pattern remains, so `sequence` cannot be advisory-only).
+
+**Does not demand a mechanically rotating key.** On the contrary: a
+rotating `A,B,C,D,A,B,C,D,...` key is exactly what pattern (1) flags. A
+balanced key with no detected pattern (verified directly for hand-checked
+non-cyclic orders at every required size, `tests/assessment-cue-audit.mjs`
+`BALANCED_NONCYCLIC_ORDERS`) passes; there is no requirement that a
+passing key look mechanically regular in any way.
+
+**Where this sits relative to Gate B:** this is a purely structural,
+mechanically-checkable property of the ANSWER KEY sequence, decidable
+without subject-matter judgment — it stays in Gate A. Gate B (section 5,
+item 8) separately covers a human reviewer's judgment of whether one
+SPECIFIC item's own construction telegraphs its answer, which is a
+different, item-level, judgment-requiring question this deterministic
+scope-level check does not and cannot answer.
+
+**Deterministic output preserved:** `detectAnswerSequencePatterns()` and
+`evaluateAnswerSequence()` are pure functions of the position sequence and
+`n` — no randomness, no wall-clock dependency, byte-identical across
+repeated calls on identical input (verified by the same
+`buildDeterministicReport()` byte-identity test, section 7, which now also
+covers the `sequence` field in every scope's Gate A result).
 
 ---
 

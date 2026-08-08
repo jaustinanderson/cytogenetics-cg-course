@@ -46,6 +46,8 @@ import {
   poissonBinomialTwoSidedPValue,
   evaluateLengthAssociation,
   evaluateGateA,
+  detectAnswerSequencePatterns,
+  evaluateAnswerSequence,
   REGIME_THRESHOLD,
   canonicalOrderKey,
   compareCanonicalOrder,
@@ -689,6 +691,364 @@ test("counterexample (point J) resolved: buildDeterministicReport() contains no 
   assert.equal(json1, json2);
   assert.ok(!json1.includes("generatedAt"));
   assert.ok(!/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(json1), "no ISO timestamp anywhere in the deterministic payload");
+});
+
+// ---------------------------------------------------------------------------
+// 12. Complete Gate A achievability (not position-only), answer-key
+//     sequence predictability, and the practical-vs-statistical decision
+//     policy (round-3 correction; independent review found the size-loop
+//     tests above only ever exercised evaluatePositionBalance() directly,
+//     never proving the COMBINED evaluateGateA() -- including the
+//     tie-aware length component -- could return "pass" for a realistic
+//     full question form of any required size).
+// ---------------------------------------------------------------------------
+
+// Builds one full question item with FULL independent control over (a)
+// which slot is correct (for position balance) and (b) whether that slot
+// is ALSO this item's own length-max slot (for length association) --
+// deliberately decoupled so a passing fixture cannot merely be a lucky
+// coincidence of the two properties, and a perturbation aimed at one
+// property does not silently also perturb the other.
+function buildIndependentItem(id, n, a, isMax) {
+  const lens = [];
+  for (let k = 0; k < n; k += 1) lens.push(10 + k); // n distinct lengths
+  const maxVal = Math.max(...lens);
+  const maxIdx = lens.indexOf(maxVal);
+  const perm = [...Array(n).keys()];
+  if (isMax) {
+    if (a !== maxIdx) { const t = perm[a]; perm[a] = perm[maxIdx]; perm[maxIdx] = t; }
+  } else if (a === maxIdx) {
+    const other = a === 0 ? 1 : 0;
+    const t = perm[a]; perm[a] = perm[other]; perm[other] = t;
+  }
+  const opts = perm.map((li) => "x".repeat(lens[li]));
+  return q(id, opts, a);
+}
+
+// A hash-based (multiplicative-congruential), deliberately non-arithmetic
+// selector for "is this item's correct answer at its own max-length slot"
+// -- decoupled from the answer-position sequence itself, landing close to
+// the 1/n null rate without being a simple function of the position
+// sequence (verified directly below to actually produce observedRate
+// close to expectedRate for every required size, not assumed).
+function hashIsMax(i, n) {
+  const h = ((i + 1) * 2654435761) >>> 0;
+  return (h % n) === 0;
+}
+
+// For each required form size, a hand-verified (see the correction's
+// reproduction scripts) answer-position ORDER that is simultaneously:
+// exact-pigeonhole BALANCED, and free of every detectAnswerSequencePatterns()
+// finding (no repeating cycle, no palindrome, no excessive run) -- i.e. a
+// genuinely non-cued, non-patterned key, not merely a rotating i%n
+// sequence (which IS itself a repeating-cycle finding, and must not be
+// used as a "should pass" fixture after this correction).
+const BALANCED_NONCYCLIC_ORDERS = {
+  5: [2, 0, 3, 1, 0],
+  6: [0, 1, 3, 2, 1, 0],
+  7: [0, 2, 2, 3, 1, 1, 0],
+  8: [3, 0, 3, 2, 0, 1, 2, 1],
+  9: [1, 0, 0, 2, 2, 3, 3, 1, 0],
+  13: [0, 3, 0, 3, 1, 2, 0, 1, 2, 3, 1, 2, 0],
+};
+
+// For each required form size, a hand-verified answer-position order that
+// is position-IMBALANCED (fails exact pigeonhole balance) while remaining
+// free of every sequence finding -- isolates a position-only failure from
+// sequence predictability.
+const IMBALANCED_CLEAN_ORDERS = {
+  5: [1, 0, 2, 0, 0],
+  6: [0, 1, 3, 2, 0, 0],
+  7: [0, 2, 1, 3, 0, 0, 0],
+  8: [3, 0, 1, 2, 0, 0, 1, 0],
+  9: [0, 0, 0, 1, 2, 1, 3, 0, 0],
+  13: [0, 2, 0, 1, 0, 3, 0, 0, 2, 3, 0, 1, 0],
+};
+
+[5, 6, 7, 8, 9, 13].forEach((N) => {
+  test(`counterexample (issue 1) resolved: a complete, independently-constructed ${N}-item 4-option FORM (position balanced, non-cyclic, non-cued length) passes the COMBINED evaluateGateA(), not merely evaluatePositionBalance() in isolation`, () => {
+    const order = BALANCED_NONCYCLIC_ORDERS[N];
+    const items = order.map((a, i) => buildIndependentItem(`pass${N}-${i}`, 4, a, hashIsMax(i, 4)));
+    const metrics = computeCueMetrics(items);
+    const gate = evaluateGateA(metrics);
+    assert.equal(gate.overall, "pass", JSON.stringify(gate, null, 2));
+    gate.positionByOptionCount.forEach((g) => assert.notEqual(g.position.status, "inconclusive"));
+    assert.notEqual(gate.length.status, "inconclusive");
+    assert.notEqual(gate.sequence.status, "inconclusive");
+  });
+
+  test(`counterexample (issue 1) resolved: perturbing ONLY answer positions (position-imbalanced, length and sequence unperturbed) fails the ${N}-item form via position specifically, not length or sequence`, () => {
+    const order = IMBALANCED_CLEAN_ORDERS[N];
+    const items = order.map((a, i) => buildIndependentItem(`posonly${N}-${i}`, 4, a, hashIsMax(i, 4)));
+    const metrics = computeCueMetrics(items);
+    const gate = evaluateGateA(metrics);
+    assert.equal(gate.overall, "fail");
+    gate.positionByOptionCount.forEach((g) => assert.equal(g.position.status, "fail"));
+    assert.equal(gate.length.status, "pass");
+    assert.equal(gate.sequence.status, "pass");
+  });
+
+  test(`counterexample (issue 1) resolved: perturbing ONLY the length/correctness relationship (always keying the max-length option; position order unperturbed) fails the ${N}-item form via length specifically, not position or sequence`, () => {
+    const order = BALANCED_NONCYCLIC_ORDERS[N];
+    const items = order.map((a, i) => buildIndependentItem(`lenonly${N}-${i}`, 4, a, true));
+    const metrics = computeCueMetrics(items);
+    const gate = evaluateGateA(metrics);
+    assert.equal(gate.overall, "fail");
+    gate.positionByOptionCount.forEach((g) => assert.equal(g.position.status, "pass"));
+    assert.equal(gate.length.status, "fail");
+    assert.equal(gate.sequence.status, "pass");
+  });
+});
+
+test("counterexample (issue 1) resolved: a mixed 2/3/4-option scope, each group with enough items for a definitive small-N structural result, passes the complete Gate A with no group silently inconclusive", () => {
+  const mixed = [];
+  [2, 3, 4].forEach((n) => {
+    const N = n * 2 + 1; // >= n, < REGIME_THRESHOLD(n) -- structural regime, still a definitive result
+    for (let i = 0; i < N; i += 1) { mixed.push(buildIndependentItem(`mix-n${n}-${i}`, n, i % n, hashIsMax(i, n))); }
+  });
+  const metrics = computeCueMetrics(mixed);
+  const gate = evaluateGateA(metrics);
+  assert.equal(gate.overall, "pass", JSON.stringify(gate, null, 2));
+  assert.equal(gate.positionByOptionCount.length, 3);
+  gate.positionByOptionCount.forEach((g) => {
+    assert.equal(g.position.status, "pass");
+    assert.equal(g.position.regime, "structural");
+  });
+  assert.equal(gate.length.status, "pass");
+  assert.equal(gate.sequence.status, "pass");
+});
+
+// ---------------------------------------------------------------------------
+// 12a. Answer-key sequence pattern detection (issue 2): aggregate position
+//      BALANCE is necessary but not sufficient -- a cyclic, alternating,
+//      mirrored, or excessive-run key can satisfy exact pigeonhole balance
+//      perfectly while still being mechanically predictable.
+// ---------------------------------------------------------------------------
+
+test("counterexample (issue 2) resolved: the literal A,B,C,D,A,B,C,D,A example (N=9, n=4) satisfies exact pigeonhole balance perfectly, yet is now caught as a repeating-cycle sequence finding", () => {
+  const positions = [0, 1, 2, 3, 0, 1, 2, 3, 0];
+  const counts = [3, 2, 2, 2];
+  assert.equal(exactPigeonholeBalance(counts, 4, 9).balanced, true, "balance alone would have passed this key");
+  const findings = detectAnswerSequencePatterns(positions, 4);
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].type, "repeating-cycle");
+  assert.equal(findings[0].period, 4);
+});
+
+test("counterexample (issue 2) resolved: a balanced alternating A,B,A,B,A,B,A key (2-option items, N=7) is caught as a repeating-cycle", () => {
+  const findings = detectAnswerSequencePatterns([0, 1, 0, 1, 0, 1, 0], 2);
+  assert.ok(findings.some((f) => f.type === "repeating-cycle" && f.period === 1 === false));
+  assert.ok(findings.some((f) => f.type === "repeating-cycle" && f.period === 2));
+});
+
+test("counterexample (issue 2) resolved: a balanced mirrored A,B,C,D,D,C,B,A key (N=8, n=4) is caught as a palindrome, distinctly from a repeating-cycle", () => {
+  const findings = detectAnswerSequencePatterns([0, 1, 2, 3, 3, 2, 1, 0], 4);
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].type, "mirrored");
+});
+
+test("counterexample (issue 2) resolved: a balanced but excessively-clustered A,A,A,B,B,B,C,C,C key (N=9, n=3) is caught as three excessive-run findings, one per clustered position", () => {
+  const counts = [3, 3, 3];
+  assert.equal(exactPigeonholeBalance(counts, 3, 9).balanced, true, "balance alone would have passed this key too");
+  const findings = detectAnswerSequencePatterns([0, 0, 0, 1, 1, 1, 2, 2, 2], 3);
+  assert.equal(findings.length, 3);
+  assert.ok(findings.every((f) => f.type === "excessive-run" && f.runLength === 3));
+});
+
+[5, 6, 7, 8, 9, 13].forEach((N) => {
+  test(`sequence check: the balanced, non-cyclic hand-verified order for N=${N} triggers no finding at all (a genuinely non-obvious key is not penalized merely for being balanced)`, () => {
+    const findings = detectAnswerSequencePatterns(BALANCED_NONCYCLIC_ORDERS[N], 4);
+    assert.deepEqual(findings, []);
+  });
+});
+
+test("evaluateAnswerSequence: does NOT demand a mechanically rotating key to satisfy balance -- a rotating i%n key is itself flagged, not required", () => {
+  const rotating = [0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3];
+  const items = rotating.map((a, i) => ({ id: `r${i}`, n: 4, answerPosition: a }));
+  const result = evaluateAnswerSequence(items);
+  assert.equal(result.status, "fail");
+  assert.equal(result.findings[0].type, "repeating-cycle");
+});
+
+test("evaluateAnswerSequence: inconclusive ONLY when N < n (too few items to assess sequence structure), not the default for a small form", () => {
+  const tooFew = evaluateAnswerSequence([{ id: "a", n: 4, answerPosition: 0 }, { id: "b", n: 4, answerPosition: 1 }]);
+  assert.equal(tooFew.status, "inconclusive");
+  const empty = evaluateAnswerSequence([]);
+  assert.equal(empty.status, "inconclusive");
+});
+
+test("evaluateAnswerSequence: does not claim statistical randomness -- findings are deterministic structural facts (no p-value, no alpha) about the sequence, not an inferential claim", () => {
+  const positions = BALANCED_NONCYCLIC_ORDERS[9];
+  const items = positions.map((a, i) => ({ id: `s${i}`, n: 4, answerPosition: a }));
+  const result = evaluateAnswerSequence(items);
+  assert.equal(result.status, "pass");
+  assert.equal("pValue" in result.detail, false);
+  assert.equal("statisticalResult" in result.detail, false);
+});
+
+test("evaluateGateA: sequence is reported SEPARATELY from aggregate position balance -- a scope can have position=pass and sequence=fail simultaneously, and overall reflects both", () => {
+  const rotating = [0, 1, 2, 3, 0, 1, 2, 3, 0]; // N=9, balanced, but a repeating cycle
+  const items = rotating.map((a, i) => buildIndependentItem(`sep${i}`, 4, a, hashIsMax(i, 4)));
+  const metrics = computeCueMetrics(items);
+  const gate = evaluateGateA(metrics);
+  gate.positionByOptionCount.forEach((g) => assert.equal(g.position.status, "pass"));
+  assert.equal(gate.sequence.status, "fail");
+  assert.equal(gate.overall, "fail");
+});
+
+// ---------------------------------------------------------------------------
+// 12b. Practical vs. statistical significance (issue 3): a statistically
+//      significant but practically trivial large-N deviation must not
+//      fail Gate A by itself -- it must surface as an explicit review
+//      flag instead, while a genuine practical-margin violation still
+//      fails regardless of statistical power.
+// ---------------------------------------------------------------------------
+
+test("counterexample (issue 3) resolved: a large-N position deviation that is statistically significant (p < alpha) but stays well inside the practical margin now PASSES, with an explicit review flag, not a silent pass and not a fail", () => {
+  const n = 4;
+  const N = 100000;
+  const expected = N / n;
+  const counts = [expected + 500, expected - 167, expected - 167, expected - 166];
+  const result = evaluatePositionBalance({ optionCount: n, total: N, positionCounts: counts });
+  assert.ok(result.detail.maxProportion <= 0.25 + PRACTICAL_MARGIN, "must stay inside the practical margin -- otherwise this isn't testing the intended boundary");
+  assert.equal(result.detail.statisticallySignificant, true, "must be statistically significant -- otherwise this isn't testing the intended boundary");
+  assert.equal(result.status, "pass");
+  assert.equal(result.reviewFlag.required, true);
+  assert.ok(result.reviewFlag.reason && result.reviewFlag.reason.length > 0);
+});
+
+test("counterexample (issue 3) resolved: a large-N position deviation that exceeds the practical margin still FAILS regardless of statistical power (a predeclared meaningful effect fails even when underpowered)", () => {
+  const n = 4;
+  const N = 40; // large-N regime for n=4 (REGIME_THRESHOLD=20), but small enough that power is limited
+  const counts = [40 * 0.42, 40 * 0.20, 40 * 0.19, 40 * 0.19]; // 42% > 40% allowed max, but a small enough N that chi-square may not reject
+  const result = evaluatePositionBalance({ optionCount: n, total: N, positionCounts: counts });
+  assert.ok(result.detail.maxProportion > 0.25 + PRACTICAL_MARGIN);
+  assert.equal(result.detail.practicalFail, true);
+  assert.equal(result.status, "fail", "the practical margin must be authoritative regardless of the statistical result at this N");
+});
+
+test("position balance: when the practical margin is exceeded AND the result is statistically significant, no review flag is raised (fail is not softened into a mere review)", () => {
+  const n = 4;
+  const N = 1000;
+  const counts = [800, 67, 67, 66]; // grossly exceeds both practical margin and any chi-square critical value
+  const result = evaluatePositionBalance({ optionCount: n, total: N, positionCounts: counts });
+  assert.equal(result.status, "fail");
+  assert.equal(result.detail.statisticallySignificant, true);
+  assert.equal(result.reviewFlag.required, false, "review flags are reserved for pass-with-signal, never used to soften an actual fail");
+});
+
+test("counterexample (issue 3) resolved: the same practical-vs-statistical policy applies to length association -- a statistically significant but practically trivial association PASSES with a review flag, not a fail", () => {
+  // Construct many items whose per-item null probability is exactly 1/2
+  // (2-way ties), then push the observed rate just barely, but detectably
+  // at large N, above 1/2 -- while staying inside the practical margin.
+  const items = [];
+  const N = 20000;
+  const targetExtra = Math.round(N * 0.02); // 2 percentage points above the 50% tie-aware null
+  for (let i = 0; i < N; i += 1) {
+    const correctAtMax = i < N / 2 + targetExtra;
+    items.push({
+      id: `la${i}`, n: 4, tiedAtMax: 2, correctAtMax,
+      nullProbabilityCorrectAtMax: 0.5,
+    });
+  }
+  const result = evaluateLengthAssociation(items);
+  assert.ok(result.detail.observedRate <= result.detail.expectedRate + PRACTICAL_MARGIN, "must stay inside the practical margin");
+  assert.equal(result.detail.statisticallySignificant, true, "must be statistically significant at this N");
+  assert.equal(result.status, "pass");
+  assert.equal(result.reviewFlag.required, true);
+});
+
+test("evaluateGateA: reviewRequired aggregates review flags from position and length components without ever being conflated with an actual fail", () => {
+  const n = 4;
+  const N = 100000;
+  const expected = N / n;
+  const counts = [expected + 500, expected - 167, expected - 167, expected - 166];
+  const items = BALANCED_NONCYCLIC_ORDERS[13].map((a, i) => buildIndependentItem(`rr${i}`, 4, a, hashIsMax(i, 4)));
+  // Directly assemble a metrics-shaped object whose position group carries
+  // the large-N significant-but-trivial deviation, reusing the already
+  // clean items for length/sequence so only position's review flag fires.
+  const metrics = computeCueMetrics(items);
+  metrics.byOptionCount = [{ optionCount: 4, total: N, positionCounts: counts }];
+  const gate = evaluateGateA(metrics);
+  assert.equal(gate.overall, "pass");
+  assert.equal(gate.reviewRequired, true);
+  assert.ok(gate.reviewFlaggedComponents.some((c) => c.component.includes("position")));
+});
+
+// ---------------------------------------------------------------------------
+// 12c. Exact Poisson-binomial two-sided p-value convention (issue 4):
+//      independently hand-computed fixtures (NOT derived by calling the
+//      implementation under test) proving the PROBABILITY-ORDERING
+//      convention now used, distinguishing it from the DOUBLED-MINIMUM-TAIL
+//      convention used before this correction.
+// ---------------------------------------------------------------------------
+
+test("counterexample (issue 4) resolved: probabilities=[0.9, 0.5, 0.5] -- the exact PMF matches hand computation, and the probability-ordering p-value diverges from the doubled-minimum-tail convention at every non-modal outcome", () => {
+  // Hand computation (shown in the correction's reproduction record):
+  //   pmf = [0.025, 0.275, 0.475, 0.225]  (sums to 1)
+  // Doubled-minimum-tail p-values (the PRIOR convention, hand-computed
+  // independently): obs=0 -> 0.05, obs=1 -> 0.60, obs=2 -> 1.00 (clipped), obs=3 -> 0.45
+  // Probability-ordering p-values (the CORRECTED convention, hand-computed
+  // independently): obs=0 -> 0.025, obs=1 -> 0.525, obs=2 -> 1.00, obs=3 -> 0.25
+  const probs = [0.9, 0.5, 0.5];
+  const pmf = poissonBinomialPMF(probs);
+  assert.ok(Math.abs(pmf[0] - 0.025) < 1e-9);
+  assert.ok(Math.abs(pmf[1] - 0.275) < 1e-9);
+  assert.ok(Math.abs(pmf[2] - 0.475) < 1e-9);
+  assert.ok(Math.abs(pmf[3] - 0.225) < 1e-9);
+
+  const expectedProbabilityOrdering = [0.025, 0.525, 1.0, 0.25];
+  const expectedDoubledTail = [0.05, 0.6, 1.0, 0.45]; // the prior convention -- must now DIFFER from the implementation at obs=0,1,3
+  for (let obs = 0; obs < 4; obs += 1) {
+    const actual = poissonBinomialTwoSidedPValue(probs, obs);
+    assert.ok(Math.abs(actual - expectedProbabilityOrdering[obs]) < 1e-9, `obs=${obs}: expected ${expectedProbabilityOrdering[obs]}, got ${actual}`);
+  }
+  assert.notEqual(poissonBinomialTwoSidedPValue(probs, 0), expectedDoubledTail[0]);
+  assert.notEqual(poissonBinomialTwoSidedPValue(probs, 1), expectedDoubledTail[1]);
+  assert.notEqual(poissonBinomialTwoSidedPValue(probs, 3), expectedDoubledTail[3]);
+});
+
+test("counterexample (issue 4) resolved: for a SYMMETRIC probability vector, probability-ordering and doubled-minimum-tail coincide (hand-verified two fair coins, pmf=[0.25,0.5,0.25])", () => {
+  // Hand computation: symmetric pmf means, for obs=0 or obs=2 (the tails),
+  // both conventions sum the same two symmetric outcomes; both give 0.5.
+  assert.ok(Math.abs(poissonBinomialTwoSidedPValue([0.5, 0.5], 0) - 0.5) < 1e-9);
+  assert.ok(Math.abs(poissonBinomialTwoSidedPValue([0.5, 0.5], 2) - 0.5) < 1e-9);
+  assert.equal(poissonBinomialTwoSidedPValue([0.5, 0.5], 1), 1);
+});
+
+test("counterexample (issue 4) resolved: at the distribution's mode, both conventions give exactly 1 -- hand-verified (pmf's own maximum is trivially <= itself, and >= itself for the tail sum)", () => {
+  const probs = [0.9, 0.5, 0.5]; // mode is obs=2, pmf[2]=0.475, the pmf's maximum
+  assert.equal(poissonBinomialTwoSidedPValue(probs, 2), 1);
+});
+
+test("counterexample (issue 4) resolved: boundary observation p=0 (an item that can never succeed under the null) is handled correctly -- hand-verified pmf=[0,0.5,0.5] for probabilities=[0,0.5]", () => {
+  const probs = [0, 0.5];
+  const pmf = poissonBinomialPMF(probs);
+  assert.deepEqual(pmf, [0.5, 0.5, 0]);
+  // observed=0: pmf[0]=0.5 is the pmf's maximum (tied with pmf[1]) -> p=1
+  assert.equal(poissonBinomialTwoSidedPValue(probs, 0), 1);
+});
+
+test("counterexample (issue 4) resolved: boundary observation p=1 (an item that always succeeds under the null) is handled correctly -- hand-verified pmf=[0,0.5,0.5] for probabilities=[1,0.5]", () => {
+  const probs = [1, 0.5];
+  const pmf = poissonBinomialPMF(probs);
+  assert.deepEqual(pmf, [0, 0.5, 0.5]);
+  assert.equal(poissonBinomialTwoSidedPValue(probs, 1), 1);
+});
+
+test("counterexample (issue 4) resolved: degenerate all-way tie (every item has nullProbabilityCorrectAtMax=1, i.e. p=1 for every trial) -- hand-verified: only k=N is possible, p-value is 1 exactly at N and 0 everywhere else, never NaN or clipped incorrectly", () => {
+  const probs = new Array(5).fill(1);
+  const pmf = poissonBinomialPMF(probs);
+  assert.deepEqual(pmf, [0, 0, 0, 0, 0, 1]);
+  assert.equal(poissonBinomialTwoSidedPValue(probs, 5), 1);
+  assert.equal(poissonBinomialTwoSidedPValue(probs, 0), 0);
+});
+
+test("the method label accurately names the chosen convention, and states it is not the only possible one", () => {
+  const items = [];
+  for (let i = 0; i < 10; i += 1) { items.push(classifyCue(q("m" + i, ["short", "the correct longer option"], 1), historicalLength)); }
+  const result = evaluateLengthAssociation(items);
+  assert.equal(result.detail.method, "exact-poisson-binomial-two-sided-probability-ordering");
 });
 
 // ---------------------------------------------------------------------------
