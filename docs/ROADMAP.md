@@ -477,14 +477,18 @@ review status stable before adding 46 questions.
   not assumed here. Preserve the beta disclosure until this is resolved
   and independently verified.
   **Foundation delivered (Issue #24, Phase 0 steps 1-3, `docs/QUALITY_LOG.md`
-  QL-036, draft PR open, not yet merged):** `docs/ASSESSMENT_VALIDITY.md`
-  independently reproduces the baseline above, defines the Gate A
-  bank/form-level statistical thresholds (with cited, directly-inspected
-  sources) and the Gate B item-level review rubric, and selects a
-  deterministic 13-question pilot batch — no question content changed,
-  the bank still fails Gate A by design, and this item stays unchecked.
-  Steps 4-9 (the actual pilot rewrite and scale-up) remain separately
-  scoped, later work.
+  QL-036 and QL-037, draft PR open, not yet merged):**
+  `docs/ASSESSMENT_VALIDITY.md` independently reproduces the baseline
+  above, defines the Gate A bank/form-level statistical thresholds (with
+  a directly-inspected, cited primary source; a secondary source is
+  labeled accordingly, not overstated as directly verified) and the Gate
+  B item-level review rubric, and selects a deterministic 13-question
+  pilot batch — no question content changed, the bank and every one of
+  its 17 forms still fails Gate A by design (now via a redesign that is
+  actually achievable for a well-authored small form or the pilot itself,
+  unlike the first draft), and this item stays unchecked. Steps 4-9 (the
+  actual pilot rewrite and scale-up) remain separately scoped, later
+  work.
 
 ### Exit criteria
 

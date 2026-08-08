@@ -11,6 +11,18 @@
  * tests/dom-behavior.mjs) to reproduce the frozen QL-033 baseline against
  * the live, current authored bank.
  *
+ * Corrected (docs/QUALITY_LOG.md QL-037) after independent review found
+ * the original Gate A design made every real course form (5-9 items) and
+ * the 13-item pilot structurally unable to ever pass, the canonical
+ * length metric measured a different string than the one actually
+ * rendered to learners, the length-cueing check ignored tie structure,
+ * pilot selection depended on input array order despite a determinism
+ * test that could not have caught that (a vacuous constant-label
+ * comparison), and the frozen baseline recorded only aggregate counts,
+ * not the exact question-id set. This file's coverage was rewritten to
+ * match the corrected implementation and to directly reproduce every
+ * counterexample the review found before asserting the fix.
+ *
  * Scope discipline: this file only measures and tests measurement code.
  * It never mutates index.html, QUESTION_GOVERNANCE, or any question
  * content -- see docs/ASSESSMENT_VALIDITY.md.
@@ -19,20 +31,31 @@
 import assert from "node:assert/strict";
 import {
   ORIGINAL_BASELINE,
+  ORIGINAL_ID_MANIFEST,
+  FROZEN_PILOT_MANIFEST,
+  sha256Hex,
+  compareToIdManifest,
   historicalLength,
   canonicalLength,
   assertValidQuestionShape,
   classifyCue,
   computeCueMetrics,
+  exactPigeonholeBalance,
   evaluatePositionBalance,
-  evaluateLengthBalance,
+  poissonBinomialPMF,
+  poissonBinomialTwoSidedPValue,
+  evaluateLengthAssociation,
   evaluateGateA,
+  REGIME_THRESHOLD,
+  canonicalOrderKey,
+  compareCanonicalOrder,
   selectPilotBatch,
   bootLiveCourseApi,
   flattenQuestionBank,
+  buildDeterministicReport,
   PRACTICAL_MARGIN,
-  ZERO_FLOOR_MIN_ITEMS_PER_POSITION,
   CHI_SQUARE_MIN_EXPECTED_PER_CELL,
+  SIGNIFICANCE_ALPHA,
 } from "../scripts/assessment-cue-audit.mjs";
 
 let passed = 0;
@@ -71,16 +94,10 @@ function q(id, opts, answerIndex, extra = {}) {
   );
 }
 
-// A perfectly balanced synthetic 4-option bank: 8 items, exactly 2 at each
-// position, correct answer length varying so no length cue exists either.
-function balancedFourOptionBank() {
-  const items = [];
-  for (let i = 0; i < 8; i += 1) {
-    const pos = i % 4;
-    const opts = ["Option one text", "Option two text", "Option three text", "Option four text"];
-    items.push(q(`bal-q${i}`, opts, pos));
-  }
-  return items;
+function balancedPositionCounts(N, n) {
+  const counts = new Array(n).fill(0);
+  for (let i = 0; i < N; i += 1) { counts[i % n] += 1; }
+  return counts;
 }
 
 // ---------------------------------------------------------------------------
@@ -139,7 +156,72 @@ test("ORIGINAL_BASELINE itself is frozen (Object.isFrozen)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2. Historical vs. canonical length metric: exact behavior
+// 2. Frozen exact-id manifest (point G) -- detects identity drift an
+//    aggregate-count-only baseline cannot.
+// ---------------------------------------------------------------------------
+
+test("ORIGINAL_ID_MANIFEST contains exactly 153 unique, frozen ids", () => {
+  assert.equal(ORIGINAL_ID_MANIFEST.count, 153);
+  assert.equal(new Set(ORIGINAL_ID_MANIFEST.sortedIds).size, 153);
+  assert.equal(Object.isFrozen(ORIGINAL_ID_MANIFEST.sortedIds), true);
+});
+
+test("the live bank's id set matches the frozen manifest exactly (digest and set both agree)", () => {
+  const check = compareToIdManifest(liveQuestions.map((it) => it.id));
+  assert.equal(check.matches, true);
+  assert.deepEqual(check.removed, []);
+  assert.deepEqual(check.added, []);
+  assert.equal(check.hasDuplicates, false);
+});
+
+test("counterexample: an id REPLACEMENT that preserves the total count of 153 is still detected (aggregate counts alone would miss this)", () => {
+  const swapped = [...ORIGINAL_ID_MANIFEST.sortedIds];
+  swapped[0] = "totally-unrelated-replacement-id";
+  const check = compareToIdManifest(swapped);
+  assert.equal(check.matches, false);
+  assert.equal(check.liveCount, 153); // count alone is unchanged -- this is the point
+  assert.ok(check.removed.length === 1);
+  assert.ok(check.added.length === 1);
+  assert.equal(check.added[0], "totally-unrelated-replacement-id");
+});
+
+test("counterexample: a removed id (count drops to 152) is detected", () => {
+  const removed = ORIGINAL_ID_MANIFEST.sortedIds.slice(1);
+  const check = compareToIdManifest(removed);
+  assert.equal(check.matches, false);
+  assert.equal(check.liveCount, 152);
+  assert.deepEqual(check.removed, [ORIGINAL_ID_MANIFEST.sortedIds[0]]);
+});
+
+test("counterexample: an added id (count rises to 154) is detected", () => {
+  const added = [...ORIGINAL_ID_MANIFEST.sortedIds, "a-brand-new-id"];
+  const check = compareToIdManifest(added);
+  assert.equal(check.matches, false);
+  assert.equal(check.liveCount, 154);
+  assert.deepEqual(check.added, ["a-brand-new-id"]);
+});
+
+test("counterexample: a duplicated id is detected via hasDuplicates even though the manifest set itself still matches", () => {
+  const duplicated = [...ORIGINAL_ID_MANIFEST.sortedIds];
+  duplicated[1] = duplicated[0];
+  const check = compareToIdManifest(duplicated);
+  assert.equal(check.hasDuplicates, true);
+  assert.equal(check.matches, false);
+});
+
+test("sha256Hex is a deterministic, order-sensitive hash function", () => {
+  assert.equal(sha256Hex("abc"), sha256Hex("abc"));
+  assert.notEqual(sha256Hex("abc"), sha256Hex("abd"));
+});
+
+test("the CLI report's noDuplicateIds field is accurately named -- it reflects uniqueness only; idManifestCheck is the real omission/addition detector", () => {
+  const report = buildDeterministicReport(liveQuestions);
+  assert.equal(report.noDuplicateIds, true);
+  assert.equal(report.idManifestCheck.matches, true);
+});
+
+// ---------------------------------------------------------------------------
+// 3. Historical vs. canonical length metric: exact behavior
 // ---------------------------------------------------------------------------
 
 test("historicalLength is raw UTF-16 code-unit .length with no normalization", () => {
@@ -148,56 +230,33 @@ test("historicalLength is raw UTF-16 code-unit .length with no normalization", (
   assert.equal(historicalLength("a  b"), 4);
 });
 
-test("canonicalLength decodes named HTML entities", () => {
-  assert.equal(canonicalLength("A &amp; B"), "A & B".length);
-  assert.equal(canonicalLength("&lt;tag&gt;"), "<tag>".length);
+test("canonicalLength does NOT decode HTML entities (corrected -- esc()/textContent never interprets them for the learner)", () => {
+  assert.equal(canonicalLength("A &amp; B"), "A &amp; B".length);
 });
 
-test("canonicalLength decodes numeric HTML entities (decimal and hex)", () => {
-  assert.equal(canonicalLength("caf&#233;"), "café".length);
-  assert.equal(canonicalLength("caf&#xE9;"), "café".length);
+test("canonicalLength does NOT strip HTML tags (corrected -- a literal <b> renders as literal text in this app)", () => {
+  const withTag = "<b>Bold</b> text";
+  assert.equal(canonicalLength(withTag), withTag.length);
 });
 
-test("canonicalLength strips HTML tags", () => {
-  assert.equal(canonicalLength("<b>Bold</b> text"), "Bold text".length);
+test("canonicalLength does NOT strip trailing punctuation (corrected -- it is genuinely rendered, not decorative padding to this metric)", () => {
+  assert.notEqual(canonicalLength("Complete statement."), canonicalLength("Complete statement"));
+  assert.equal(canonicalLength("Complete statement."), canonicalLength("Complete statement") + 1);
 });
 
-test("canonicalLength strips tags before decoding entities, so an escaped tag typed as literal source text is preserved as visible text, not double-processed into a strippable tag", () => {
-  // Regression test: an earlier implementation decoded entities first,
-  // which turned "&lt;tag&gt;" into the literal text "<tag>" and then
-  // incorrectly stripped it as if it were real markup, undercounting a
-  // learner-visible "<tag>" as zero characters.
-  assert.equal(canonicalLength("&lt;tag&gt;"), "<tag>".length);
-  assert.notEqual(canonicalLength("&lt;tag&gt;"), 0);
-});
-
-test("canonicalLength does not mis-strip a lone comparison operator from real current option text", () => {
-  // Real current option text (m9, ordering questions) uses ">" as a
-  // comparison operator, not markup -- must never be stripped or
-  // otherwise mismeasured.
-  const real = "Countable > analyzable > karyotypable";
-  assert.equal(canonicalLength(real), real.length);
-});
-
-test("canonicalLength collapses internal whitespace and trims", () => {
+test("canonicalLength collapses internal whitespace and trims (a genuine rendering effect -- no white-space:pre override on .qopt)", () => {
   assert.equal(canonicalLength("  a    b  "), "a b".length);
 });
 
-test("canonicalLength strips exactly one trailing sentence-ending mark, not internal punctuation", () => {
-  assert.equal(canonicalLength("Complete statement."), canonicalLength("Complete statement"));
-  assert.equal(canonicalLength("Wait, really?"), "Wait, really".length);
-  assert.equal(canonicalLength("A, B, and C"), "A, B, and C".length);
-});
-
 test("canonicalLength counts grapheme clusters, not UTF-16 code units, for non-BMP characters", () => {
-  const withEmoji = "a\u{1F44D}b"; // a + thumbs-up (surrogate pair) + b
-  assert.equal(historicalLength(withEmoji), 4); // 1 + 2 (surrogate pair) + 1
-  assert.equal(canonicalLength(withEmoji), 3); // 1 grapheme + 1 grapheme + 1 grapheme
+  const withEmoji = "a\u{1F44D}b";
+  assert.equal(historicalLength(withEmoji), 4);
+  assert.equal(canonicalLength(withEmoji), 3);
 });
 
 test("canonicalLength NFC-normalizes so precomposed and decomposed forms measure identically", () => {
-  const precomposed = "café"; // é as one code point
-  const decomposed = "café"; // e + combining acute accent
+  const precomposed = "café";
+  const decomposed = "café";
   assert.equal(canonicalLength(precomposed), canonicalLength(decomposed));
 });
 
@@ -207,8 +266,13 @@ test("length metrics throw on non-string input rather than silently miscounting"
   assert.throws(() => canonicalLength(undefined), TypeError);
 });
 
+test("counterexample (point B): a real current option's literal comparison operator is measured, not misread as a tag boundary", () => {
+  const real = "Countable > analyzable > karyotypable";
+  assert.equal(canonicalLength(real), real.length);
+});
+
 // ---------------------------------------------------------------------------
-// 3. Malformed question-shape rejection
+// 4. Malformed question-shape rejection
 // ---------------------------------------------------------------------------
 
 test("rejects a question with fewer than 2 options", () => {
@@ -245,27 +309,40 @@ test("selectPilotBatch propagates the same malformed-input rejection", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 4. Two-, three-, and four-option fixtures; uniquely-longest and
-//    tied-longest handling
+// 5. classifyCue: two-, three-, and four-option fixtures; ties
 // ---------------------------------------------------------------------------
 
 test("classifyCue: 4-option item, correct answer uniquely longest", () => {
   const item = q("m", ["short", "shorter", "the correct and longest option", "mid length"], 2);
   const cue = classifyCue(item, historicalLength);
   assert.equal(cue.cueClass, "uniquely-longest");
+  assert.equal(cue.tiedAtMax, 1);
+  assert.equal(cue.correctAtMax, true);
+  assert.equal(cue.nullProbabilityCorrectAtMax, 1 / 4);
 });
 
-test("classifyCue: 4-option item, correct answer tied for longest", () => {
+test("classifyCue: 4-option item, correct answer tied for longest (2-way tie)", () => {
   const item = q("m", ["aaaaaaaaaa", "correct-aa", "bb", "cc"], 1);
   const cue = classifyCue(item, historicalLength);
   assert.equal(item.o[0].length, item.o[1].length);
   assert.equal(cue.cueClass, "tied-longest");
+  assert.equal(cue.tiedAtMax, 2);
+  assert.equal(cue.nullProbabilityCorrectAtMax, 2 / 4);
+});
+
+test("classifyCue: all-way tie (every option the same length) gives null probability 1 -- length carries zero information", () => {
+  const item = q("m", ["aaaa", "bbbb", "cccc", "dddd"], 2);
+  const cue = classifyCue(item, historicalLength);
+  assert.equal(cue.tiedAtMax, 4);
+  assert.equal(cue.nullProbabilityCorrectAtMax, 1);
+  assert.equal(cue.correctAtMax, true);
 });
 
 test("classifyCue: 4-option item, correct answer not the longest", () => {
   const item = q("m", ["a much longer distractor option here", "short", "b", "c"], 1);
   const cue = classifyCue(item, historicalLength);
   assert.equal(cue.cueClass, "not-longest");
+  assert.equal(cue.correctAtMax, false);
 });
 
 test("classifyCue: 2-option item works identically to 4-option (uniquely-longest, tied, not-longest)", () => {
@@ -279,7 +356,7 @@ test("classifyCue: 3-option item works identically", () => {
   assert.equal(classifyCue(item, historicalLength).cueClass, "uniquely-longest");
 });
 
-test("computeCueMetrics separates option-count groups (mixed 2/3/4-option bank)", () => {
+test("computeCueMetrics separates option-count groups for POSITION balance (mixed 2/3/4-option bank)", () => {
   const mixed = [
     q("a", ["x", "y"], 0),
     q("b", ["x", "y", "z"], 1),
@@ -289,96 +366,88 @@ test("computeCueMetrics separates option-count groups (mixed 2/3/4-option bank)"
   const metrics = computeCueMetrics(mixed);
   const counts = metrics.byOptionCount.map((g) => [g.optionCount, g.total]);
   assert.deepEqual(counts, [[2, 1], [3, 1], [4, 2]]);
+  assert.equal(metrics.items.length, 4);
 });
 
 // ---------------------------------------------------------------------------
-// 5. Gate A: thresholds, boundaries, pass/fail/inconclusive
+// 6. Gate A position balance: the small-N structural regime (point A)
 // ---------------------------------------------------------------------------
 
-test("evaluatePositionBalance: inconclusive when N < optionCount", () => {
-  const result = evaluatePositionBalance({ optionCount: 4, total: 2, positionCounts: [1, 1, 0, 0] });
-  assert.equal(result.status, "inconclusive");
+test("exactPigeonholeBalance: has no free parameter -- floor/ceil are fully derived from N and n", () => {
+  assert.deepEqual(exactPigeonholeBalance([2, 1, 1, 1], 4, 5), { balanced: true, floorAllowed: 1, ceilAllowed: 2, outOfRangeCounts: [] });
+  assert.equal(exactPigeonholeBalance([5, 0, 0, 0], 4, 5).balanced, false);
 });
 
-test("evaluatePositionBalance: perfectly uniform, large N -> pass", () => {
-  const N = 100;
-  const result = evaluatePositionBalance({ optionCount: 4, total: N, positionCounts: [25, 25, 25, 25] });
-  assert.equal(result.status, "pass");
+test("exactPigeonholeBalance / evaluatePositionBalance: the LOWER bound (floor) is independently enforced -- a position undershooting the floor fails even when no position overshoots the ceiling", () => {
+  // N=5, n=4: floor=1, ceil=2. [2,2,1,0] has max=2 (within ceil) but one
+  // position at 0 (below floor=1) -- this specifically isolates the lower
+  // bound from the upper bound, which an all-at-one-position fixture
+  // (always violating the upper bound too) cannot do.
+  const detail = exactPigeonholeBalance([2, 2, 1, 0], 4, 5);
+  assert.equal(detail.balanced, false);
+  assert.ok(detail.outOfRangeCounts.includes(0));
+
+  const result = evaluatePositionBalance({ optionCount: 4, total: 5, positionCounts: [2, 2, 1, 0] });
+  assert.equal(result.status, "fail");
+  assert.equal(result.regime, "structural");
 });
 
-test("evaluatePositionBalance: boundary just inside the practical margin at large N -> not a practical failure", () => {
-  // n=4: maxAllowedShare = 0.25 + 0.15 = 0.40 exactly.
+[5, 6, 7, 8, 9, 13].forEach((N) => {
+  test(`counterexample (point A) resolved: a perfectly balanced ${N}-item, 4-option form now PASSES Gate A position balance (it could not before this correction)`, () => {
+    const counts = balancedPositionCounts(N, 4);
+    const result = evaluatePositionBalance({ optionCount: 4, total: N, positionCounts: counts });
+    assert.equal(result.status, "pass", `counts=${JSON.stringify(counts)}`);
+    assert.equal(result.regime, "structural");
+  });
+
+  test(`a correspondingly imbalanced ${N}-item, 4-option form (all at one position) still FAILS`, () => {
+    const counts = [N, 0, 0, 0];
+    const result = evaluatePositionBalance({ optionCount: 4, total: N, positionCounts: counts });
+    assert.equal(result.status, "fail");
+    assert.equal(result.regime, "structural");
+  });
+});
+
+test("position balance: inconclusive ONLY when N < optionCount -- not the default outcome for any valid small form (corrected precise meaning)", () => {
+  const tooFew = evaluatePositionBalance({ optionCount: 4, total: 2, positionCounts: [1, 1, 0, 0] });
+  assert.equal(tooFew.status, "inconclusive");
+  // Every N >= n gets a definitive pass/fail -- verified across the whole small-N range.
+  for (let N = 4; N < REGIME_THRESHOLD(4); N += 1) {
+    const balanced = evaluatePositionBalance({ optionCount: 4, total: N, positionCounts: balancedPositionCounts(N, 4) });
+    assert.notEqual(balanced.status, "inconclusive", `N=${N} balanced case must not be inconclusive`);
+  }
+});
+
+test("REGIME_THRESHOLD(n) is the single shared boundary for both regime selection and chi-square computability (point E)", () => {
+  const n = 4;
+  const threshold = REGIME_THRESHOLD(n);
+  assert.equal(threshold, CHI_SQUARE_MIN_EXPECTED_PER_CELL * n);
+
+  const below = evaluatePositionBalance({ optionCount: n, total: threshold - 1, positionCounts: balancedPositionCounts(threshold - 1, n) });
+  assert.equal(below.regime, "structural");
+  assert.equal(below.detail.statisticalResult, "not-computed-small-n-structural-regime-applies");
+
+  const at = evaluatePositionBalance({ optionCount: n, total: threshold, positionCounts: balancedPositionCounts(threshold, n) });
+  assert.equal(at.regime, "statistical");
+  assert.notEqual(at.detail.statisticalResult, "not-computed-small-n-structural-regime-applies");
+
+  const above = evaluatePositionBalance({ optionCount: n, total: threshold + 1, positionCounts: balancedPositionCounts(threshold + 1, n) });
+  assert.equal(above.regime, "statistical");
+});
+
+test("position balance: large-N statistical regime still works as before -- practical margin boundary just inside vs. just beyond", () => {
   const N = 1000;
   const atBoundary = Math.floor(N * (0.25 + PRACTICAL_MARGIN));
   const rest = N - atBoundary;
-  const positionCounts = [atBoundary, Math.ceil(rest / 3), Math.floor(rest / 3), rest - Math.ceil(rest / 3) - Math.floor(rest / 3)];
-  const result = evaluatePositionBalance({ optionCount: 4, total: N, positionCounts });
-  const maxProportion = atBoundary / N;
-  assert.ok(maxProportion <= 0.25 + PRACTICAL_MARGIN);
-});
+  const okCounts = [atBoundary, Math.ceil(rest / 3), Math.floor(rest / 3), rest - Math.ceil(rest / 3) - Math.floor(rest / 3)];
+  const ok = evaluatePositionBalance({ optionCount: 4, total: N, positionCounts: okCounts });
+  assert.ok(atBoundary / N <= 0.25 + PRACTICAL_MARGIN);
 
-test("evaluatePositionBalance: just beyond the practical margin -> fail", () => {
-  const N = 1000;
   const over = Math.ceil(N * (0.25 + PRACTICAL_MARGIN)) + 1;
-  const rest = N - over;
-  const positionCounts = [over, Math.ceil(rest / 3), Math.floor(rest / 3), rest - Math.ceil(rest / 3) - Math.floor(rest / 3)];
-  const result = evaluatePositionBalance({ optionCount: 4, total: N, positionCounts });
-  assert.equal(result.status, "fail");
-  assert.ok(result.reasons.some((r) => r.includes("allowed max")));
-});
-
-test("evaluatePositionBalance: a position used zero times with ample opportunity -> fail via zero floor", () => {
-  const N = ZERO_FLOOR_MIN_ITEMS_PER_POSITION * 4; // exactly at the floor
-  const positionCounts = [N / 3, Math.ceil((N * 2) / 3) - Math.floor(N / 3), Math.floor(N / 3), 0];
-  const total = positionCounts.reduce((a, b) => a + b, 0);
-  const result = evaluatePositionBalance({ optionCount: 4, total, positionCounts });
-  assert.equal(result.status, "fail");
-  assert.ok(result.reasons.some((r) => r.includes("never used")));
-});
-
-test("evaluatePositionBalance: a position used zero times with TOO FEW items for the zero floor -> not flagged by the zero-floor rule alone", () => {
-  // N=4, n=4: below ZERO_FLOOR_MIN_ITEMS_PER_POSITION*n = 12, so the zero-floor
-  // check does not apply -- but the practical share threshold still can.
-  const positionCounts = [2, 1, 1, 0];
-  const result = evaluatePositionBalance({ optionCount: 4, total: 4, positionCounts });
-  assert.ok(!result.reasons.some((r) => r.includes("never used")));
-});
-
-test("evaluatePositionBalance: chi-square only computed when every expected cell count >= CHI_SQUARE_MIN_EXPECTED_PER_CELL", () => {
-  const smallN = CHI_SQUARE_MIN_EXPECTED_PER_CELL * 4 - 4; // just under the 5-per-cell floor
-  const small = evaluatePositionBalance({ optionCount: 4, total: smallN, positionCounts: [smallN, 0, 0, 0] });
-  assert.equal(small.detail.statisticalResult, "not-computed");
-
-  const largeN = CHI_SQUARE_MIN_EXPECTED_PER_CELL * 4;
-  const large = evaluatePositionBalance({ optionCount: 4, total: largeN, positionCounts: [largeN, 0, 0, 0] });
-  assert.notEqual(large.detail.statisticalResult, "not-computed");
-});
-
-test("evaluateLengthBalance: inconclusive when N < optionCount", () => {
-  const result = evaluateLengthBalance({ optionCount: 4, total: 1 }, 1);
-  assert.equal(result.status, "inconclusive");
-});
-
-test("evaluateLengthBalance: at the neutral 1/n rate with large N -> pass", () => {
-  const N = 400;
-  const result = evaluateLengthBalance({ optionCount: 4, total: N }, N / 4);
-  assert.equal(result.status, "pass");
-});
-
-test("evaluateLengthBalance: rate significantly BELOW the expected baseline is also flagged (not only above)", () => {
-  const N = 400;
-  const result = evaluateLengthBalance({ optionCount: 4, total: N }, 0); // correct answer never longest
-  assert.equal(result.status, "fail");
-  assert.ok(result.detail.z < 0);
-});
-
-test("evaluateGateA: whole synthetic balanced bank passes", () => {
-  const metrics = computeCueMetrics(balancedFourOptionBank(), { lengthFn: historicalLength });
-  const gate = evaluateGateA(metrics);
-  // N=8 is below the reliable-inference floor (20) for this bank size, so
-  // the honest result is inconclusive, not a confident pass -- but it must
-  // never be "fail", since nothing here is actually imbalanced.
-  assert.notEqual(gate.overall, "fail");
+  const rest2 = N - over;
+  const failCounts = [over, Math.ceil(rest2 / 3), Math.floor(rest2 / 3), rest2 - Math.ceil(rest2 / 3) - Math.floor(rest2 / 3)];
+  const fail = evaluatePositionBalance({ optionCount: 4, total: N, positionCounts: failCounts });
+  assert.equal(fail.status, "fail");
 });
 
 test("evaluateGateA: the live authored bank reports FAIL -- QL-033 remains unresolved (intentional, not a test-suite bug)", () => {
@@ -405,8 +474,127 @@ test("evaluateGateA: every one of the 17 individual forms also currently fails G
 });
 
 // ---------------------------------------------------------------------------
-// 6. Deterministic pilot selection
+// 7. Gate A length association: tie-aware model (point D) and mixed
+//    option-count evaluation (point C)
 // ---------------------------------------------------------------------------
+
+test("poissonBinomialPMF: sums to 1 and matches a known simple case (two fair coins)", () => {
+  const pmf = poissonBinomialPMF([0.5, 0.5]);
+  assert.equal(pmf.length, 3);
+  const sum = pmf.reduce((a, b) => a + b, 0);
+  assert.ok(Math.abs(sum - 1) < 1e-9);
+  assert.ok(Math.abs(pmf[0] - 0.25) < 1e-9);
+  assert.ok(Math.abs(pmf[1] - 0.5) < 1e-9);
+  assert.ok(Math.abs(pmf[2] - 0.25) < 1e-9);
+});
+
+test("poissonBinomialTwoSidedPValue: p=1 at the exact expected value for a symmetric case, small elsewhere", () => {
+  const probs = new Array(100).fill(0.25);
+  const pAtMean = poissonBinomialTwoSidedPValue(probs, 25);
+  assert.ok(pAtMean > 0.05);
+  const pExtreme = poissonBinomialTwoSidedPValue(probs, 100);
+  assert.ok(pExtreme < 1e-10);
+});
+
+test("counterexample (point D) resolved: a bank that always keys a member of a TIED maximum-length pair (never uniquely longest) is now caught", () => {
+  // 20% of items: correct is uniquely longest (looks "normal" against a flat
+  // 25% expectation). 80%: a 2-way tie for longest, correct always one of
+  // the two tied options. The OLD model (uniquely-longest rate only) would
+  // see 20%, inside its +-15% margin around 25% -- and PASS, missing a
+  // 100% max-length-set association entirely.
+  const items = [];
+  for (let i = 0; i < 10; i += 1) { items.push(classifyCue(q("u" + i, ["a", "the uniquely longest correct one here", "c", "d"], 1), historicalLength)); }
+  for (let i = 0; i < 40; i += 1) { items.push(classifyCue(q("t" + i, ["short", "tied max option one", "tied max option two", "short"], i % 2 === 0 ? 1 : 2), historicalLength)); }
+
+  const uniquelyLongestCount = items.filter((it) => it.cueClass === "uniquely-longest").length;
+  assert.equal(uniquelyLongestCount, 10); // 20% of 50 -- would have looked "normal" under the old flat-rate check
+  const oldObserved = uniquelyLongestCount / items.length;
+  assert.ok(oldObserved >= 0.25 - PRACTICAL_MARGIN && oldObserved <= 0.25 + PRACTICAL_MARGIN, "the old flat-rate check would have passed this");
+
+  const result = evaluateLengthAssociation(items);
+  assert.equal(result.status, "fail");
+  assert.equal(result.detail.observed, 50); // every item's correct answer is in its own max-length set
+  assert.equal(result.detail.observedRate, 1);
+});
+
+test("length association: all-way-tied items carry zero information and are correctly not flagged", () => {
+  const items = [];
+  for (let i = 0; i < 20; i += 1) { items.push(classifyCue(q("x" + i, ["aaaa", "bbbb", "cccc", "dddd"], i % 4), historicalLength)); }
+  const result = evaluateLengthAssociation(items);
+  assert.equal(result.status, "pass");
+  assert.equal(result.detail.pValue, 1);
+});
+
+test("length association: symmetric in both directions -- a rate significantly BELOW the tie-aware expectation also fails", () => {
+  const items = [];
+  for (let i = 0; i < 40; i += 1) { items.push(classifyCue(q("x" + i, ["the longer distractor option here", "b", "c", "d"], (i % 3) + 1), historicalLength)); }
+  const result = evaluateLengthAssociation(items);
+  assert.equal(result.status, "fail");
+  assert.ok(result.detail.observedRate < result.detail.expectedRate);
+});
+
+test("length association: a genuinely non-cued, deliberately rotating bank passes", () => {
+  const items = [];
+  const stems = ["short", "medium length", "a fair bit longer than the others", "mid"];
+  for (let i = 0; i < 80; i += 1) { items.push(classifyCue(q("x" + i, stems, i % 4), historicalLength)); }
+  const result = evaluateLengthAssociation(items);
+  assert.equal(result.status, "pass");
+});
+
+test("length association: inconclusive only for a genuinely empty scope", () => {
+  assert.equal(evaluateLengthAssociation([]).status, "inconclusive");
+});
+
+test("counterexample (point C) resolved: mixed 2/3/4-option scopes are evaluated directly, not made inconclusive merely for containing more than one option-count group", () => {
+  const mixedNonCued = [];
+  for (let i = 0; i < 20; i += 1) { mixedNonCued.push(classifyCue(q("m2-" + i, ["a", "the somewhat longer one"], i % 2), historicalLength)); }
+  for (let i = 0; i < 20; i += 1) { mixedNonCued.push(classifyCue(q("m3-" + i, ["a", "bb", "ccc"], i % 3), historicalLength)); }
+  for (let i = 0; i < 20; i += 1) { mixedNonCued.push(classifyCue(q("m4-" + i, ["a", "bb", "ccc", "dddd"], i % 4), historicalLength)); }
+  const nonCuedResult = evaluateLengthAssociation(mixedNonCued);
+  assert.equal(nonCuedResult.status, "pass");
+
+  const mixedCued = [];
+  for (let i = 0; i < 20; i += 1) { mixedCued.push(classifyCue(q("m2-" + i, ["a", "the correct longer one here"], 1), historicalLength)); }
+  for (let i = 0; i < 20; i += 1) { mixedCued.push(classifyCue(q("m3-" + i, ["a", "bb", "the correct longest one here"], 2), historicalLength)); }
+  for (let i = 0; i < 20; i += 1) { mixedCued.push(classifyCue(q("m4-" + i, ["a", "bb", "ccc", "the correct longest one here"], 3), historicalLength)); }
+  const cuedResult = evaluateLengthAssociation(mixedCued);
+  assert.equal(cuedResult.status, "fail");
+});
+
+test("evaluateGateA combines position (grouped) and length (ungrouped) correctly for a mixed-option-count scope", () => {
+  const mixed = [];
+  for (let i = 0; i < 20; i += 1) { mixed.push(q("m2-" + i, ["a", "the somewhat longer one"], i % 2)); }
+  for (let i = 0; i < 20; i += 1) { mixed.push(q("m4-" + i, ["a", "bb", "ccc", "dddd"], i % 4)); }
+  const metrics = computeCueMetrics(mixed, { lengthFn: historicalLength });
+  const gate = evaluateGateA(metrics);
+  assert.equal(metrics.byOptionCount.length, 2);
+  assert.notEqual(gate.length.status, "inconclusive");
+});
+
+// ---------------------------------------------------------------------------
+// 8. Statistical naming and boundary correctness (point E)
+// ---------------------------------------------------------------------------
+
+test("SIGNIFICANCE_ALPHA is used consistently and is the conventional, documented conservative value", () => {
+  assert.equal(SIGNIFICANCE_ALPHA, 0.01);
+});
+
+test("a statistical result is never reported as an actual computed pass when it was not computed (structural regime uses a distinct, unambiguous label)", () => {
+  const result = evaluatePositionBalance({ optionCount: 4, total: 5, positionCounts: [2, 1, 1, 1] });
+  assert.equal(result.detail.statisticalResult, "not-computed-small-n-structural-regime-applies");
+  assert.notEqual(result.detail.statisticalResult, "fails-to-reject-uniform");
+});
+
+// ---------------------------------------------------------------------------
+// 9. Deterministic pilot selection: canonical order, not input order (point F)
+// ---------------------------------------------------------------------------
+
+test("canonicalOrderKey/compareCanonicalOrder: numeric module comparison, not lexicographic (m2 before m10)", () => {
+  assert.ok(compareCanonicalOrder("m2-q1", "m10-q1") < 0);
+  assert.ok("m10-q1" < "m2-q1"); // the naive string comparison would get this backwards
+  assert.ok(compareCanonicalOrder("m16-q7", "final-q1") < 0);
+  assert.ok(compareCanonicalOrder("m1-q2", "m1-q10") < 0);
+});
 
 test("selectPilotBatch on the live bank is deterministic across repeated calls", () => {
   const first = selectPilotBatch(liveQuestions);
@@ -415,43 +603,61 @@ test("selectPilotBatch on the live bank is deterministic across repeated calls",
   assert.deepEqual(first.records, second.records);
 });
 
-test("selectPilotBatch on the live bank is deterministic even when input order is shuffled (canonical order is defined by module/array order embedded in each item, selection logic re-derives it independent of array position)", () => {
-  const shuffled = [...liveQuestions].reverse();
-  const fromCanonical = selectPilotBatch(liveQuestions);
-  const fromShuffled = selectPilotBatch(shuffled);
-  // Reversing the INPUT array changes which item is "first" per stratum,
-  // so the exact ids may differ -- what must stay true is that both are
-  // internally self-consistent (deterministic for their own given order)
-  // and identical strata are covered either way.
-  const strataOf = (batch) => new Set(batch.records.filter((r) => r.stratum === "domain-x-cueClass").map((r) => r.stratum));
-  assert.deepEqual(strataOf(fromCanonical), strataOf(fromShuffled));
-  assert.equal(fromCanonical.size, selectPilotBatch(liveQuestions).size);
+test("counterexample (point F) resolved: reversing the live bank's input array now produces the EXACT SAME selected ids (a real, strong equality check, not the prior vacuous constant-label comparison)", () => {
+  const forward = selectPilotBatch(liveQuestions);
+  const reversed = selectPilotBatch([...liveQuestions].reverse());
+  assert.deepEqual(reversed.ids, forward.ids);
 });
 
-test("the live bank's pilot batch covers all 5 domains, all difficulty levels present, and all answer positions actually used", () => {
+test("counterexample (point F) resolved: a deterministic shuffle of the live bank's input array also produces the exact same selected ids", () => {
+  const shuffled = [...liveQuestions];
+  for (let i = shuffled.length - 1; i > 0; i -= 1) {
+    const j = (i * 2654435761) % (i + 1);
+    const t = shuffled[i]; shuffled[i] = shuffled[j]; shuffled[j] = t;
+  }
+  const shuffledResult = selectPilotBatch(shuffled);
+  const forward = selectPilotBatch(liveQuestions);
+  assert.deepEqual(shuffledResult.ids, forward.ids);
+});
+
+test("the live bank's pilot batch matches the FROZEN_PILOT_MANIFEST exactly, in order", () => {
+  const pilot = selectPilotBatch(liveQuestions);
+  assert.deepEqual(pilot.ids, [...FROZEN_PILOT_MANIFEST]);
+});
+
+test("the live bank's pilot batch covers all 5 domains, all difficulty levels present, and all answer positions actually used, using REAL recorded values (not a constant label)", () => {
   const pilot = selectPilotBatch(liveQuestions);
   const idToQuestion = new Map(liveQuestions.map((it) => [it.id, it]));
   const pilotItems = pilot.ids.map((id) => idToQuestion.get(id));
 
   const allDomains = new Set(liveQuestions.map((it) => it.d));
-  const pilotDomains = new Set(pilotItems.map((it) => it.d));
+  const pilotDomains = new Set(pilot.records.map((r) => r.domain));
   assert.deepEqual(pilotDomains, allDomains);
+  // Cross-check the record's own domain field against the actual question.
+  pilot.records.forEach((r) => { assert.equal(r.domain, idToQuestion.get(r.id).d); });
 
   const allDifficulties = new Set(liveQuestions.map((it) => it.x));
-  const pilotDifficulties = new Set(pilotItems.map((it) => it.x));
+  const pilotDifficulties = new Set(pilot.records.map((r) => r.difficulty));
   assert.deepEqual(pilotDifficulties, allDifficulties);
 
   const usedPositions = new Set(liveQuestions.map((it) => it.a));
-  const pilotPositions = new Set(pilotItems.map((it) => it.a));
+  const pilotPositions = new Set(pilot.records.map((r) => r.answerPosition));
   assert.deepEqual(pilotPositions, usedPositions);
+
+  assert.ok(pilotItems.every(Boolean));
 });
 
-test("the live bank's pilot batch includes at least one final-form and one module-quiz item", () => {
+test("the live bank's pilot batch includes at least one final-form and one module-quiz item, using the real recorded formContext", () => {
   const pilot = selectPilotBatch(liveQuestions);
-  const idToQuestion = new Map(liveQuestions.map((it) => [it.id, it]));
-  const modules = pilot.ids.map((id) => idToQuestion.get(id).module);
-  assert.ok(modules.includes("final"));
-  assert.ok(modules.some((m) => m !== "final"));
+  const contexts = pilot.records.map((r) => r.formContext);
+  assert.ok(contexts.includes("final"));
+  assert.ok(contexts.some((c) => c === "module"));
+});
+
+test("the live bank's pilot batch includes both full and partial distractor-feedback coverage, using the real recorded field", () => {
+  const pilot = selectPilotBatch(liveQuestions);
+  const coverages = new Set(pilot.records.map((r) => r.distractorFeedbackCoverage));
+  assert.deepEqual(coverages, new Set(["full", "partial"]));
 });
 
 test("selectPilotBatch never includes a duplicate id", () => {
@@ -472,7 +678,21 @@ test("selectPilotBatch selection never evaluates or mutates question content -- 
 });
 
 // ---------------------------------------------------------------------------
-// 7. Scope discipline: this audit never touches product state
+// 10. Deterministic JSON output (point J)
+// ---------------------------------------------------------------------------
+
+test("counterexample (point J) resolved: buildDeterministicReport() contains no wall-clock timestamp field, and repeated calls on identical input are byte-identical", () => {
+  const report1 = buildDeterministicReport(liveQuestions);
+  const report2 = buildDeterministicReport(liveQuestions);
+  const json1 = JSON.stringify(report1);
+  const json2 = JSON.stringify(report2);
+  assert.equal(json1, json2);
+  assert.ok(!json1.includes("generatedAt"));
+  assert.ok(!/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(json1), "no ISO timestamp anywhere in the deterministic payload");
+});
+
+// ---------------------------------------------------------------------------
+// 11. Scope discipline: this audit never touches product state
 // ---------------------------------------------------------------------------
 
 test("booting the course for the audit and reading getQuestions() does not touch progress, storage, or emit events", () => {

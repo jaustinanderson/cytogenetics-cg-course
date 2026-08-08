@@ -1867,15 +1867,13 @@ Phase 0's nine-step batched remediation protocol (Issue #24): freezing
 and independently reproducing the QL-033 baseline (position counts
 11/139/3/0, uniquely-longest 114/153, longest-or-tied 133/153 — an exact
 match, confirmed by a dedicated test, not copied from QL-033's text);
-defining Gate A (bank/form-level statistical thresholds, with two
-directly-inspected, cited sources — University of Illinois CITL and the
-NBME Item-Writing Guide — and an explicit rejection of exact-uniformity
-or p-value-only criteria) and Gate B (a 17-point human-reviewer rubric);
-and selecting a deterministic, cherry-pick-resistant 13-question pilot
-batch (`final-q33`, `m1-q1`, `m1-q2`, `m1-q3`, `m12-q6`, `m15-q1`,
-`m16-q1`, `m2-q1`, `m2-q3`, `m4-q1`, `m6-q1`, `m6-q4`, `m7-q2`) covering
-all 5 domains, all 3 difficulty levels, all 3 answer positions actually
-used, and both form/feedback-structure contexts.
+defining Gate A (bank/form-level statistical thresholds and Gate B
+(a 17-point human-reviewer rubric); and selecting a deterministic,
+cherry-pick-resistant 13-question pilot batch (`m1-q1`, `m1-q2`, `m1-q3`,
+`m2-q1`, `m2-q3`, `m4-q1`, `m6-q1`, `m6-q4`, `m7-q2`, `m12-q6`, `m15-q1`,
+`m16-q1`, `final-q33`) covering all 5 domains, all 3 difficulty levels,
+all 3 answer positions actually used, and both form/feedback-structure
+contexts.
 
 **Corrected the earlier planning document's own bank-vs-item conflation
 in the process of independently reproducing it, and found a real bug
@@ -1889,6 +1887,39 @@ behavior) before any code was committed as the baseline. Fixed; no
 current question was affected (zero current options contain markup or
 entities), but a future one could have been silently mismeasured. See
 `docs/QUALITY_LOG.md` QL-036 for the full record.
+
+**A second independent review (same day, before merge) found Gate A's
+design made every real 5-9 item course form and the 13-item pilot
+mathematically unable to ever pass, even perfectly balanced — the check
+was unachievable, not merely occasionally strict.** Corrected to a
+two-regime model (a zero-free-parameter "exact pigeonhole" structural
+rule below a shared `5n`-item threshold; the prior practical-margin/
+chi-square approach above it), so synthetic balanced 5/6/7/8/9/13-item
+forms now pass while imbalanced ones still fail. The canonical length
+metric was also found to strip tags, decode entities, and strip
+punctuation that `index.html`'s actual `esc()`/`textContent` rendering
+displays to learners as literal text — corrected to measure exactly the
+rendered string, verified by a new real-browser rendered-text oracle
+test. The length-cueing check was found to ignore tie structure (a bank
+keying the correct answer to a tied-maximum-length option could evade a
+uniquely-longest-only check) and to go inconclusive for mixed
+option-count scopes — replaced with a tie-aware, per-item, exact
+Poisson-binomial test valid at any sample size. Six further
+reproducibility gaps were also corrected, including that the prior
+pilot-selection-order determinism test used a comparison helper that
+could only ever produce a constant value and could not have caught the
+order-dependence bug it was named for (now fixed with a canonical,
+id-derived selection order and a real equality assertion); that the
+frozen baseline recorded only aggregate counts, not the exact 153
+question ids (a hypothetical id swap preserving every count would have
+gone undetected — now a separate frozen id manifest with a SHA-256
+digest); and that the NBME source citation was mislabeled a "directly
+inspected primary source" when its wording actually came from an
+unverified third-party mirror (the official PDF is gated behind a
+lead-capture form) — now downgraded to explicitly labeled corroborating
+color, with the University of Illinois CITL source (fully, directly
+verified) as the sole basis for every numeric threshold. See
+`docs/QUALITY_LOG.md` QL-037 for the full record.
 
 **Nothing here is a correction to product code or scientific content.**
 `index.html` is unmodified; no question, answer, rationale, distractor

@@ -33,6 +33,38 @@ All notable repository changes are recorded here.
   foundation only; the actual pilot-batch rewrite remains separately
   scoped, later work. See `docs/QUALITY_LOG.md` QL-036 for the full
   record.
+  **Corrected (QL-037):** independent review found Gate A's original
+  design made every real 5-9 item course form and the 13-item pilot
+  mathematically unable to ever pass, even perfectly balanced — replaced
+  with a two-regime model (a zero-free-parameter "exact pigeonhole"
+  structural rule below `5n` observations, the prior practical-margin/
+  chi-square approach at or above it, both driven by one shared
+  threshold). The canonical length metric was found to strip tags,
+  decode entities, and strip punctuation that `index.html`'s actual
+  `esc()`/`textContent` rendering displays to learners as literal
+  characters — corrected to measure exactly the rendered text, verified
+  by a new real-browser rendered-text oracle test. The length-cueing
+  check was found to ignore tie structure (a bank could key the correct
+  answer to a tied-maximum-length option and evade a uniquely-longest-only
+  check) and to go inconclusive for any mixed option-count scope —
+  replaced with a tie-aware, per-item, exact Poisson-binomial association
+  test valid at any sample size, needing no option-count grouping.
+  Seven further reproducibility gaps were also corrected: pilot selection
+  now sorts into a canonical, id-derived order before selecting, so
+  reversing or shuffling the input array reproduces the identical pilot
+  (the prior determinism test used a helper that could not have caught
+  the bug it was named for); the frozen baseline now includes an exact,
+  independently-frozen 153-id manifest with a SHA-256 digest, not just
+  aggregate counts (`noDuplicateOrOmittedIds` renamed to the accurately
+  scoped `noDuplicateIds`); historical-method and NBME-citation claims
+  were corrected to the exact strength the retained evidence supports;
+  and the `--json` output no longer embeds a wall-clock timestamp.
+  `tests/assessment-cue-audit.mjs` grew from 53 to 82 dependency-free
+  checks; `tests/e2e/assessment-cue-audit.spec.mjs` grew to 7 real-browser
+  checks. Still no question content changed, still Gate A correctly fails
+  the bank and every form, still QL-033 not marked corrected. See
+  `docs/QUALITY_LOG.md` QL-037 and `docs/ASSESSMENT_VALIDITY.md` for the
+  full record.
 - Added `docs/LEARNING_PLATFORM_ROADMAP.md`, a durable planning document
   (Issue #24, carried by PR #25): a long-term roadmap toward a
   trustworthy, adaptive, subject-independent learning platform — guiding

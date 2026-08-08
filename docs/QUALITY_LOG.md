@@ -4407,3 +4407,165 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   first, not against whatever the first draft implementation happens to
   output, which is exactly what caught the entity/tag-order bug above
   before it reached a committed baseline.
+
+## QL-037 — QL-036's Gate A design was unreachable for real small forms; its length metric measured the wrong string; nine further reproducibility/validity gaps (Issue #24, Phase 0 steps 1-3)
+
+- **Status:** Corrected on the same branch
+  (`claude/phase-0-ql033-foundation`), draft PR open against `main` for
+  independent review, not yet merged. QL-033 itself remains confirmed and
+  unresolved; this entry corrects the QL-036 *tooling*, not the bank.
+- **Finding — ten problems, each reproduced by direct construction before
+  any fix (full detail in `docs/ASSESSMENT_VALIDITY.md`):**
+  1. **Gate A was mathematically unreachable for real small forms.**
+     `evaluatePositionBalance()`/`evaluateLengthBalance()` treated any
+     scope below `5n` observations as `inconclusive` unless it failed.
+     Confirmed: a perfectly balanced synthetic 5-item, 4-option form
+     reported `inconclusive`, never `pass` — and every real course form
+     has 5-9 items, the pilot has 13. No real form or the pilot could
+     ever pass, contradicting Phase 0's own exit criteria.
+  2. **The canonical length metric measured a different string than the
+     one actually rendered.** `index.html`'s `esc()` round-trips option
+     text through `textContent`/`innerHTML` losslessly — a literal
+     `<b>Bold</b>` or `&amp;` displays to the learner as those literal
+     characters, never interpreted. The prior `canonicalLength()` stripped
+     tag-shaped text, decoded entities, and stripped trailing punctuation
+     — all three measured text the learner never sees.
+  3. **Mixed option-count scopes were never actually evaluated for
+     length.** `evaluateGateA()` made the length result `inconclusive`
+     whenever more than one option-count group was present, despite the
+     feature's claimed generic 2/3/4-option support.
+  4. **The length null model ignored tie structure.** Comparing only the
+     uniquely-longest rate against a flat `1/n` missed a bank that always
+     keys a member of a *tied* maximum-length set. Confirmed: a 50-item
+     synthetic bank with 20% uniquely-longest (looks normal against a
+     flat 25% baseline) and 80% two-way-tied-with-correct-always-included
+     (100% in the max-length set) passed the old check entirely.
+  5. **Statistical computability and regime-selection logic disagreed.**
+     The z-test's `N*p*(1-p) >= 5` condition and the status logic's
+     `N >= 5n` condition were separately derived and could diverge; the
+     length check was also mis-labeled a "two-proportion z-test" (it was
+     one-sample).
+  6. **Pilot selection depended on input array order**, and the committed
+     test claiming to prove otherwise did not: its `strataOf()` helper
+     filtered to `stratum === "domain-x-cueClass"` then mapped to
+     `.stratum`, producing only the constant Set `{"domain-x-cueClass"}`
+     regardless of which domains/cueClasses were actually selected —
+     vacuously true, unable to catch the order-dependence it was named
+     for.
+  7. **`ORIGINAL_BASELINE` froze only aggregate counts, not the exact
+     153 ids.** A hypothetical id removed and replaced by an unrelated
+     one could preserve every aggregate count. `noDuplicateOrOmittedIds`
+     checked only uniqueness (`idSet.size === length`) despite its name.
+  8. **Historical-method provenance was overstated.** Reproducing
+     QL-033's aggregate counts with raw `.length` was presented as
+     evidence of the *original* one-off method; no original script
+     survives to actually prove that.
+  9. **The NBME citation was mislabeled.** Both CITL and NBME were called
+     "directly inspected primary sources," but the NBME wording was
+     extracted from a third-party mirror because the official PDF is
+     gated behind a lead-capture form (confirmed again for this
+     correction: the official download URL returns an HTML landing page,
+     not a PDF; an archive.org mirror could not be reached).
+  10. **The `--json` CLI output embedded `new Date().toISOString()`**,
+      so identical input produced byte-different output across runs,
+      contradicting the deterministic-output claim.
+- **Impact:** None shipped — PR #26 remained draft/unmerged throughout;
+  found and fixed before merge.
+- **Correction (full detail, exact mathematics, and every reproduced
+  counterexample in `docs/ASSESSMENT_VALIDITY.md`):**
+  1. **Two-regime Gate A for position balance**, both driven by one
+     shared threshold `REGIME_THRESHOLD(n) = 5n`: below it, a fully
+     derived, zero-free-parameter **exact pigeonhole rule** (every
+     position's count must be `floor(N/n)` or `ceil(N/n)`, the
+     mathematically tightest achievable balance) decides pass/fail with
+     no statistic attempted; at or above it, the existing practical-
+     margin-plus-chi-square approach (now guaranteed computable by the
+     same threshold). `inconclusive` is now reserved for exactly `N < n`.
+     Verified: synthetic balanced 5/6/7/8/9/13-item forms all now pass;
+     correspondingly imbalanced ones still fail.
+  2. **`canonicalLength()` rewritten** to NFC-normalize, collapse
+     whitespace (a genuine rendering effect — no `white-space:pre`
+     override on `.qopt`), and count grapheme clusters — no entity
+     decoding, no tag stripping, no punctuation stripping. A new
+     real-browser **rendered-text oracle**
+     (`tests/e2e/assessment-cue-audit.spec.mjs`) injects synthetic
+     runtime-only option text (literal tags, entities, NFC/NFD, emoji,
+     whitespace, punctuation) via the existing `addQuestions()` API and
+     directly compares the metric against the real rendered `.qopt` text.
+  3. **Length association evaluated once per scope, ungrouped**, since
+     the corrected per-item model (below) needs no option-count grouping.
+  4. **Tie-aware length model**: per item, `P(correct in max-length set)
+     = k_i/n_i` (tie count over option count), aggregated as an exact
+     **Poisson-binomial** distribution (independent Bernoulli trials with
+     different probabilities) via a new `O(N^2)` DP
+     (`poissonBinomialPMF`/`poissonBinomialTwoSidedPValue`) — exact and
+     valid at any N, needing no separate small/large-N split for this
+     check. Symmetric both directions, documented why. Verified against
+     the exact evasion scenario in Finding 4, now correctly failing.
+  5. **`REGIME_THRESHOLD(n)`** is now the single named value used
+     everywhere a "is this large enough" decision is made for position
+     balance; the length check's exact test needs no such threshold at
+     all, eliminating this class of disagreement structurally. Naming
+     corrected throughout.
+  6. **Pilot selection sorts into a canonical order first**
+     (`compareCanonicalOrder`, derived only from each id — numeric module
+     comparison, `final` sorting last — never from array position), then
+     applies the same stratum-first-encountered rule. Verified: reversing
+     or pseudo-randomly shuffling the live bank's 153-item input array now
+     produces the *exact same* selected ids. `FROZEN_PILOT_MANIFEST`
+     records the resulting ordered list; a test enforces it exactly.
+  7. **`ORIGINAL_ID_MANIFEST`** (new
+     `scripts/assessment-cue-audit-id-manifest.mjs`) freezes the literal
+     153 ids independently of the live bank, plus a SHA-256 digest.
+     `compareToIdManifest()` detects removal, addition, replacement, and
+     duplication. `noDuplicateOrOmittedIds` renamed to the accurately
+     scoped `noDuplicateIds`; `idManifestCheck` is the real
+     omission/addition/replacement detector.
+  8. Every historical-method claim corrected to the exact strength the
+     evidence supports: raw `.length` *independently reproduces* the
+     frozen counts; word count does not; the *original* one-off method
+     cannot be proven from retained evidence, since none survives.
+  9. NBME downgraded from "directly inspected primary source" to an
+     explicitly labeled, unverified secondary mirror citation, kept only
+     as corroborating color; CITL (fully, directly verified, covering
+     both required guidance points) is now the sole basis for every
+     numeric threshold and rule.
+  10. The deterministic JSON payload
+      (`buildDeterministicReport()`) no longer contains any wall-clock
+      value; execution metadata is generated separately and passed only
+      to the human-readable console banner.
+- **Tests:** `tests/assessment-cue-audit.mjs` rewritten and expanded from
+  53 to 81 dependency-free checks, each new one directly reproducing its
+  counterexample before asserting the fix: balanced/imbalanced position
+  fixtures at N=5,6,7,8,9,13; the exact `REGIME_THRESHOLD` boundary
+  (below/at/above); the tie-evasion scenario from Finding 4, all-way-tie
+  zero-information case, and both-direction symmetry; mixed-option-count
+  pass and fail fixtures; reversed- and shuffled-input pilot-selection
+  equality (a real, strong assertion, not the prior vacuous one);
+  frozen-pilot-manifest exact match; id-manifest removal/addition/
+  replacement/duplication detection; deterministic-JSON byte-identity
+  across repeated calls with no timestamp present. `tests/e2e/assessment-cue-audit.spec.mjs`
+  expanded to 7 real-browser checks, including the rendered-text oracle
+  and reversed-order pilot-selection equality against the live bank.
+- **Mutation-tested:** 8 targeted reversions against
+  `scripts/assessment-cue-audit.mjs` (never `index.html`), covering every
+  required category, each failed exactly its intended, directly-attributable
+  test(s) and no others, reverted to byte-identical via `diff` before
+  committing. See `docs/VALIDATION.md` for the full record.
+- **Full local validation:** `npm test` (172 dependency-free DOM-behavior
+  checks + 70 governance checks + 82 assessment-cue checks + 5
+  deployed-revision checks) and the complete `npx playwright test` suite,
+  both green except pre-existing, already-documented flakes confirmed
+  transient by isolated re-run.
+- **Scope:** No question, answer, rationale, distractor feedback, domain,
+  topic, difficulty, or stable ID changed; `index.html` is unmodified. No
+  `QUESTION_GOVERNANCE` field populated; all 153 questions remain `draft`.
+  QL-033 is not marked corrected. Phase 0 stays unchecked in
+  `docs/ROADMAP.md` and Issue #24.
+- **Prevention:** A validity check's *achievability* is itself a
+  correctness property, not just its detection power — a check that can
+  never be satisfied by good-faith content is as much a defect as one
+  that never detects bad content, and both need a directly-constructed
+  counterexample (a synthetic fixture proven to pass, or proven to evade
+  detection) before being trusted, not only a check against the one
+  already-known-bad real bank.

@@ -2904,6 +2904,138 @@ remain `draft`. QL-033 is not marked corrected. See
 `docs/QUALITY_LOG.md` QL-036 and `docs/ASSESSMENT_VALIDITY.md` for the
 full record.
 
+### Correction — Gate A was unreachable for real small forms; the length metric measured the wrong string; nine further gaps, added 2026-08-08
+
+A second independent review of the same draft PR (head `5b4f243`, the
+QL-036 foundation) found ten problems, each reproduced by direct
+construction before any fix — full mathematics and every reproduced
+counterexample in `docs/ASSESSMENT_VALIDITY.md`; summarized here for the
+validation record; see `docs/QUALITY_LOG.md` QL-037 for the complete
+finding-by-finding correction.
+
+**The central defect:** Gate A's small-sample handling made every real
+course form (5–9 items) and the 13-item pilot **structurally unable to
+ever pass**, even perfectly balanced — confirmed directly with a
+synthetic, perfectly balanced 5-item fixture reporting `inconclusive`,
+never `pass`. This directly contradicted Phase 0's own exit criteria.
+**Correction:** a two-regime model sharing one threshold,
+`REGIME_THRESHOLD(n) = 5n` — below it, a zero-free-parameter "exact
+pigeonhole" structural rule (every position's count must be
+`floor(N/n)` or `ceil(N/n)`) decides pass/fail deterministically with no
+statistic attempted; at or above it, the existing practical-margin/
+chi-square approach, now guaranteed computable by the same threshold.
+Verified: synthetic balanced 5/6/7/8/9/13-item forms all now pass;
+correspondingly imbalanced ones (all-one-position) still fail.
+`inconclusive` is now reserved for exactly `N < n`.
+
+**The length metric measured a different string than the one rendered.**
+`index.html`'s `esc()` round-trips option text through
+`textContent`/`innerHTML` losslessly — literal `<b>Bold</b>` or `&amp;`
+displays to a learner as those literal characters, never interpreted.
+The prior `canonicalLength()` stripped tags, decoded entities, and
+stripped trailing punctuation, all three measuring text a learner never
+sees. **Correction:** rewritten to NFC-normalize, collapse whitespace (a
+genuine rendering effect — no `white-space:pre` override on `.qopt`,
+directly checked), and count grapheme clusters only — no
+decoding/stripping of any kind. A new real-browser **rendered-text
+oracle** (`tests/e2e/assessment-cue-audit.spec.mjs`) injects synthetic,
+session-only runtime option text (literal tags, entities, NFC/NFD
+composition, emoji, whitespace, punctuation) via the existing,
+separately validated `addQuestions()` API and asserts the metric matches
+the real rendered `.qopt` text directly — not merely by inference.
+
+**The length-cueing check ignored tie structure and mixed option
+counts.** Confirmed: a 50-item synthetic bank with 20% uniquely-longest
+(looks normal against the old flat 25% baseline) and 80% two-way-tied-
+with-correct-always-included (100% actually in the max-length set)
+passed the old check entirely — and a mixed 2/3/4-option scope went
+`inconclusive` for length regardless of whether it was cued. **Correction:**
+a per-item tie-aware model — `P(correct in max-length set) = k_i/n_i`
+(tie count over option count) — aggregated as an exact Poisson-binomial
+distribution via a new `O(N²)` dynamic-programming implementation
+(`poissonBinomialPMF`/`poissonBinomialTwoSidedPValue`), valid at any
+sample size and requiring no option-count grouping at all. Verified
+against the exact evasion scenario above (now correctly fails) and
+against genuinely non-cued mixed-option-count fixtures (correctly pass).
+
+**Pilot selection depended on input array order, undetected by its own
+determinism test.** The prior test's `strataOf()` helper filtered
+records to `stratum === "domain-x-cueClass"` then mapped to `.stratum`
+— after the filter, this can only ever produce the constant Set
+`{"domain-x-cueClass"}`, regardless of which domains/cueClasses were
+actually selected, so the test passed vacuously and could not have
+caught the order-dependence bug it was named for. **Correction:**
+selection now sorts into a canonical order derived only from each
+question's own id (numeric module comparison so `m2` sorts before
+`m10`, unlike a naive string sort; `final` sorts last) before applying
+the existing stratum rule. Verified directly against the live 153-item
+bank: reversing the input array, and a deterministic pseudo-shuffle of
+it, both now reproduce the *exact same* 13 selected ids as forward file
+order — a real, strong equality assertion, not the prior vacuous one.
+`FROZEN_PILOT_MANIFEST` records the resulting ordered list.
+
+**The frozen baseline recorded only aggregate counts.** A hypothetical
+id removed and replaced by an unrelated one could preserve every
+aggregate count undetected. **Correction:**
+`scripts/assessment-cue-audit-id-manifest.mjs` freezes the literal 153
+ids independently of the live bank; `ORIGINAL_ID_MANIFEST` adds a
+SHA-256 digest; `compareToIdManifest()` detects removal, addition,
+replacement, and duplication — each verified by direct construction.
+`noDuplicateOrOmittedIds` (which checked only uniqueness despite its
+name) is renamed to the accurately scoped `noDuplicateIds`;
+`idManifestCheck` is the real detector.
+
+**Provenance and determinism corrections:** historical-method claims
+corrected to say raw `.length` *independently reproduces* QL-033's
+counts (word count does not), without claiming this proves what the
+original one-off script actually did, since none survives to check. The
+NBME citation is downgraded from "directly inspected primary source" to
+an explicitly labeled, unverified third-party-mirror citation — the
+official PDF is gated behind a lead-capture form (confirmed again: the
+official download URL returns an HTML landing page, and `pdftotext`
+cannot parse it as a PDF; an archive.org mirror could not be reached) —
+kept only as corroborating color, never as the basis for any threshold.
+CITL (fully, directly verified, covering both required guidance points)
+is now the sole cited basis for every numeric rule. The `--json` output's
+deterministic payload no longer contains `new Date().toISOString()` or
+any other wall-clock value; execution metadata is generated separately
+and passed only to the human-readable console banner. Verified: two
+successive `--json` runs are now byte-identical.
+
+**Tests:** `tests/assessment-cue-audit.mjs` rewritten and expanded from
+53 to 81 dependency-free checks, each new one directly reproducing its
+counterexample before asserting the fix (see the list above and
+`docs/QUALITY_LOG.md` QL-037 for the complete enumeration).
+`tests/e2e/assessment-cue-audit.spec.mjs` expanded from 5 to 7
+real-browser checks, adding the rendered-text oracle and a reversed-order
+pilot-selection equality check against the live bank.
+
+**Mutation-tested:** 8 targeted, temporary, fully reverted reversions
+against `scripts/assessment-cue-audit.mjs` (never `index.html`), covering
+every required category (balanced/imbalanced small-form position
+structure, the exact statistical boundary, mixed option-count scopes,
+tie-aware length association, rendering-accurate length measurement,
+input-order-independent pilot selection, exact-id replacement detection,
+and deterministic JSON output), each failed exactly its intended,
+directly-attributable test(s) and no others, reverted to byte-identical
+via `diff` before committing.
+
+**Full local validation:** `npm test` (172 dependency-free DOM-behavior
+checks + 70 governance checks + 82 assessment-cue checks + 5
+deployed-revision checks) and the complete `npx playwright test` suite,
+both green except pre-existing, already-documented flakes confirmed
+transient by isolated re-run.
+
+No question, answer, rationale, distractor feedback, domain, topic,
+difficulty, or stable ID changed. `index.html` is byte-for-byte
+unchanged. No `QUESTION_GOVERNANCE` field populated; all 153 questions
+remain `draft`. QL-033 is not marked corrected. Gate A still correctly
+fails the whole bank and every one of its 17 forms — no threshold was
+weakened to make the present bank pass; the fix was making Gate A
+*achievable* for well-authored content, not easier for badly-authored
+content. See `docs/QUALITY_LOG.md` QL-037 and
+`docs/ASSESSMENT_VALIDITY.md` for the full record.
+
 ## Gates still open
 
 ### Browser behavior
