@@ -4261,3 +4261,149 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   (structural completeness vs. qualification) can create the illusion of
   coverage where only one of them is load-bearing at the point that
   matters (record validity at load, not just release-gate qualification).
+
+## QL-036 — QL-033 foundation delivered: frozen baseline, Gate A/Gate B design, deterministic pilot batch (Issue #24, Phase 0 steps 1-3)
+
+- **Status:** Delivered on branch `claude/phase-0-ql033-foundation`, draft
+  PR open against `main` for independent review, not yet merged. This is
+  **foundation only** — QL-033 itself remains confirmed and unresolved;
+  see `docs/ASSESSMENT_VALIDITY.md` for the complete record this entry
+  summarizes.
+- **Scope:** `docs/LEARNING_PLATFORM_ROADMAP.md` Phase 0's first three
+  batched-remediation steps — (1) freeze and independently reproduce the
+  original QL-033 baseline, (2) define the Gate A bank/form statistical
+  guardrails and the Gate B item-writing/cue-review rubric, (3) select a
+  deterministic, representative pilot batch. Steps 4-9 (actual item
+  rewriting, review, re-audit, scaling) are explicitly **not** performed
+  here.
+- **Tooling delivered:** `scripts/assessment-cue-audit.mjs`, the single
+  authoritative implementation of every measurement, Gate A rule, and
+  pilot-selection algorithm this entry describes, imported (never
+  re-implemented) by `tests/assessment-cue-audit.mjs` (53 dependency-free
+  checks) and `tests/e2e/assessment-cue-audit.spec.mjs` (10 real-browser
+  cross-check tests across both configured projects). `npm run
+  audit:assessment-cues` runs the human-readable report; `-- --json`
+  produces deterministic machine-readable output.
+- **Baseline reproduction:** independently re-derived (not copied from
+  QL-033's own text) against the live 153-question bank: position counts
+  A=11/B=139/C=3/D=0, uniquely-longest 114/153, longest-or-tied 133/153 —
+  an exact match to QL-033's original figures, confirmed by a dedicated
+  test that would fail if the bank or the measurement diverged from the
+  frozen record.
+- **Length-measurement finding:** QL-033's original metric was
+  independently identified (by testing candidate metrics until one
+  reproduced the recorded counts, not assumed) as plain JavaScript
+  `.length` (raw UTF-16 code units) — confirmed distinct from a word-count
+  metric, which produces different counts (89/153, 138/153) on the same
+  data. A more robust canonical metric (`canonicalLength()`: strip literal
+  markup, decode HTML entities, NFC-normalize, collapse whitespace, strip
+  one trailing decorative punctuation mark, count grapheme clusters) was
+  defined for future use; it currently reproduces the identical counts to
+  the historical metric on every one of the 153 questions' options (no
+  markup, entities, irregular whitespace, or non-BMP characters exist in
+  the current bank), so no divergence from the frozen baseline exists yet
+  — but the historical numbers are preserved as an immutable record
+  (`ORIGINAL_BASELINE`, `Object.freeze()`d) regardless, so a future
+  divergence, if one ever occurs, can never silently overwrite them.
+- **A genuine implementation bug found and fixed during this same
+  work, before any test asserted the wrong behavior as correct:** an
+  early version of `canonicalLength()` decoded HTML entities before
+  stripping tags. That order let an escaped tag typed as literal source
+  text (e.g. `&lt;tag&gt;`, meant to be read as the visible characters
+  `<tag>`) decode into something that then looked exactly like a real tag
+  and get wrongly stripped — undercounting genuinely visible text as zero
+  characters. Caught by a test written against the *intended* behavior
+  (not against whatever the first implementation happened to do), before
+  any code merged. Fixed by stripping literal tags first, decoding
+  entities second; a dedicated regression test and a test confirming a
+  real current option's literal `>` comparison-operator character
+  (`"Countable > analyzable > karyotypable"`, module 9) is never
+  mis-stripped were both added. No current measurement was affected by
+  either the bug or the fix (verified: zero current options contain
+  markup or entities), but a future authored item using either could have
+  been silently mismeasured had this not been caught here.
+- **Gate A defined**, with two authoritative, directly-inspected sources
+  (University of Illinois CITL "Improving Your Test Questions," items #11
+  and #14; NBME Item-Writing Guide, November 2020, "Correct Option Stands
+  Out," page 21 — both quoted verbatim with retrieval dates in
+  `docs/ASSESSMENT_VALIDITY.md`), an explicit, justified numeric threshold
+  (`PRACTICAL_MARGIN = 0.15`, an additive allowance above the `1/n` chance
+  rate — 40% max share at n=4), a zero-floor rule for a never-used
+  position, and a statistical corroboration (chi-square / normal
+  approximation, α=0.01, only computed above the standard minimum
+  expected-cell-count of 5, otherwise honestly reported
+  `not-computed`/`inconclusive` rather than silently passed. **The
+  current bank, and every one of its 17 individual forms, is reported as
+  FAILING Gate A** — confirmed by a dedicated test, and by design: no
+  threshold was weakened to make the present bank pass.
+- **Gate B defined**: a 17-point human-reviewer rubric in
+  `docs/ASSESSMENT_VALIDITY.md` covering distractor plausibility,
+  parallel construction, grammatical/keyword/absolute-word cues,
+  paired-opposite and all/none-of-the-above risks, padding risk,
+  rationale/feedback alignment, stable-ID-preservation-vs-supersession
+  criteria, and quarantine as a legitimate outcome. Explicitly kept
+  distinct from scientific correctness, `QUESTION_GOVERNANCE` lifecycle,
+  Gate A's bank-level statistics, diagnostic eligibility, and future
+  psychometric validation. No question has been reviewed against it.
+- **Deterministic pilot batch selected**: 13 of 153 questions
+  (`final-q33`, `m1-q1`, `m1-q2`, `m1-q3`, `m12-q6`, `m15-q1`, `m16-q1`,
+  `m2-q1`, `m2-q3`, `m4-q1`, `m6-q1`, `m6-q4`, `m7-q2`), via a purely
+  mechanical, cherry-pick-resistant rule (first-encountered representative
+  per domain × cueClass stratum in canonical file order, then
+  supplemental coverage passes for difficulty, answer position, form
+  context, and distractor-feedback structure) — confirmed deterministic
+  across repeated runs by a dedicated test. Selection records only
+  mechanical facts (stratum, current cue measurement, current governance
+  state) — no item's scientific content was evaluated, and selection is
+  explicitly not authorization to rewrite.
+- **Two honest domain-level findings surfaced by this work** (not
+  previously broken out in QL-033's original bank-wide entry): the
+  `operations` domain's correct answer is the uniquely longest option in
+  all 10 of its questions (100%); the `molecular` domain has zero
+  `not-longest` items across its 14 questions (13 uniquely-longest, 1
+  tied-longest). Recorded here and in `docs/ASSESSMENT_VALIDITY.md` for
+  whoever performs the later item-rewriting batches.
+- **Impact:** None shipped to production — draft PR, not yet merged. No
+  question, answer, rationale, distractor feedback, domain, topic,
+  difficulty, or stable ID was changed; `index.html` is byte-for-byte
+  unchanged by this work. No `QUESTION_GOVERNANCE` field was populated;
+  all 153 questions remain `draft`. QL-033 is not marked corrected.
+- **Tests:** 53 new dependency-free checks (`tests/assessment-cue-audit.mjs`)
+  covering the frozen-baseline reproduction, both length metrics
+  (including the entity/tag-order regression above), malformed-input
+  rejection, 2/3/4-option generalization, Gate A boundary/threshold
+  behavior (inconclusive/pass/fail transitions, chi-square validity
+  floor, both-direction length-rate flagging), the current bank's and
+  every form's confirmed Gate A failure, and pilot-selection determinism
+  and coverage. 10 new real-browser Playwright checks
+  (`tests/e2e/assessment-cue-audit.spec.mjs`) confirming
+  `window.CytoCourse.getQuestions()` and the dependency-free audit agree
+  exactly, and that reading the audit's inputs touches no progress,
+  storage, or event.
+- **Mutation-tested:** 8 targeted reversions against
+  `scripts/assessment-cue-audit.mjs` (never `index.html`) — position-
+  change detection, correct-answer-length-change detection, tie-handling
+  correctness, module omission, module double-counting, generalization
+  collapse (hardcoded option count), Gate A threshold weakening, and
+  pilot-selection determinism — each failed exactly its intended,
+  directly-attributable test(s) and no others, reverted to byte-identical
+  via `diff` before committing. The Gate A threshold-weakening mutation
+  was caught by the per-form test specifically; the whole-bank test
+  remained independently failing at N=153 even at the weakened margin,
+  expected redundancy rather than a masked gap. See
+  `docs/VALIDATION.md` for the full record.
+- **Full local validation:** `npm test` (172 dependency-free DOM-behavior
+  checks + 70 governance checks + 53 assessment-cue checks + 5
+  deployed-revision checks) and the complete `npx playwright test` suite,
+  both green except pre-existing, already-documented flakes confirmed
+  transient by isolated re-run.
+- **Scope:** No product code behavior changed for any existing feature;
+  `index.html` is unmodified. No scientific review, psychometric
+  validation, or QL-033 correction was performed or claimed.
+- **Prevention:** When defining a statistical or measurement threshold,
+  reproduce the number the threshold is meant to catch independently
+  (here, the historical QL-033 counts) before trusting any derived
+  metric — and write the tests against the *intended* correct behavior
+  first, not against whatever the first draft implementation happens to
+  output, which is exactly what caught the entity/tag-order bug above
+  before it reached a committed baseline.

@@ -6,6 +6,33 @@ All notable repository changes are recorded here.
 
 ### Added
 
+- Added `docs/ASSESSMENT_VALIDITY.md` and `scripts/assessment-cue-audit.mjs`
+  (Issue #24, `docs/LEARNING_PLATFORM_ROADMAP.md` Phase 0 steps 1-3, draft
+  PR): the QL-033 assessment-cue foundation. Independently reproduces the
+  frozen QL-033 baseline (position counts 11/139/3/0, uniquely-longest
+  114/153, longest-or-tied 133/153) directly against the live authored
+  bank; identifies QL-033's original length metric as raw JavaScript
+  `.length` and defines a more robust canonical metric (entity decoding,
+  tag stripping, NFC normalization, whitespace/punctuation handling,
+  grapheme-cluster counting) that currently reproduces identical counts
+  on the unchanged bank; defines Gate A (bank/form-level statistical
+  position- and length-balance thresholds, with two cited, directly
+  inspected sources, an explicit numeric margin, and a documented
+  inconclusive state for small forms) and Gate B (a 17-point item-level
+  human-review rubric); and selects a deterministic, cherry-pick-resistant
+  13-question pilot batch. `scripts/assessment-cue-audit.mjs` is the
+  single implementation behind the new `npm run audit:assessment-cues`
+  CLI, `tests/assessment-cue-audit.mjs` (53 new dependency-free checks,
+  now part of `npm test`), and `tests/e2e/assessment-cue-audit.spec.mjs`
+  (10 new real-browser cross-check tests). A genuine implementation bug
+  (an entity-decode/tag-strip ordering issue that could have mismeasured
+  a future option) was found and fixed before it shipped, with a
+  dedicated regression test. **No question content changed, `index.html`
+  is unmodified, the bank and every one of its 17 forms is confirmed to
+  still fail Gate A, and QL-033 is not marked corrected** — this is
+  foundation only; the actual pilot-batch rewrite remains separately
+  scoped, later work. See `docs/QUALITY_LOG.md` QL-036 for the full
+  record.
 - Added `docs/LEARNING_PLATFORM_ROADMAP.md`, a durable planning document
   (Issue #24, carried by PR #25): a long-term roadmap toward a
   trustworthy, adaptive, subject-independent learning platform — guiding

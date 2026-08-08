@@ -1859,6 +1859,49 @@ place in `docs/LEARNING_PLATFORM_ROADMAP.md`, `docs/ROADMAP.md`,
 `README.md`, and this document; see the PR #25 body for the full
 correction record.
 
+### QL-033 assessment-cue audit foundation — Phase 0 steps 1-3, draft PR opened 2026-08-08
+
+`docs/ASSESSMENT_VALIDITY.md` and `scripts/assessment-cue-audit.mjs`
+deliver the first three steps of `docs/LEARNING_PLATFORM_ROADMAP.md`
+Phase 0's nine-step batched remediation protocol (Issue #24): freezing
+and independently reproducing the QL-033 baseline (position counts
+11/139/3/0, uniquely-longest 114/153, longest-or-tied 133/153 — an exact
+match, confirmed by a dedicated test, not copied from QL-033's text);
+defining Gate A (bank/form-level statistical thresholds, with two
+directly-inspected, cited sources — University of Illinois CITL and the
+NBME Item-Writing Guide — and an explicit rejection of exact-uniformity
+or p-value-only criteria) and Gate B (a 17-point human-reviewer rubric);
+and selecting a deterministic, cherry-pick-resistant 13-question pilot
+batch (`final-q33`, `m1-q1`, `m1-q2`, `m1-q3`, `m12-q6`, `m15-q1`,
+`m16-q1`, `m2-q1`, `m2-q3`, `m4-q1`, `m6-q1`, `m6-q4`, `m7-q2`) covering
+all 5 domains, all 3 difficulty levels, all 3 answer positions actually
+used, and both form/feedback-structure contexts.
+
+**Corrected the earlier planning document's own bank-vs-item conflation
+in the process of independently reproducing it, and found a real bug
+before it shipped:** while designing the canonical, more-robust
+learner-visible length metric this work adds alongside the historical
+one, an early implementation decoded HTML entities before stripping
+tags, which caused an escaped tag typed as literal source text to be
+double-processed and wrongly stripped to zero length — caught by a test
+written against the intended behavior (not the first draft's actual
+behavior) before any code was committed as the baseline. Fixed; no
+current question was affected (zero current options contain markup or
+entities), but a future one could have been silently mismeasured. See
+`docs/QUALITY_LOG.md` QL-036 for the full record.
+
+**Nothing here is a correction to product code or scientific content.**
+`index.html` is unmodified; no question, answer, rationale, distractor
+feedback, domain, topic, difficulty, or stable ID changed; no
+`QUESTION_GOVERNANCE` field was populated; all 153 questions remain
+`draft`; the whole bank and every one of its 17 forms is confirmed,
+by a dedicated test, to still fail Gate A; QL-033 is not marked
+corrected; Phase 0 as a whole remains incomplete (steps 4-9 — the actual
+pilot rewrite, review, and scale-up — are not begun). Selecting the
+pilot batch is not authorization to rewrite it; that is separately
+scoped, later work pending independent review and merge of this
+foundation first.
+
 ### Accessibility
 
 The course has a skip link that now moves keyboard focus into `#main`

@@ -2736,6 +2736,174 @@ independent reviewer, credential, or approval record was fabricated.
 `SCHEMA_V` stays `2`. See `docs/QUALITY_LOG.md` QL-035 for the full
 record.
 
+## QL-033 assessment-cue audit foundation — added 2026-08-08
+
+Foundation for `docs/LEARNING_PLATFORM_ROADMAP.md` Phase 0 steps 1-3
+(Issue #24): freezing and reproducing the QL-033 baseline, defining Gate
+A/Gate B, and selecting a deterministic pilot batch. Full policy record
+in `docs/ASSESSMENT_VALIDITY.md`; this section covers validation only.
+**No question content changed; `index.html` is byte-for-byte unchanged;
+the bank still fails Gate A by design; QL-033 is not marked corrected.**
+
+### Tooling
+
+`scripts/assessment-cue-audit.mjs` is the single authoritative
+implementation of every measurement, Gate A rule, and pilot-selection
+algorithm — imported, never re-implemented, by
+`tests/assessment-cue-audit.mjs` and `tests/e2e/assessment-cue-audit.spec.mjs`.
+It boots the real inline `<script>` from `index.html` in an isolated Node
+`vm` sandbox (the same technique `tests/question-governance.mjs` and
+`tests/dom-behavior.mjs` already use), calling the real, live
+`window.CytoCourse.getQuestions()` rather than a separately maintained
+copy of the question data. `npm run audit:assessment-cues` runs the
+human-readable report; `-- --json` produces deterministic
+machine-readable output verified byte-identical (modulo the
+`generatedAt` timestamp) across repeated runs.
+
+### A genuine bug found and fixed before any test asserted it as correct
+
+An early version of `canonicalLength()` decoded HTML entities before
+stripping literal tags. That order let an escaped tag typed as literal
+source text (e.g. `&lt;tag&gt;`, meant to be read as the visible
+characters `<tag>`) decode into something that then looked exactly like
+a real tag and get wrongly stripped — undercounting genuinely visible
+text as zero characters, confirmed by direct execution before the fix.
+Fixed by stripping tags first, decoding entities second. A dedicated
+regression test, and a test confirming a real current option's literal
+`>` comparison-operator character (`"Countable > analyzable >
+karyotypable"`, module 9) is never mis-stripped, were both added. No
+current measurement was affected by the bug (zero current options
+contain markup or entities), but a future authored item using either
+could have been silently mismeasured had this not been caught before
+being committed as the baseline implementation.
+
+### Tests
+
+**53 new dependency-free checks** (`tests/assessment-cue-audit.mjs`,
+`npm run test:assessment-cues`, now part of `npm test`):
+
+- the frozen baseline (position counts 11/139/3/0, uniquely-longest
+  114/153, longest-or-tied 133/153, total 153, unique-id-count 153)
+  reproduced against the **live** authored bank via the `vm`-sandbox
+  boot, not copied from `docs/QUALITY_LOG.md`'s text;
+- `ORIGINAL_BASELINE` confirmed `Object.freeze()`d;
+- the canonical metric confirmed to currently match the historical
+  metric exactly on the live bank;
+- historical-length exactness (raw UTF-16 code units, no normalization);
+- canonical-length behavior: named/numeric HTML entity decoding, tag
+  stripping (in the corrected order — see above), whitespace collapsing,
+  single-trailing-mark stripping without touching internal punctuation,
+  grapheme-cluster counting for a non-BMP character (verified distinct
+  from UTF-16 code-unit counting), NFC normalization equivalence, and
+  non-string-input rejection;
+- malformed-question-shape rejection: too few options, out-of-range/
+  non-integer/negative answer index, missing/empty id, non-string/empty
+  option — each propagated (not silently swallowed) by
+  `computeCueMetrics()` and `selectPilotBatch()` too;
+- `classifyCue()` correctness across 2-, 3-, and 4-option synthetic
+  fixtures for all three cue classes (uniquely-longest, tied-longest,
+  not-longest);
+- `computeCueMetrics()` correctly separating a mixed 2/3/4-option
+  synthetic bank into independent option-count groups;
+- Gate A boundary behavior: inconclusive below `N < optionCount`;
+  pass at a perfectly uniform large-N synthetic fixture; the exact
+  practical-margin boundary (just inside vs. just beyond `1/n +
+  PRACTICAL_MARGIN`); the zero-floor rule firing only once the
+  `ZERO_FLOOR_MIN_ITEMS_PER_POSITION × n` opportunity threshold is met;
+  chi-square computed only once the standard expected-cell-count-≥5 rule
+  is satisfied; the length z-test flagging a rate significantly *below*
+  the expected baseline, not only above;
+- the live bank's whole-bank Gate A result, and every one of its 17
+  individual forms' Gate A results, asserted to be exactly `fail` —
+  confirming the audit correctly classifies the known, unresolved
+  defect rather than either silently passing it or making CI red for a
+  known, not-yet-fixed issue;
+- pilot-selection determinism (repeated calls; and structurally
+  consistent strata coverage even under a reversed input order), full
+  coverage of all 5 domains/all present difficulty levels/all answer
+  positions actually used/both form contexts, no duplicate id, the
+  correct empty-D-position report, and confirmation selection never
+  mutates its input;
+- confirmation that reading `getQuestions()`/`getQuestionGovernance()`
+  for the audit touches no progress, storage, or event, and that all 153
+  questions remain `draft` with no evidence populated throughout.
+
+**10 new real-browser Playwright checks**
+(`tests/e2e/assessment-cue-audit.spec.mjs`, both configured projects):
+`window.CytoCourse.getQuestions()` exposes the same 153 ids; the
+browser-observed bank reproduces the exact frozen historical-metric
+baseline; the browser-observed canonical-metric result matches the
+`vm`-sandbox-booted dependency-free audit's result exactly (proving the
+two boot paths agree, not merely that each is internally
+self-consistent); the browser-observed bank yields the identical
+deterministic 13-item pilot batch; and reading the audit's inputs
+changes no progress/storage/event and leaves all 153 questions `draft`.
+Console confirmed clean in every test.
+
+### Mutation-tested
+
+8 targeted, temporary, fully reverted reversions against
+`scripts/assessment-cue-audit.mjs` (never `index.html` — every mutation
+targeted the measurement/Gate-A/pilot-selection implementation itself,
+not real question content), each confirmed to fail exactly its intended,
+directly-attributable test(s) and no others, before being reverted to
+byte-identical (via `diff`) prior to committing. These cover all 7
+required mutation categories; category 4 (module omission/double
+counting) was tested as two separate mutations:
+
+1. **Correct-answer-position change** — shifted every position count by
+   one (`positionCounts[q.a]` → `positionCounts[(q.a + 1) % n]`) —
+   caught by exactly the frozen-baseline reproduction test.
+2. **Changed distractor/correct-answer length** — subtracted 5 from the
+   measured length of only the correct answer inside `classifyCue()` —
+   caught by the frozen-baseline reproduction test and two classification
+   tests whose fixtures depend on exact tie boundaries (both legitimately
+   affected by corrupting the length computation itself).
+3. **Incorrect tie handling** — collapsed the tie branch so any correct
+   answer at the maximum length is reported `uniquely-longest`
+   regardless of how many options share that maximum — caught by the
+   frozen-baseline reproduction test and the two dedicated
+   uniquely-longest-vs-tied-longest classification tests.
+4. **Omission of one form/module** — skipped `m1` inside
+   `flattenQuestionBank()` — caught by the 153-total/unique-id-count
+   test, the frozen-baseline reproduction test, and the
+   every-form-fails-Gate-A test (now 16, not 17, forms).
+5. **Double-counting one form/module** — pushed `m1`'s items twice —
+   caught by the 153-total/unique-id-count test, the every-id-appears-
+   exactly-once test, and the frozen-baseline reproduction test.
+6. **Collapsing the generalized `n`-option grouping into a hardcoded
+   4-option assumption** — caught by exactly the mixed-2/3/4-option
+   `computeCueMetrics()` grouping test (the live bank, being entirely
+   4-option, was correctly unaffected).
+7. **Weakening a Gate A boundary** — set `PRACTICAL_MARGIN` to 10 (an
+   effectively unreachable practical threshold) — caught by the
+   every-form-fails-Gate-A test (small forms, where the statistical test
+   is not computable, lose their only applicable check and flip to
+   pass/inconclusive). The whole-bank-fails-Gate-A test remained
+   (correctly) failing even at this weakened margin, since at N=153 the
+   chi-square/z statistics alone still overwhelmingly reject uniformity —
+   expected redundancy given the bank's severity, not a masked gap, since
+   the per-form test's failure is itself the direct, correct detection of
+   this exact mutation.
+8. **Nondeterministic pilot selection** — added a `Math.random() > 0.5`
+   condition to the primary domain-x-cueClass selection loop — caught
+   reliably (confirmed across 3 repeated runs) by both pilot-selection
+   determinism tests, and occasionally also by the domain-coverage test.
+
+### Full local validation
+
+`npm test` (172 dependency-free DOM-behavior checks + 70 governance
+checks + 53 assessment-cue checks + 5 deployed-revision checks) and the
+complete `npx playwright test` suite, both green except pre-existing,
+already-documented flakes confirmed transient by isolated re-run.
+
+No question, answer, rationale, distractor feedback, domain, topic,
+difficulty, or stable ID changed. `index.html` is byte-for-byte
+unchanged. No `QUESTION_GOVERNANCE` field populated; all 153 questions
+remain `draft`. QL-033 is not marked corrected. See
+`docs/QUALITY_LOG.md` QL-036 and `docs/ASSESSMENT_VALIDITY.md` for the
+full record.
+
 ## Gates still open
 
 ### Browser behavior
