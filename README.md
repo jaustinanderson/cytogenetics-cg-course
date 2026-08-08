@@ -11,6 +11,13 @@ local progress tracking, performance analytics, and automated validation.
 > validated. The full question bank has not yet completed a documented,
 > question-by-question scientific review for public release.
 
+> **Authorship and AI assistance:** Austin owns the educational scope, domain
+> constraints, product direction, acceptance criteria, and release decisions.
+> AI coding tools assisted with portions of implementation, testing, and
+> documentation. That assistance is disclosed in the repository history and
+> does not substitute for scientific review; the evidence-backed review status
+> below remains the authority for every content claim.
+
 See [Scientific Review Status](./docs/SCIENTIFIC_REVIEW.md) for the current,
 itemized record of what has and has not been independently reviewed. The
 live course itself also carries this disclosure directly, near its
