@@ -1948,6 +1948,41 @@ three rounds: 8 + 8 + 4 = **20** (an earlier PR-body draft undercounted
 this as "8 across two rounds"). See `docs/QUALITY_LOG.md` QL-038 for the
 full record.
 
+**A fourth independent review (same PR, before merge) found the large-N
+practical decision examined only the single largest answer position
+(missing material underrepresentation), that position balance never
+reported an actual p-value, that the frozen id-manifest function's own
+comment overclaimed detecting order, and that the NBME URL-role
+description was imprecise.** At N=20 (n=4), distributions `[7,7,6,0]`,
+`[8,6,6,0]`, `[8,8,4,0]` — each leaving one position at zero correct
+answers — all passed under the single-largest-share rule; replaced with
+Cohen's w (Cohen, 1988), the standard scale-free multinomial effect size,
+using Cohen's own published medium-effect threshold (0.3), verified to
+fail all three (w = 0.583, 0.600, 0.663) while a genuinely balanced N=20
+distribution still passes and the N=19/20/21 regime transition behaves
+consistently. Position balance now computes and reports an exact
+chi-square p-value (`chiSquareUpperTailPValue()`, the regularized
+incomplete gamma function, verified against published critical-value
+tables), replacing a Boolean-only critical-value comparison.
+`compareToIdManifest()`'s comment corrected to state plainly it is a
+set-identity check only; a new, genuinely separate, order-sensitive
+per-form manifest (`compareToFormOrderManifest()`) now tracks each form's
+authored encounter order, since the sequence check (QL-038) made that
+order a real contract — and the whole-bank aggregate is no longer treated
+as one learner-facing sequence for gate purposes. The two official NBME
+URLs were re-fetched and directly re-inspected: the institutions page is
+the actual request-form page; the file/pdf-shaped URL serves only an HTML
+page shell with no PDF and no request form of its own. Mutation count
+reconciled across all four rounds: 8 + 8 + 4 + 7 = **27**. Two of round
+4's 7 mutations initially surfaced genuine test-coverage gaps (a
+p-value placeholder that preserved the correct significance
+classification by construction; a `formOrderCheck` stub every existing
+test happened to pass through unchanged), both closed with permanent
+tests before being counted as passing. A complete `npx playwright test`
+run at a deterministic fixed worker count (`--workers=2`) produced a
+fully clean result: 252 passed, 6 skipped, 0 failed. See
+`docs/QUALITY_LOG.md` QL-039 for the full record.
+
 **Nothing here is a correction to product code or scientific content.**
 `index.html` is unmodified; no question, answer, rationale, distractor
 feedback, domain, topic, difficulty, or stable ID changed; no

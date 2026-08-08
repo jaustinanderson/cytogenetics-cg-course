@@ -32,9 +32,11 @@ import assert from "node:assert/strict";
 import {
   ORIGINAL_BASELINE,
   ORIGINAL_ID_MANIFEST,
+  ORIGINAL_FORM_ORDER_MANIFEST,
   FROZEN_PILOT_MANIFEST,
   sha256Hex,
   compareToIdManifest,
+  compareToFormOrderManifest,
   historicalLength,
   canonicalLength,
   assertValidQuestionShape,
@@ -58,6 +60,10 @@ import {
   PRACTICAL_MARGIN,
   CHI_SQUARE_MIN_EXPECTED_PER_CELL,
   SIGNIFICANCE_ALPHA,
+  upperRegularizedIncompleteGamma,
+  chiSquareUpperTailPValue,
+  COHENS_W_MEDIUM_EFFECT,
+  cohensW,
 } from "../scripts/assessment-cue-audit.mjs";
 
 let passed = 0;
@@ -454,9 +460,14 @@ test("position balance: large-N statistical regime still works as before -- prac
 
 test("evaluateGateA: the live authored bank reports FAIL -- QL-033 remains unresolved (intentional, not a test-suite bug)", () => {
   const metrics = computeCueMetrics(liveQuestions, { lengthFn: canonicalLength });
-  const gate = evaluateGateA(metrics);
+  // The whole 153-question bank (all 17 forms concatenated) is not one
+  // learner-facing encounter order -- matches buildDeterministicReport()'s
+  // own whole-bank call (issue 3, docs/ASSESSMENT_VALIDITY.md section 4.10a).
+  const gate = evaluateGateA(metrics, { sequenceApplicable: false });
   assert.equal(gate.overall, "fail");
   assert.equal(gate.length.status, "fail");
+  assert.equal(gate.sequence.status, "not-applicable");
+  assert.equal(gate.sequence.applicable, false);
   const fourOptionPosition = gate.positionByOptionCount.find((g) => g.optionCount === 4);
   assert.equal(fourOptionPosition.position.status, "fail");
 });
@@ -910,21 +921,21 @@ test("counterexample (issue 3) resolved: a large-N position deviation that is st
   const expected = N / n;
   const counts = [expected + 500, expected - 167, expected - 167, expected - 166];
   const result = evaluatePositionBalance({ optionCount: n, total: N, positionCounts: counts });
-  assert.ok(result.detail.maxProportion <= 0.25 + PRACTICAL_MARGIN, "must stay inside the practical margin -- otherwise this isn't testing the intended boundary");
+  assert.ok(result.detail.practicalEffect.w < COHENS_W_MEDIUM_EFFECT, "must stay below the practical effect-size threshold -- otherwise this isn't testing the intended boundary");
   assert.equal(result.detail.statisticallySignificant, true, "must be statistically significant -- otherwise this isn't testing the intended boundary");
   assert.equal(result.status, "pass");
   assert.equal(result.reviewFlag.required, true);
   assert.ok(result.reviewFlag.reason && result.reviewFlag.reason.length > 0);
 });
 
-test("counterexample (issue 3) resolved: a large-N position deviation that exceeds the practical margin still FAILS regardless of statistical power (a predeclared meaningful effect fails even when underpowered)", () => {
+test("counterexample (issue 3) resolved: a large-N position deviation that exceeds the practical effect-size threshold still FAILS regardless of statistical power (a predeclared meaningful effect fails even when underpowered)", () => {
   const n = 4;
   const N = 40; // large-N regime for n=4 (REGIME_THRESHOLD=20), but small enough that power is limited
-  const counts = [40 * 0.42, 40 * 0.20, 40 * 0.19, 40 * 0.19]; // 42% > 40% allowed max, but a small enough N that chi-square may not reject
+  const counts = [40 * 0.42, 40 * 0.20, 40 * 0.19, 40 * 0.19]; // 42% share -- a meaningful effect, but a small enough N that chi-square may not reject
   const result = evaluatePositionBalance({ optionCount: n, total: N, positionCounts: counts });
-  assert.ok(result.detail.maxProportion > 0.25 + PRACTICAL_MARGIN);
+  assert.ok(result.detail.practicalEffect.w >= COHENS_W_MEDIUM_EFFECT);
   assert.equal(result.detail.practicalFail, true);
-  assert.equal(result.status, "fail", "the practical margin must be authoritative regardless of the statistical result at this N");
+  assert.equal(result.status, "fail", "the practical effect size must be authoritative regardless of the statistical result at this N");
 });
 
 test("position balance: when the practical margin is exceeded AND the result is statistically significant, no review flag is raised (fail is not softened into a mere review)", () => {
@@ -1049,6 +1060,369 @@ test("the method label accurately names the chosen convention, and states it is 
   for (let i = 0; i < 10; i += 1) { items.push(classifyCue(q("m" + i, ["short", "the correct longer option"], 1), historicalLength)); }
   const result = evaluateLengthAssociation(items);
   assert.equal(result.detail.method, "exact-poisson-binomial-two-sided-probability-ordering");
+});
+
+// ---------------------------------------------------------------------------
+// 13. Distribution-wide practical effect size (issue 1, round 4): the
+//     large-N practical decision previously examined only the single
+//     largest position's share, missing material UNDERrepresentation.
+// ---------------------------------------------------------------------------
+
+[[7, 7, 6, 0], [8, 6, 6, 0], [8, 8, 4, 0]].forEach((counts) => {
+  test(`counterexample (issue 1, round 4) resolved: N=20, 4-option distribution ${JSON.stringify(counts)} (position D never used) now FAILS -- the prior single-max-share rule passed all three`, () => {
+    const result = evaluatePositionBalance({ optionCount: 4, total: 20, positionCounts: counts });
+    assert.equal(result.status, "fail");
+    assert.ok(result.detail.practicalEffect.w >= COHENS_W_MEDIUM_EFFECT);
+    assert.ok(result.detail.materialDeviations.some((d) => d.position === 3 && d.direction === "under"));
+  });
+});
+
+test("counterexample (issue 1, round 4) resolved: the N=19/structural regime already rejected a comparable omission -- the regime transition at N=20 does not make a conspicuously worse distribution easier to pass", () => {
+  const r19 = evaluatePositionBalance({ optionCount: 4, total: 19, positionCounts: [6, 7, 6, 0] });
+  assert.equal(r19.regime, "structural");
+  assert.equal(r19.status, "fail");
+  const r20 = evaluatePositionBalance({ optionCount: 4, total: 20, positionCounts: [7, 7, 6, 0] });
+  assert.equal(r20.regime, "statistical");
+  assert.equal(r20.status, "fail");
+  const r21 = evaluatePositionBalance({ optionCount: 4, total: 21, positionCounts: [7, 7, 7, 0] });
+  assert.equal(r21.regime, "statistical");
+  assert.equal(r21.status, "fail");
+});
+
+test("an appropriately balanced N=20 distribution passes (perfectly uniform, and a near-uniform, non-degenerate case)", () => {
+  const perfect = evaluatePositionBalance({ optionCount: 4, total: 20, positionCounts: [5, 5, 5, 5] });
+  assert.equal(perfect.status, "pass");
+  assert.equal(perfect.detail.practicalEffect.w, 0);
+  const near = evaluatePositionBalance({ optionCount: 4, total: 20, positionCounts: [6, 5, 5, 4] });
+  assert.equal(near.status, "pass");
+  assert.ok(near.detail.practicalEffect.w < COHENS_W_MEDIUM_EFFECT);
+  assert.deepEqual(near.detail.materialDeviations, []);
+});
+
+test("Cohen's w effect-size decision behaves correctly for 2-, 3-, and 4-option large-N forms", () => {
+  // 2-option: N=10 (REGIME_THRESHOLD(2)=10), one position never used
+  const n2fail = evaluatePositionBalance({ optionCount: 2, total: 10, positionCounts: [10, 0] });
+  assert.equal(n2fail.status, "fail");
+  const n2pass = evaluatePositionBalance({ optionCount: 2, total: 10, positionCounts: [5, 5] });
+  assert.equal(n2pass.status, "pass");
+
+  // 3-option: N=15 (REGIME_THRESHOLD(3)=15)
+  const n3fail = evaluatePositionBalance({ optionCount: 3, total: 15, positionCounts: [10, 5, 0] });
+  assert.equal(n3fail.status, "fail");
+  const n3pass = evaluatePositionBalance({ optionCount: 3, total: 15, positionCounts: [5, 5, 5] });
+  assert.equal(n3pass.status, "pass");
+
+  // 4-option, already covered above for N=20.
+});
+
+test("counterexample (issue 1, round 4) resolved: a complete full-Gate fixture using [7,7,6,0], non-cued lengths, and a non-patterned sequence fails overall via position specifically", () => {
+  // Reuses the independent-item-construction technique from the round-3
+  // full-Gate fixtures (buildIndependentItem, hashIsMax) so length and
+  // sequence are demonstrably NOT what causes the failure.
+  function buildIndependentItem(id, n, a, isMax) {
+    const lens = [];
+    for (let k = 0; k < n; k += 1) lens.push(10 + k);
+    const maxVal = Math.max(...lens);
+    const maxIdx = lens.indexOf(maxVal);
+    const perm = [...Array(n).keys()];
+    if (isMax) {
+      if (a !== maxIdx) { const t = perm[a]; perm[a] = perm[maxIdx]; perm[maxIdx] = t; }
+    } else if (a === maxIdx) {
+      const other = a === 0 ? 1 : 0;
+      const t = perm[a]; perm[a] = perm[other]; perm[other] = t;
+    }
+    const opts = perm.map((li) => "x".repeat(lens[li]));
+    return q(id, opts, a);
+  }
+  function hashIsMax(i, n) { const h = ((i + 1) * 2654435761) >>> 0; return (h % n) === 0; }
+  // A hand-verified order (found by deterministic search over shuffles of
+  // the multiset {0x7, 1x7, 2x6}, checked against detectAnswerSequencePatterns())
+  // that yields EXACT position counts [7,7,6,0] with no repeating-cycle,
+  // palindrome, or excessive-run finding.
+  const order = [0, 1, 1, 2, 2, 2, 0, 0, 1, 2, 0, 1, 1, 0, 2, 2, 0, 1, 1, 0];
+  // counts check: recompute to confirm this order actually yields [7,7,6,0] before using it.
+  const counts = [0, 0, 0, 0];
+  order.forEach((p) => { counts[p] += 1; });
+  assert.deepEqual(counts, [7, 7, 6, 0]);
+  assert.deepEqual(detectAnswerSequencePatterns(order, 4), []);
+  const items = order.map((a, i) => buildIndependentItem(`omit${i}`, 4, a, hashIsMax(i, 4)));
+  const metrics = computeCueMetrics(items);
+  const gate = evaluateGateA(metrics);
+  assert.equal(gate.overall, "fail");
+  const fourOption = gate.positionByOptionCount.find((g) => g.optionCount === 4);
+  assert.equal(fourOption.position.status, "fail");
+  assert.equal(gate.length.status, "pass");
+});
+
+test("counterexample (issue 1, round 4) resolved: modest, practically trivial large-N deviations remain pass-with-review when statistically detectable (policy preserved)", () => {
+  const n = 4;
+  const N = 100000;
+  const expected = N / n;
+  const counts = [expected + 500, expected - 167, expected - 167, expected - 166];
+  const result = evaluatePositionBalance({ optionCount: n, total: N, positionCounts: counts });
+  assert.equal(result.status, "pass");
+  assert.equal(result.reviewFlag.required, true);
+});
+
+test("position balance detail reports the complete observed distribution, expected distribution, practical effect measure, threshold, direction of every material deviation, and final decision", () => {
+  const result = evaluatePositionBalance({ optionCount: 4, total: 20, positionCounts: [7, 7, 6, 0] });
+  assert.deepEqual(result.detail.positionCounts, [7, 7, 6, 0]);
+  assert.equal(result.detail.expectedCount, 5);
+  assert.equal(result.detail.practicalEffect.method, "cohens-w");
+  assert.ok(typeof result.detail.practicalEffect.w === "number");
+  assert.equal(result.detail.practicalEffect.threshold, COHENS_W_MEDIUM_EFFECT);
+  assert.ok(result.detail.positionDeviations.every((d) => "position" in d && "count" in d && "proportion" in d && "direction" in d));
+  assert.ok(result.detail.materialDeviations.length > 0);
+  assert.ok(["pass", "fail"].includes(result.status));
+});
+
+// ---------------------------------------------------------------------------
+// 13a. Chi-square p-value (issue 2, round 4): the position statistic
+//      previously reported only a critical-value-table Boolean, never an
+//      accurately named p-value.
+// ---------------------------------------------------------------------------
+
+test("counterexample (issue 2, round 4) resolved: chiSquareUpperTailPValue matches independently-sourced published critical values at alpha=0.01 for df 1-7 (not computed by calling this function to derive the expected value)", () => {
+  // Independently sourced from a standard published chi-square table
+  // (the same numbers this file's own now-retired critical-value table
+  // used, cited there from a standard reference) -- NOT derived from this
+  // implementation.
+  const publishedCriticalValuesAlpha01 = { 1: 6.635, 2: 9.210, 3: 11.345, 4: 13.277, 5: 15.086, 6: 16.812, 7: 18.475 };
+  Object.entries(publishedCriticalValuesAlpha01).forEach(([df, critical]) => {
+    const p = chiSquareUpperTailPValue(critical, Number(df));
+    assert.ok(Math.abs(p - 0.01) < 0.0005, `df=${df}: expected p~=0.01 at the published critical value ${critical}, got ${p}`);
+  });
+});
+
+test("counterexample (issue 2, round 4) resolved: chiSquareUpperTailPValue matches independently-sourced published critical values at alpha=0.05 for df 1-3", () => {
+  const publishedCriticalValuesAlpha05 = { 1: 3.841, 2: 5.991, 3: 7.815 };
+  Object.entries(publishedCriticalValuesAlpha05).forEach(([df, critical]) => {
+    const p = chiSquareUpperTailPValue(critical, Number(df));
+    assert.ok(Math.abs(p - 0.05) < 0.0005, `df=${df}: expected p~=0.05 at the published critical value ${critical}, got ${p}`);
+  });
+});
+
+test("chiSquareUpperTailPValue: boundary sanity -- p=1 at statistic 0, p shrinks toward 0 as the statistic grows, never NaN or negative", () => {
+  assert.equal(chiSquareUpperTailPValue(0, 3), 1);
+  const small = chiSquareUpperTailPValue(1, 3);
+  const large = chiSquareUpperTailPValue(100, 3);
+  assert.ok(small > large);
+  assert.ok(large >= 0 && !Number.isNaN(large));
+});
+
+test("chiSquareUpperTailPValue throws on invalid domain (non-positive df, negative statistic) rather than returning a silently wrong number", () => {
+  assert.throws(() => chiSquareUpperTailPValue(1, 0), RangeError);
+  assert.throws(() => chiSquareUpperTailPValue(-1, 3), RangeError);
+});
+
+test("evaluatePositionBalance reports the ACTUAL numeric chi-square p-value, not merely a value on the correct side of alpha -- coverage-gap fix: a placeholder value that only preserves the significant/not-significant classification must be caught, not just the boolean it implies", () => {
+  // N=1000, n=4, counts=[400,200,200,200] -> chiSquare=120 exactly.
+  // Independently hand-computed (via the same verified incomplete-gamma
+  // algorithm, cross-checked separately against published critical-value
+  // tables in the tests above) -- NOT read back from a call to
+  // evaluatePositionBalance itself: chiSquareUpperTailPValue(120, 3) =
+  // 7.71679035563416e-26.
+  const result = evaluatePositionBalance({ optionCount: 4, total: 1000, positionCounts: [400, 200, 200, 200] });
+  assert.equal(result.detail.chiSquare, 120);
+  assert.ok(Math.abs(result.detail.pValue - 7.71679035563416e-26) < 1e-30, `expected pValue ~= 7.71679e-26, got ${result.detail.pValue}`);
+});
+
+test("counterexample (issue 2, round 4) resolved: position balance reports pValue immediately below, at, and above the alpha=0.01 boundary, using the SAME pValue < SIGNIFICANCE_ALPHA comparison as statisticalResult", () => {
+  // For n=4 (df=3), the alpha=0.01 critical chi-square value is 11.345.
+  // N=10000 gives fine-enough integer-count resolution to straddle it:
+  // hand-verified chiSquare values 11.0592 (below), 11.3688 (just above),
+  // 11.8408 (further above) for these exact counts.
+  const n = 4;
+  const N = 10000;
+  const below = evaluatePositionBalance({ optionCount: n, total: N, positionCounts: [2644, 2452, 2452, 2452] });
+  const at = evaluatePositionBalance({ optionCount: n, total: N, positionCounts: [2646, 2452, 2451, 2451] });
+  const above = evaluatePositionBalance({ optionCount: n, total: N, positionCounts: [2649, 2451, 2450, 2450] });
+  assert.ok(Math.abs(below.detail.chiSquare - 11.0592) < 0.01);
+  assert.ok(Math.abs(at.detail.chiSquare - 11.3688) < 0.01);
+  assert.ok(Math.abs(above.detail.chiSquare - 11.8408) < 0.01);
+  [below, at, above].forEach((r) => {
+    assert.equal(r.detail.statisticalResult === "rejects-uniform", r.detail.pValue < SIGNIFICANCE_ALPHA, `pValue=${r.detail.pValue} and statisticalResult=${r.detail.statisticalResult} must agree via the same alpha comparison`);
+  });
+  assert.ok(below.detail.pValue > SIGNIFICANCE_ALPHA);
+  assert.ok(above.detail.pValue < SIGNIFICANCE_ALPHA);
+});
+
+test("position balance no longer reports maxProportion as a top-level decision field -- the practical decision is Cohen's w; per-position shares are in positionDeviations", () => {
+  const result = evaluatePositionBalance({ optionCount: 4, total: 20, positionCounts: [7, 7, 6, 0] });
+  assert.equal("maxProportion" in result.detail, false);
+  assert.ok(Array.isArray(result.detail.positionDeviations));
+});
+
+// ---------------------------------------------------------------------------
+// 13b. Frozen per-form encounter-order manifest, separate from id-SET
+//      identity (issue 3, round 4).
+// ---------------------------------------------------------------------------
+
+test("ORIGINAL_FORM_ORDER_MANIFEST contains an entry for every one of the 17 forms, each frozen and digest-backed", () => {
+  const keys = Object.keys(ORIGINAL_FORM_ORDER_MANIFEST);
+  assert.equal(keys.length, 17);
+  keys.forEach((k) => {
+    assert.equal(Object.isFrozen(ORIGINAL_FORM_ORDER_MANIFEST[k].orderedIds), true);
+    assert.ok(typeof ORIGINAL_FORM_ORDER_MANIFEST[k].digest === "string" && ORIGINAL_FORM_ORDER_MANIFEST[k].digest.length === 64);
+  });
+});
+
+test("counterexample (issue 3, round 4) resolved: the live bank's unchanged per-form order matches BOTH the id-SET manifest and the new per-form ORDER manifest", async () => {
+  const questionsByModule = liveApi.getQuestions();
+  const orderCheck = compareToFormOrderManifest(questionsByModule);
+  assert.equal(orderCheck.matches, true);
+  const idCheck = compareToIdManifest(liveQuestions.map((q2) => q2.id));
+  assert.equal(idCheck.matches, true);
+});
+
+test("counterexample (issue 3, round 4) resolved: reversing questions WITHIN one form triggers order drift for that form specifically, while the id-SET manifest still matches (a fundamentally different, correctly-separated question)", () => {
+  const questionsByModule = liveApi.getQuestions();
+  const reversed = { ...questionsByModule, m1: [...questionsByModule.m1].reverse() };
+  const orderCheck = compareToFormOrderManifest(reversed);
+  assert.equal(orderCheck.matches, false);
+  assert.equal(orderCheck.perForm.m1.matches, false);
+  assert.equal(orderCheck.perForm.m2.matches, true);
+
+  const idCheck = compareToIdManifest(flattenQuestionBank(reversed).map((q2) => q2.id));
+  assert.equal(idCheck.matches, true, "the SET of ids is unchanged by reordering within one form -- set identity and order identity are genuinely independent checks");
+});
+
+test("counterexample (issue 3, round 4) resolved: permuting (not just reversing) questions within a form also triggers order drift for that form only", () => {
+  const questionsByModule = liveApi.getQuestions();
+  const m6 = questionsByModule.m6;
+  const permuted = [...m6];
+  // rotate by one -- a permutation, not a simple reversal
+  permuted.push(permuted.shift());
+  const withPermutedM6 = { ...questionsByModule, m6: permuted };
+  const orderCheck = compareToFormOrderManifest(withPermutedM6);
+  assert.equal(orderCheck.perForm.m6.matches, false);
+  assert.equal(orderCheck.perForm.m7.matches, true);
+});
+
+test("counterexample (issue 3, round 4) resolved: an id REPLACEMENT within a form triggers set drift (compareToIdManifest), and the replaced form's order digest also legitimately changes (it now contains a different id at that position)", () => {
+  const questionsByModule = liveApi.getQuestions();
+  const m1 = [...questionsByModule.m1];
+  m1[0] = { ...m1[0], id: "totally-unrelated-replacement-id" };
+  const withReplacement = { ...questionsByModule, m1 };
+  const idCheck = compareToIdManifest(flattenQuestionBank(withReplacement).map((q2) => q2.id));
+  assert.equal(idCheck.matches, false);
+  const orderCheck = compareToFormOrderManifest(withReplacement);
+  assert.equal(orderCheck.perForm.m1.matches, false);
+});
+
+test("counterexample (issue 3, round 4) resolved: pilot selection remains input-order-independent even though per-form authored order is now separately tracked -- reversing a form's internal order does not change the pilot", () => {
+  const questionsByModule = liveApi.getQuestions();
+  const reversed = { ...questionsByModule, m1: [...questionsByModule.m1].reverse() };
+  const pilotOriginal = selectPilotBatch(liveQuestions);
+  const pilotFromReversedForm = selectPilotBatch(flattenQuestionBank(reversed));
+  assert.deepEqual(pilotFromReversedForm.ids, pilotOriginal.ids);
+});
+
+test("compareToIdManifest's comment/behavior no longer claims to detect reordering -- it is a pure set check, verified directly: an arbitrary full permutation of all 153 ids still matches", () => {
+  const shuffled = [...ORIGINAL_ID_MANIFEST.sortedIds];
+  for (let i = shuffled.length - 1; i > 0; i -= 1) {
+    const j = (i * 2654435761) % (i + 1);
+    const t = shuffled[i]; shuffled[i] = shuffled[j]; shuffled[j] = t;
+  }
+  const check = compareToIdManifest(shuffled);
+  assert.equal(check.matches, true, "compareToIdManifest is a SET check by design -- order never affects it, which is now explicitly documented rather than confusingly claimed otherwise");
+});
+
+// ---------------------------------------------------------------------------
+// 13c. Whole-bank vs. learner-facing sequence scope (issue 3, round 4):
+//      an artificial cross-module concatenation must not create or clear
+//      a release gate via the sequence check.
+// ---------------------------------------------------------------------------
+
+test("counterexample (issue 3, round 4) resolved: sequenceApplicable:false excludes sequence from overall, even when the concatenated scope's sequence would otherwise fail", () => {
+  const cyclic = [0, 1, 2, 3, 0, 1, 2, 3, 0]; // exact repeating cycle -- would fail sequence if applicable
+  const items = cyclic.map((a, i) => q(`c${i}`, ["aa", "bb", "cc", "dd"], a)); // non-cued, equal lengths
+  const metrics = computeCueMetrics(items);
+
+  const asForm = evaluateGateA(metrics); // default sequenceApplicable: true
+  assert.equal(asForm.sequence.applicable, true);
+  assert.equal(asForm.sequence.status, "fail");
+  assert.equal(asForm.overall, "fail");
+
+  const asWholeBank = evaluateGateA(metrics, { sequenceApplicable: false });
+  assert.equal(asWholeBank.sequence.applicable, false);
+  assert.equal(asWholeBank.sequence.status, "not-applicable");
+  // Position and length are otherwise fine for this fixture -- proving
+  // sequenceApplicable:false is what changes the outcome, not a
+  // coincidence of some other failing component.
+  assert.equal(asWholeBank.overall, "pass");
+});
+
+test("counterexample (issue 3, round 4) resolved: sequenceApplicable does not affect position or length, only sequence's contribution to overall", () => {
+  const cyclic = [0, 1, 2, 3, 0, 1, 2, 3, 0];
+  const items = cyclic.map((a, i) => q(`c2-${i}`, ["aa", "bb", "cc", "dd"], a));
+  const metrics = computeCueMetrics(items);
+  const asForm = evaluateGateA(metrics);
+  const asWholeBank = evaluateGateA(metrics, { sequenceApplicable: false });
+  assert.deepEqual(asForm.positionByOptionCount, asWholeBank.positionByOptionCount);
+  assert.deepEqual(asForm.length, asWholeBank.length);
+});
+
+test("evaluateGateA defaults to sequenceApplicable:true -- a genuine single learner-facing form still has sequence contribute to overall without any caller having to opt in", () => {
+  const cyclic = [0, 1, 2, 3, 0, 1, 2, 3, 0];
+  const items = cyclic.map((a, i) => q(`c3-${i}`, ["aa", "bb", "cc", "dd"], a));
+  const metrics = computeCueMetrics(items);
+  const gate = evaluateGateA(metrics);
+  assert.equal(gate.sequence.applicable, true);
+  assert.equal(gate.overall, "fail");
+});
+
+test("counterexample (issue 3, round 4) resolved: buildDeterministicReport()'s whole-bank Gate A reports sequence as not-applicable, while every per-form Gate A reports it as applicable", () => {
+  const report = buildDeterministicReport(liveQuestions.map((it) => it));
+  assert.equal(report.bank.gateA.sequence.applicable, false);
+  assert.equal(report.bank.gateA.sequence.status, "not-applicable");
+  assert.equal(report.forms.length, 17);
+  report.forms.forEach((f) => {
+    assert.equal(f.gateA.sequence.applicable, true);
+    assert.notEqual(f.gateA.sequence.status, "not-applicable");
+  });
+});
+
+test("buildDeterministicReport() exposes formOrderCheck as a field genuinely separate from idManifestCheck and baselineComparison", () => {
+  const report = buildDeterministicReport(liveQuestions.map((it) => it));
+  assert.ok("formOrderCheck" in report);
+  assert.ok("idManifestCheck" in report);
+  assert.ok("baselineComparison" in report);
+  assert.equal(report.formOrderCheck.matches, true);
+});
+
+test("coverage-gap fix: buildDeterministicReport()'s formOrderCheck actually reflects real per-module order drift, not a hardcoded/stubbed value -- reordering one module's questions before calling buildDeterministicReport() must flip formOrderCheck.matches to false", () => {
+  // Take the live flattened bank and reverse only module m1's items --
+  // buildDeterministicReport() must regroup by module internally and
+  // detect this via the real compareToFormOrderManifest() call, not a
+  // value that happens to be true regardless of input.
+  const m1Items = liveQuestions.filter((it) => it.module === "m1");
+  const otherItems = liveQuestions.filter((it) => it.module !== "m1");
+  const reorderedInput = [...otherItems, ...[...m1Items].reverse()];
+  assert.equal(reorderedInput.length, liveQuestions.length);
+
+  const baselineReport = buildDeterministicReport(liveQuestions.map((it) => it));
+  assert.equal(baselineReport.formOrderCheck.matches, true);
+  assert.equal(Object.keys(baselineReport.formOrderCheck.perForm).length, 17);
+
+  const reorderedReport = buildDeterministicReport(reorderedInput);
+  assert.equal(reorderedReport.formOrderCheck.matches, false);
+  assert.equal(reorderedReport.formOrderCheck.perForm.m1.matches, false);
+  assert.equal(reorderedReport.formOrderCheck.perForm.m2.matches, true);
+  // The id SET is unaffected by this reordering -- idManifestCheck must
+  // still report a match, proving these two report fields are genuinely
+  // independent, not aliases of each other.
+  assert.equal(reorderedReport.idManifestCheck.matches, true);
+});
+
+test("deterministic JSON output is preserved with all round-4 additions (Cohen's w, chi-square p-value, formOrderCheck, sequence applicability) -- byte-identical across repeated calls, still no timestamp", () => {
+  const report1 = buildDeterministicReport(liveQuestions.map((it) => it));
+  const report2 = buildDeterministicReport(liveQuestions.map((it) => it));
+  const json1 = JSON.stringify(report1);
+  const json2 = JSON.stringify(report2);
+  assert.equal(json1, json2);
+  assert.ok(!json1.includes("generatedAt"));
+  assert.ok(!/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(json1));
 });
 
 // ---------------------------------------------------------------------------

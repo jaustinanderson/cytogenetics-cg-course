@@ -54,7 +54,7 @@ export const ORIGINAL_BASELINE = Object.freeze({
 // section 2 for the exact reproduction command) -- NOT derived at import
 // time from the live bank on every run, which would make it incapable of
 // detecting a later id substitution.
-import { ORIGINAL_ID_MANIFEST_IDS } from "./assessment-cue-audit-id-manifest.mjs";
+import { ORIGINAL_ID_MANIFEST_IDS, ORIGINAL_FORM_ORDER_IDS } from "./assessment-cue-audit-id-manifest.mjs";
 
 export function sha256Hex(text) {
   return crypto.createHash("sha256").update(text, "utf8").digest("hex");
@@ -73,12 +73,31 @@ export const ORIGINAL_ID_MANIFEST = Object.freeze({
 /**
  * Compares a live set of ids against the frozen ORIGINAL_ID_MANIFEST.
  * Detects removal, addition, replacement (one id swapped for another,
- * even if the total count and every aggregate metric is unchanged),
- * duplication, and reordering where order is part of the contract (the
- * sorted-id digest is order-independent by construction -- the frozen
- * manifest is a SET identity check, not a sequence check, which is the
- * correct contract for "which questions exist", as opposed to pilot
- * selection's separate canonical-order contract, section 6 below).
+ * even if the total count and every aggregate metric is unchanged), and
+ * duplication.
+ *
+ * CORRECTED (docs/ASSESSMENT_VALIDITY.md section 2.2): this function's
+ * comment previously claimed it also detected "reordering where order is
+ * part of the contract" -- that was wrong and self-contradictory with the
+ * very next clause, which correctly explains the digest is computed over
+ * the SORTED id list and is therefore order-INDEPENDENT by construction.
+ * This function answers exactly one question -- "does the same SET of 153
+ * ids exist" -- and deliberately does not, and cannot, answer "are they in
+ * the same ORDER." Reversing or arbitrarily permuting the live id array
+ * before calling this function still reports `matches: true` if the SET
+ * is unchanged (verified directly, tests/assessment-cue-audit.mjs) --
+ * this is correct behavior for a set-identity check, not a bug, but the
+ * old comment's claim about order was inaccurate and has been removed.
+ *
+ * Per-form AUTHORED ENCOUNTER ORDER is now a separate, independently
+ * tracked contract -- see `compareToFormOrderManifest()` below -- because
+ * the new answer-key sequence check (section D, `evaluateAnswerSequence()`)
+ * makes each learner-facing form's actual rendered order part of Gate A's
+ * behavioral contract for the first time (`index.html`'s `buildQuiz()`
+ * renders `QUIZZES[key]` in exact array order, never shuffled). Before
+ * that check existed, order genuinely was not part of any Gate A
+ * decision, so this file correctly didn't track it -- but the old
+ * comment already (incorrectly) claimed this function covered it.
  */
 export function compareToIdManifest(liveIds) {
   const sortedLive = [...liveIds].sort();
@@ -98,6 +117,65 @@ export function compareToIdManifest(liveIds) {
     removed,
     added,
   };
+}
+
+/** Order-sensitive digest of an ordered id list -- deliberately NOT sorted first, unlike manifestDigest() above. */
+function formOrderDigest(orderedIds) {
+  return sha256Hex(JSON.stringify(orderedIds));
+}
+
+export const ORIGINAL_FORM_ORDER_MANIFEST = Object.freeze(
+  Object.fromEntries(
+    Object.entries(ORIGINAL_FORM_ORDER_IDS).map(([moduleKey, orderedIds]) => [
+      moduleKey,
+      Object.freeze({ orderedIds: Object.freeze([...orderedIds]), digest: formOrderDigest(orderedIds) }),
+    ])
+  )
+);
+
+/**
+ * Compares each form's LIVE authored encounter order against the frozen
+ * ORIGINAL_FORM_ORDER_MANIFEST -- an ORDER-SENSITIVE check, the
+ * counterpart `compareToIdManifest()` above deliberately is not.
+ *
+ * Kept as a genuinely separate concern from `compareToIdManifest()`
+ * (set identity), from `baselineComparison` in `buildDeterministicReport()`
+ * (mechanical aggregate-metric drift against QL-033's frozen counts), and
+ * from `evaluateGateA()` (the CURRENT Gate A status of whatever bank
+ * exists today, regardless of whether it matches any frozen record) --
+ * four independently meaningful, independently reported questions that
+ * must not be conflated: "does the same set of questions exist," "is each
+ * form's authored encounter order unchanged," "have the frozen aggregate
+ * measurements drifted," and "does the live bank pass Gate A right now."
+ *
+ * `liveQuestionsByModule` is the `{moduleKey: [question, ...]}` shape
+ * `window.CytoCourse.getQuestions()` returns (each module's array
+ * already in its real authored/rendered order -- see
+ * `flattenQuestionBank()`, which preserves this per-module order when
+ * flattening).
+ */
+export function compareToFormOrderManifest(liveQuestionsByModule) {
+  const moduleKeys = new Set([
+    ...Object.keys(ORIGINAL_FORM_ORDER_MANIFEST),
+    ...Object.keys(liveQuestionsByModule),
+  ]);
+  const perForm = {};
+  let allMatch = true;
+  [...moduleKeys].sort().forEach((moduleKey) => {
+    const frozen = ORIGINAL_FORM_ORDER_MANIFEST[moduleKey] || null;
+    const liveOrderedIds = (liveQuestionsByModule[moduleKey] || []).map((q) => q.id);
+    const liveDigest = formOrderDigest(liveOrderedIds);
+    const matches = !!frozen && liveDigest === frozen.digest;
+    if (!matches) allMatch = false;
+    perForm[moduleKey] = {
+      matches,
+      liveDigest,
+      frozenDigest: frozen ? frozen.digest : null,
+      liveOrderedIds,
+      frozenOrderedIds: frozen ? frozen.orderedIds : null,
+    };
+  });
+  return { matches: allMatch, perForm };
 }
 
 // ============================================================================
@@ -377,9 +455,172 @@ export function REGIME_THRESHOLD(n) {
 // ordinary sampling variation alone.
 export const SIGNIFICANCE_ALPHA = 0.01;
 
-// Standard chi-square critical values at alpha=0.01, indexed by degrees
-// of freedom (df = optionCount - 1). Covers option counts 2 through 8.
-const CHI_SQUARE_CRITICAL_ALPHA_01 = { 1: 6.635, 2: 9.210, 3: 11.345, 4: 13.277, 5: 15.086, 6: 16.812, 7: 18.475 };
+// Reference chi-square critical values at alpha=0.01, indexed by degrees
+// of freedom (df = optionCount - 1). NOT used to drive any decision below
+// (corrected -- docs/ASSESSMENT_VALIDITY.md section 4.6b): retained only
+// as an independently-sourced, well-known reference table for
+// cross-checking chiSquareUpperTailPValue() below in tests, and for
+// display alongside the computed p-value. Covers option counts 2-8; the
+// p-value function itself is not limited to this range.
+const CHI_SQUARE_CRITICAL_ALPHA_01_REFERENCE = { 1: 6.635, 2: 9.210, 3: 11.345, 4: 13.277, 5: 15.086, 6: 16.812, 7: 18.475 };
+
+// ----------------------------------------------------------------------------
+// Chi-square goodness-of-fit p-value (new -- docs/ASSESSMENT_VALIDITY.md
+// section 4.6b). CORRECTED: position balance previously reported only a
+// chi-square statistic and a Boolean critical-value-table comparison,
+// never an actual p-value -- a critical-value lookup is not itself a
+// p-value, and the round-3 correction's own stated policy ("report the
+// statistical result and p-value separately") was not actually followed
+// for position balance (length association already computed a genuine
+// p-value via the exact Poisson-binomial method). This computes the
+// EXACT upper-tail chi-square p-value via the regularized upper
+// incomplete gamma function Q(df/2, chiSquare/2) -- the standard,
+// closed-form relationship between the chi-square distribution's survival
+// function and the incomplete gamma function (not an approximation of a
+// different kind; the approximation here is the same one the chi-square
+// GOODNESS-OF-FIT TEST ITSELF makes, i.e. that the discrete multinomial
+// counts are well-approximated by the continuous chi-square distribution,
+// which REGIME_THRESHOLD(n)'s minimum-expected-cell-count rule already
+// exists to keep valid -- see the "Approximation and applicability" note
+// below). Implemented as a standard series/continued-fraction evaluation
+// of the incomplete gamma function (Numerical Recipes 3rd ed., section
+// 6.2), verified directly against the independently-sourced reference
+// critical-value table above at both alpha=0.01 and alpha=0.05 (matches
+// to 4-5 significant figures at every tabulated (df, critical-value)
+// pair, tests/assessment-cue-audit.mjs) -- this is NOT limited to the
+// 2-8 option-count range the table happens to cover.
+// ----------------------------------------------------------------------------
+
+/** Lanczos approximation of ln(Gamma(x)), standard g=7/n=9 coefficient set. */
+function logGamma(x) {
+  const g = 7;
+  const c = [
+    0.99999999999980993, 676.5203681218851, -1259.1392167224028,
+    771.32342877765313, -176.61502916214059, 12.507343278686905,
+    -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7,
+  ];
+  if (x < 0.5) { return Math.log(Math.PI / Math.sin(Math.PI * x)) - logGamma(1 - x); }
+  const xm1 = x - 1;
+  let a = c[0];
+  const t = xm1 + g + 0.5;
+  for (let i = 1; i < g + 2; i += 1) { a += c[i] / (xm1 + i); }
+  return 0.5 * Math.log(2 * Math.PI) + (xm1 + 0.5) * Math.log(t) - t + Math.log(a);
+}
+
+/** Lower regularized incomplete gamma P(a,x) via its series expansion -- valid/convergent for x < a+1. */
+function lowerRegularizedIncompleteGammaSeries(a, x) {
+  if (x <= 0) return 0;
+  let sum = 1 / a;
+  let term = sum;
+  let n = a;
+  for (let i = 0; i < 500; i += 1) {
+    n += 1;
+    term *= x / n;
+    sum += term;
+    if (Math.abs(term) < Math.abs(sum) * 1e-15) break;
+  }
+  return sum * Math.exp(-x + a * Math.log(x) - logGamma(a));
+}
+
+/** Upper regularized incomplete gamma Q(a,x) via a continued fraction (modified Lentz's method) -- valid/convergent for x >= a+1. */
+function upperRegularizedIncompleteGammaContinuedFraction(a, x) {
+  const FPMIN = 1e-300;
+  let b = x + 1 - a;
+  let c = 1 / FPMIN;
+  let d = 1 / b;
+  let h = d;
+  for (let i = 1; i < 500; i += 1) {
+    const an = -i * (i - a);
+    b += 2;
+    d = an * d + b;
+    if (Math.abs(d) < FPMIN) d = FPMIN;
+    c = b + an / c;
+    if (Math.abs(c) < FPMIN) c = FPMIN;
+    d = 1 / d;
+    const del = d * c;
+    h *= del;
+    if (Math.abs(del - 1) < 1e-15) break;
+  }
+  return Math.exp(-x + a * Math.log(x) - logGamma(a)) * h;
+}
+
+/** Upper regularized incomplete gamma Q(a,x) = 1 - P(a,x), for a > 0, x >= 0. */
+export function upperRegularizedIncompleteGamma(a, x) {
+  if (a <= 0) { throw new RangeError("upperRegularizedIncompleteGamma: a must be positive"); }
+  if (x < 0) { throw new RangeError("upperRegularizedIncompleteGamma: x must be non-negative"); }
+  if (x === 0) return 1;
+  if (x < a + 1) { return 1 - lowerRegularizedIncompleteGammaSeries(a, x); }
+  return upperRegularizedIncompleteGammaContinuedFraction(a, x);
+}
+
+/**
+ * Exact upper-tail (right-tail) p-value of the chi-square distribution:
+ * P(X >= chiSquareStat) for X ~ chi-square(df). This is the accurately
+ * named p-value for a chi-square goodness-of-fit test's statistic --
+ * NOT a critical-value-table lookup, and not limited to any small,
+ * tabulated set of df values.
+ *
+ * Approximation and applicability (stated honestly, not left implicit):
+ * this function computes the chi-square SURVIVAL FUNCTION exactly, given
+ * a chi-square-distributed statistic -- there is no approximation in this
+ * step. The approximation that matters is upstream of this function: the
+ * chi-square goodness-of-fit TEST assumes the observed multinomial counts
+ * are well-approximated by a continuous chi-square distribution, which is
+ * only reasonable when every expected cell count is reasonably large
+ * (conventionally >= 5, `CHI_SQUARE_MIN_EXPECTED_PER_CELL`). This
+ * function does not itself enforce that condition -- callers (currently
+ * only `evaluatePositionBalance()`'s large-N regime, which is reached
+ * exactly when `N >= REGIME_THRESHOLD(n)` guarantees it) are responsible
+ * for only calling it where the approximation is valid.
+ */
+export function chiSquareUpperTailPValue(chiSquareStat, df) {
+  if (df <= 0) { throw new RangeError("chiSquareUpperTailPValue: df must be positive"); }
+  if (chiSquareStat < 0) { throw new RangeError("chiSquareUpperTailPValue: chiSquareStat must be non-negative"); }
+  return upperRegularizedIncompleteGamma(df / 2, chiSquareStat / 2);
+}
+
+// ----------------------------------------------------------------------------
+// Cohen's w: distribution-wide multinomial practical effect size (new --
+// docs/ASSESSMENT_VALIDITY.md section 4.3b). CORRECTED: the large-N
+// practical/effect-size decision previously examined only the single
+// LARGEST position's share against `1/n + PRACTICAL_MARGIN` -- it never
+// evaluated the complete distribution, so it could not detect material
+// UNDERrepresentation (a position receiving zero or few correct answers)
+// unless that same imbalance happened to also push some OTHER position's
+// share over the max-share threshold. Confirmed directly: at N=20, n=4,
+// distributions [7,7,6,0], [8,6,6,0], and [8,8,4,0] -- every one leaving
+// position D with ZERO correct answers -- all passed under the prior
+// single-max-share rule, since no individual share exceeded 40%.
+//
+// Cohen's w = sqrt(chiSquare / N) is the standard multinomial/chi-square
+// effect size (Cohen, J. (1988). Statistical Power Analysis for the
+// Behavioral Sciences, 2nd ed., chapter 7) -- unlike the raw chi-square
+// statistic itself (which grows with N and is therefore a SIGNIFICANCE
+// measure, not a practical-effect measure), w is scale-free: it measures
+// the MAGNITUDE of the deviation pattern across the WHOLE distribution,
+// independent of sample size, so a single fixed threshold is meaningful
+// at any N in the large-N regime. It is symmetric to over- AND
+// under-representation by construction, since it is derived from the same
+// squared-deviation sum every position contributes to. Cohen's own
+// published convention for a "medium" effect (0.3) is adopted here as the
+// practical-fail threshold -- an independently-sourced, non-arbitrary
+// number, not tuned to this bank or to make any specific counterexample
+// fail (verified: for n=4, a single position exactly at the OLD single-
+// position margin boundary, `1/n + PRACTICAL_MARGIN`, with every other
+// position exactly at its own expected value, produces w exactly equal to
+// this same 0.3 threshold by the underlying algebra -- the two
+// definitions agree at the single-cell boundary case for n=4, which is
+// reassuring consistency, not a coincidence engineered to reach 0.3).
+// ----------------------------------------------------------------------------
+
+export const COHENS_W_MEDIUM_EFFECT = 0.3;
+
+/** Cohen's w multinomial effect size: sqrt(chiSquare / N). Scale-free (does not grow with N), unlike chiSquare itself. */
+export function cohensW(chiSquare, N) {
+  if (N <= 0) { throw new RangeError("cohensW: N must be positive"); }
+  if (chiSquare < 0) { throw new RangeError("cohensW: chiSquare must be non-negative"); }
+  return Math.sqrt(chiSquare / N);
+}
 
 /**
  * The deterministic, always-achievable SMALL-N structural rule for
@@ -435,61 +676,81 @@ export function evaluatePositionBalance(group) {
 
   // LARGE-N STATISTICAL REGIME.
   const expectedProportion = 1 / n;
-  const maxCount = Math.max(...positionCounts);
-  const maxProportion = maxCount / N;
-  const maxAllowedShare = Math.min(1, expectedProportion + PRACTICAL_MARGIN);
-  const reasons = [];
-  let practicalFail = false;
-  if (maxProportion > maxAllowedShare) {
-    practicalFail = true;
-    reasons.push(`a position accounts for ${(maxProportion * 100).toFixed(1)}% of ${N} items (allowed max ${(maxAllowedShare * 100).toFixed(1)}%, expected ${(expectedProportion * 100).toFixed(1)}% under uniform chance)`);
-  }
+  const expectedCount = N / n;
 
   // Chi-square is always computable in this branch, by construction
   // (N >= REGIME_THRESHOLD(n) === CHI_SQUARE_MIN_EXPECTED_PER_CELL * n
   // guarantees every expected cell count N/n >= CHI_SQUARE_MIN_EXPECTED_PER_CELL).
-  const chiSquare = positionCounts.reduce((sum, observed) => {
-    const expected = N / n;
-    return sum + (observed - expected) ** 2 / expected;
-  }, 0);
+  const chiSquare = positionCounts.reduce((sum, observed) => sum + (observed - expectedCount) ** 2 / expectedCount, 0);
   const df = n - 1;
-  const critical = CHI_SQUARE_CRITICAL_ALPHA_01[df];
-  let statisticalResult = "not-computed";
-  let statisticallySignificant = false;
-  if (critical !== undefined) {
-    statisticalResult = chiSquare > critical ? "rejects-uniform" : "fails-to-reject-uniform";
-    statisticallySignificant = statisticalResult === "rejects-uniform";
-  } else {
-    reasons.push(`degrees of freedom ${df} exceeds this module's chi-square critical-value table -- statistical corroboration not available for this option count, practical threshold remains authoritative`);
-  }
+  const pValue = chiSquareUpperTailPValue(chiSquare, df);
+  const statisticalResult = pValue < SIGNIFICANCE_ALPHA ? "rejects-uniform" : "fails-to-reject-uniform";
+  const statisticallySignificant = statisticalResult === "rejects-uniform";
+  const referenceCriticalValue = CHI_SQUARE_CRITICAL_ALPHA_01_REFERENCE[df] ?? null;
 
-  // DECISION POLICY (corrected -- docs/ASSESSMENT_VALIDITY.md section 4.6a,
-  // "practical vs. statistical significance"). The practical/effect-size
-  // margin is the SOLE, AUTHORITATIVE driver of pass/fail in this regime:
-  // exceeding it fails regardless of statistical significance or power (a
-  // predeclared, educationally meaningful effect can fail even under a
-  // small sample's low statistical power). Statistical significance
-  // ALONE, without exceeding the practical margin, NEVER fails the gate
-  // by itself -- with enough items, an educationally trivial deviation
-  // becomes statistically detectable purely because N is large, and
-  // detectability is not the same as a substantive cueing defect. It
-  // still surfaces, explicitly, as a separate review flag, so a real
-  // statistical signal is never silently discarded either.
+  // PRACTICAL/EFFECT-SIZE DECISION (corrected -- docs/ASSESSMENT_VALIDITY.md
+  // section 4.3b): Cohen's w, the distribution-wide multinomial effect
+  // size, replaces the prior single-largest-position-share rule, which
+  // could not detect material UNDERrepresentation (a position at or near
+  // zero) unless it happened to also push some OTHER position over the
+  // old share threshold.
+  const w = cohensW(chiSquare, N);
+  const practicalFail = w >= COHENS_W_MEDIUM_EFFECT;
+
+  // Per-position directional reporting (descriptive/diagnostic only --
+  // this does NOT itself drive the pass/fail decision, which is Cohen's w
+  // above; it exists so every material deviation's direction is visible
+  // in the report, not just the aggregate effect size). Reuses the
+  // existing PRACTICAL_MARGIN proportion, applied to EVERY position, not
+  // only the largest.
+  const maxAllowedShare = Math.min(1, expectedProportion + PRACTICAL_MARGIN);
+  const minAllowedShare = Math.max(0, expectedProportion - PRACTICAL_MARGIN);
+  const positionDeviations = positionCounts.map((count, position) => {
+    const proportion = count / N;
+    const direction = proportion > maxAllowedShare ? "over" : proportion < minAllowedShare ? "under" : "within-margin";
+    return { position, count, proportion, direction };
+  });
+  const materialDeviations = positionDeviations.filter((d) => d.direction !== "within-margin");
+
+  const reasons = [];
+  if (practicalFail) {
+    reasons.push(`Cohen's w = ${w.toFixed(3)} meets or exceeds the medium-effect threshold (${COHENS_W_MEDIUM_EFFECT}) for the complete position distribution ${JSON.stringify(positionCounts)} against the expected uniform distribution (${expectedCount.toFixed(2)} per position) -- a practically material deviation, not merely a statistically detectable one`);
+  }
+  materialDeviations.forEach((d) => {
+    reasons.push(`position ${d.position} is materially ${d.direction}-represented: ${(d.proportion * 100).toFixed(1)}% of ${N} items (expected ${(expectedProportion * 100).toFixed(1)}%, margin [${(minAllowedShare * 100).toFixed(1)}%, ${(maxAllowedShare * 100).toFixed(1)}%])`);
+  });
+
+  // STATISTICAL SIGNIFICANCE (corroboration/review-flag only -- see
+  // docs/ASSESSMENT_VALIDITY.md section 4.6a, unchanged policy: the
+  // practical effect size above is the SOLE authoritative driver of
+  // pass/fail; significance alone, without a practical-effect failure,
+  // never fails the gate by itself, and instead raises an explicit review
+  // flag, since a large enough N can make an educationally trivial
+  // deviation statistically detectable without it being a substantive
+  // cueing defect).
   let reviewRequired = false;
   let reviewReason = null;
   if (statisticallySignificant && !practicalFail) {
     reviewRequired = true;
-    reviewReason = `chi-square goodness-of-fit statistic ${chiSquare.toFixed(2)} exceeds the critical value ${critical} (df=${df}, alpha=${SIGNIFICANCE_ALPHA}) -- statistically distinguishable from uniform -- even though the observed share (${(maxProportion * 100).toFixed(2)}%) stays within the practical margin (allowed max ${(maxAllowedShare * 100).toFixed(1)}%); flagged for human review, not failed, since statistical significance alone does not establish an educationally meaningful cueing defect`;
+    reviewReason = `chi-square goodness-of-fit p-value ${pValue.toExponential(3)} is below alpha=${SIGNIFICANCE_ALPHA} (statistic ${chiSquare.toFixed(2)}, df=${df}) -- statistically distinguishable from uniform -- even though Cohen's w (${w.toFixed(3)}) stays below the practical medium-effect threshold (${COHENS_W_MEDIUM_EFFECT}); flagged for human review, not failed, since statistical significance alone does not establish an educationally meaningful cueing defect`;
     reasons.push(reviewReason);
   } else if (statisticallySignificant) {
-    reasons.push(`chi-square goodness-of-fit statistic ${chiSquare.toFixed(2)} exceeds the critical value ${critical} (df=${df}, alpha=${SIGNIFICANCE_ALPHA}) -- position distribution is statistically distinguishable from uniform, corroborating the practical-margin failure above`);
+    reasons.push(`chi-square goodness-of-fit p-value ${pValue.toExponential(3)} is below alpha=${SIGNIFICANCE_ALPHA} (statistic ${chiSquare.toFixed(2)}, df=${df}) -- position distribution is statistically distinguishable from uniform, corroborating the practical-effect failure above`);
   }
 
   const status = practicalFail ? "fail" : "pass";
   return {
     status, regime: "statistical", reasons,
     reviewFlag: { required: reviewRequired, reason: reviewReason },
-    detail: { n, N, positionCounts, maxProportion, expectedProportion, maxAllowedShare, practicalFail, chiSquare, statisticalResult, statisticallySignificant },
+    detail: {
+      n, N, positionCounts, expectedCount, expectedProportion,
+      positionDeviations, materialDeviations,
+      practicalEffect: { method: "cohens-w", w, threshold: COHENS_W_MEDIUM_EFFECT, practicalFail },
+      // Retained for backward-readability/comparison only -- no longer the fail driver.
+      maxAllowedShare, minAllowedShare,
+      chiSquare, df, pValue, statisticalResult, statisticallySignificant, referenceCriticalValue,
+      practicalFail,
+    },
   };
 }
 
@@ -829,16 +1090,35 @@ export function evaluateAnswerSequence(items) {
  * ONCE over every item in the scope regardless of option count
  * (corrected -- no longer disabled/inconclusive merely because more than
  * one option-count group is present); answer-key sequence predictability
- * (new) is evaluated once over every item in the scope's original
- * encounter order, reported separately from both.
+ * is evaluated once over every item in the scope's original encounter
+ * order, reported separately from both.
+ *
+ * `sequenceApplicable` (corrected -- docs/ASSESSMENT_VALIDITY.md section
+ * 4.10a, "whole-bank vs. learner-facing sequence scope"; default `true`):
+ * the sequence check's premise is that the scope passed in is ONE
+ * continuous learner-facing encounter order -- true for a single form
+ * (one `<details class="quiz">`, `index.html`'s `buildQuiz()`) and, if
+ * ever assembled, a pilot quiz, but NOT true for an artificial
+ * concatenation such as "every question across all 17 forms back to
+ * back," which no learner ever actually encounters as one sequence. Pass
+ * `sequenceApplicable: false` for such scopes (`buildDeterministicReport()`
+ * does this for the whole-bank aggregate): sequence findings are still
+ * computed and returned for transparency, but reported with
+ * `status: "not-applicable"` and `applicable: false`, and EXCLUDED from
+ * the `overall` roll-up -- an artificial cross-module concatenation must
+ * not be able to create OR clear a release gate via a "sequence" property
+ * that was never meaningful for it in the first place. Position balance
+ * and length association remain fully authoritative at any scope,
+ * including the whole bank, since both are genuinely meaningful in
+ * aggregate regardless of learner traversal order.
  *
  * Gate A is a purely STRUCTURAL/STATISTICAL judgment about answer
- * position and length distribution (and, now, sequence predictability).
- * It never inspects, and can never establish, scientific correctness,
- * item plausibility, or any other Gate B property -- see
+ * position and length distribution (and, where applicable, sequence
+ * predictability). It never inspects, and can never establish, scientific
+ * correctness, item plausibility, or any other Gate B property -- see
  * docs/ASSESSMENT_VALIDITY.md.
  */
-export function evaluateGateA(metrics) {
+export function evaluateGateA(metrics, { sequenceApplicable = true } = {}) {
   const positionByOptionCount = metrics.byOptionCount.map((group) => ({
     optionCount: group.optionCount,
     total: group.total,
@@ -846,7 +1126,18 @@ export function evaluateGateA(metrics) {
   }));
 
   const length = evaluateLengthAssociation(metrics.items);
-  const sequence = evaluateAnswerSequence(metrics.items);
+  const rawSequence = evaluateAnswerSequence(metrics.items);
+  const sequence = sequenceApplicable
+    ? { ...rawSequence, applicable: true }
+    : {
+        ...rawSequence,
+        applicable: false,
+        status: "not-applicable",
+        reasons: [
+          "sequence findings are informational only for this scope -- it is not a single learner-facing encounter order (docs/ASSESSMENT_VALIDITY.md section 4.10a)",
+          ...rawSequence.reasons,
+        ],
+      };
 
   // Diagnostic-only summary, retained per docs/ASSESSMENT_VALIDITY.md's
   // requirement to keep a clearly defined unique-longest figure visible
@@ -857,7 +1148,11 @@ export function evaluateGateA(metrics) {
     rate: metrics.total > 0 ? metrics.uniquelyLongestCorrect / metrics.total : null,
   };
 
-  const allStatuses = [...positionByOptionCount.map((g) => g.position.status), length.status, sequence.status];
+  const allStatuses = [
+    ...positionByOptionCount.map((g) => g.position.status),
+    length.status,
+    ...(sequenceApplicable ? [sequence.status] : []),
+  ];
   const overall = allStatuses.includes("fail") ? "fail" : allStatuses.includes("inconclusive") ? "inconclusive" : "pass";
 
   // Aggregated, explicit review flag (docs/ASSESSMENT_VALIDITY.md section
@@ -1074,18 +1369,35 @@ function buildDeterministicReport(allQuestions) {
 
   const bankMetrics = computeCueMetrics(allQuestions, { lengthFn: canonicalLength });
   const bankHistorical = computeCueMetrics(allQuestions, { lengthFn: historicalLength });
-  const bankGateA = evaluateGateA(bankMetrics);
+  // sequenceApplicable: false -- the whole bank (all 17 forms concatenated
+  // in module order) is not one continuous learner-facing encounter order
+  // (each module is its own separate quiz); see evaluateGateA()'s doc
+  // comment and docs/ASSESSMENT_VALIDITY.md section 4.10a. Position and
+  // length remain fully authoritative for the whole bank.
+  const bankGateA = evaluateGateA(bankMetrics, { sequenceApplicable: false });
 
   const byModule = new Map();
   allQuestions.forEach((q) => {
     if (!byModule.has(q.module)) byModule.set(q.module, []);
     byModule.get(q.module).push(q);
   });
+  // Each form IS one genuine learner-facing quiz (index.html's
+  // buildQuiz() renders exactly this module's array, in this order, as
+  // one continuous <details class="quiz">), so sequence is fully
+  // applicable per-form -- evaluateGateA()'s default.
   const forms = [...byModule.keys()].sort().map((moduleKey) => {
     const qs = byModule.get(moduleKey);
     const metrics = computeCueMetrics(qs, { lengthFn: canonicalLength });
     return { module: moduleKey, metrics, gateA: evaluateGateA(metrics) };
   });
+
+  // Per-form AUTHORED ENCOUNTER ORDER, checked as its own, separate
+  // contract from idManifestCheck (set identity) below -- see
+  // compareToFormOrderManifest()'s doc comment for why these four checks
+  // (set identity, per-form order, mechanical metric drift via
+  // baselineComparison below, and current Gate A status via bank/forms
+  // above) are kept genuinely independent rather than conflated.
+  const formOrderCheck = compareToFormOrderManifest(Object.fromEntries(byModule));
 
   const byDomain = new Map();
   allQuestions.forEach((q) => {
@@ -1142,6 +1454,7 @@ function buildDeterministicReport(allQuestions) {
     uniqueIdCount: new Set(allQuestions.map((q) => q.id)).size,
     noDuplicateIds: new Set(allQuestions.map((q) => q.id)).size === allQuestions.length,
     idManifestCheck,
+    formOrderCheck,
     baselineComparison,
     bank: { metrics: bankMetrics, gateA: bankGateA },
     forms,
@@ -1159,7 +1472,12 @@ function printHumanReadable(report, executionMeta) {
   lines.push("=".repeat(76));
   if (executionMeta && executionMeta.generatedAt) { lines.push(`Generated: ${executionMeta.generatedAt} (execution metadata only -- excluded from the deterministic payload)`); }
   lines.push(`Total authored questions: ${report.totalAuthoredQuestions} (unique ids: ${report.uniqueIdCount}, no duplicate ids: ${report.noDuplicateIds})`);
-  lines.push(`Frozen exact-id manifest match: ${report.idManifestCheck.matches} (removed: ${JSON.stringify(report.idManifestCheck.removed)}, added: ${JSON.stringify(report.idManifestCheck.added)})`);
+  lines.push(`Frozen exact-id-SET manifest match: ${report.idManifestCheck.matches} (removed: ${JSON.stringify(report.idManifestCheck.removed)}, added: ${JSON.stringify(report.idManifestCheck.added)}) -- set identity only, order-independent`);
+  lines.push(`Frozen per-form ENCOUNTER-ORDER manifest match: ${report.formOrderCheck.matches} -- order-sensitive, separate contract from the id-set check above`);
+  Object.keys(report.formOrderCheck.perForm).forEach((moduleKey) => {
+    const f = report.formOrderCheck.perForm[moduleKey];
+    if (!f.matches) { lines.push(`    - ${moduleKey}: order drift detected (live digest ${f.liveDigest.slice(0, 12)}... != frozen ${f.frozenDigest ? f.frozenDigest.slice(0, 12) + "..." : "none"})`); }
+  });
   lines.push("");
   lines.push("-- Frozen original baseline (QL-033) vs. reproduced-today (historical method) --");
   const b = report.baselineComparison;
@@ -1176,6 +1494,7 @@ function printHumanReadable(report, executionMeta) {
   });
   lines.push(`  length association (tie-aware, exact Poisson-binomial): ${report.bank.gateA.length.status.toUpperCase()}`);
   report.bank.gateA.length.reasons.forEach((r) => lines.push(`    - ${r}`));
+  lines.push(`  answer-key sequence (${report.bank.gateA.sequence.applicable ? "applicable" : "NOT APPLICABLE -- whole bank is not one learner-facing encounter order"}): ${report.bank.gateA.sequence.status.toUpperCase()}`);
   lines.push(`  uniquely-longest diagnostic (informational only): ${JSON.stringify(report.bank.gateA.uniquelyLongestDiagnostic)}`);
   lines.push("");
   lines.push("-- Per-form (module) Gate A --");

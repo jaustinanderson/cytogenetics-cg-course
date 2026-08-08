@@ -4757,3 +4757,195 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   particular can support more than one defensible p-value definition, and
   the choice deserves a name and a stated rationale, not silent
   application.
+
+## QL-039 — the large-N practical decision missed material underrepresentation; position balance never reported a real p-value; the frozen manifest's own comment overclaimed order detection; NBME URL roles were described imprecisely (Issue #24, Phase 0 steps 1-3)
+
+- **Status:** Corrected on the same branch
+  (`claude/phase-0-ql033-foundation`), draft PR still open against `main`
+  for independent review, not yet merged. QL-033 itself remains confirmed
+  and unresolved; this entry corrects the QL-036/QL-037/QL-038 *tooling*
+  further, not the bank.
+- **Finding — four problems, each reproduced by direct construction
+  before any fix (full detail in `docs/ASSESSMENT_VALIDITY.md`):**
+  1. **The large-N practical/effect-size decision examined only the
+     single largest answer position**, never the complete distribution,
+     so it could not detect material UNDERrepresentation unless that same
+     imbalance happened to also inflate some other position's share past
+     the threshold. Confirmed directly: at `N=20`, `n=4` (the smallest N
+     in the large-N regime for 4-option items), distributions `[7,7,6,0]`,
+     `[8,6,6,0]`, and `[8,8,4,0]` — every one leaving position D with
+     **zero** correct answers — all reported `pass`. A complete, fully
+     independent full-Gate fixture confirmed the same gap at the
+     whole-gate level.
+  2. **Position balance never reported an actual p-value.** Its `detail`
+     object contained a chi-square statistic and a Boolean
+     critical-value-table comparison, but no `pValue` field — a
+     critical-value lookup is not itself a p-value, and this directly
+     contradicted the round-3 correction's own stated intent to report
+     the statistical result and p-value separately (length association's
+     exact Poisson-binomial test already did this correctly).
+  3. **`compareToIdManifest()`'s own comment claimed it detected
+     "reordering where order is part of the contract,"** immediately
+     contradicted by the very next clause, which correctly explains the
+     digest is computed over the SORTED id list and is therefore
+     order-independent by construction. Confirmed directly: reversing all
+     153 frozen ids still reports `matches: true` (correct behavior for a
+     set-identity check; the comment's claim about order was simply
+     wrong). Separately, this became more consequential once the sequence
+     check (QL-038) started examining each form's real rendered order,
+     which had no frozen record of its own at all.
+  4. **NBME source-provenance wording described the two official NBME
+     URLs less precisely than directly re-inspecting them supports.**
+     Both official URLs were re-fetched and directly inspected for this
+     correction: `https://www.nbme.org/institutions/nbme-item-writing-guide/`
+     is the official request page (its own text: *"Complete the form to
+     receive your PDF download today"*); the separate URL
+     `https://www.nbme.org/file/nbme_item-writing-guide_r_6-pdf/` serves
+     an HTML attachment/page-shell (`content-type: text/html`, `pdftotext`
+     cannot parse it as a PDF) that does **not** itself expose the request
+     form (its only `<form>` elements are generic site-search forms).
+- **Impact:** None shipped — PR #26 remained draft/unmerged throughout;
+  found and fixed before merge.
+- **Correction (full detail, exact mathematics, and every reproduced
+  counterexample in `docs/ASSESSMENT_VALIDITY.md` sections 2.2, 4.3b,
+  4.6b):**
+  1. **Cohen's w** (Cohen, J. (1988), *Statistical Power Analysis for the
+     Behavioral Sciences*, 2nd ed.), `w = sqrt(chiSquare / N)`, replaces
+     the single-largest-position-share rule as the large-N practical
+     decision. Scale-free (unlike raw chi-square, which grows with N),
+     symmetric to over- and under-representation by construction, with
+     Cohen's own published "medium effect" threshold (`0.3`) adopted as
+     the fail threshold — an independently-sourced number, not tuned to
+     this bank. Per-position directional deviations are retained as
+     diagnostic detail (`positionDeviations`/`materialDeviations`),
+     reusing the existing `PRACTICAL_MARGIN`, so the report states not
+     just THAT a material deviation exists but WHICH position(s) and in
+     WHICH direction. Verified: all three counterexample distributions
+     now fail (w = 0.583, 0.600, 0.663 — all a "large" Cohen's effect);
+     the N=19/structural-regime and N=20/21-statistical-regime results
+     agree for a comparable omission (no easier-to-pass transition);
+     balanced N=20 distributions still pass comfortably (w=0 and
+     w=0.141); verified for 2- and 3-option forms, not only 4-option.
+     The existing policy that statistical significance alone does not
+     fail an educationally trivial deviation (QL-038) is unchanged.
+  2. **`chiSquareUpperTailPValue(chiSquareStat, df)`** computes the exact
+     upper-tail chi-square p-value via the regularized upper incomplete
+     gamma function (standard series/continued-fraction algorithm,
+     Numerical Recipes 3rd ed. §6.2), valid at any positive df (not
+     limited to the previously tabulated df 1-7). Verified against an
+     independently-sourced published critical-value table at both
+     α=0.01 and α=0.05, matching to 4-5 significant figures at every
+     tabulated point. Position balance now uses the same
+     `pValue < SIGNIFICANCE_ALPHA` comparison length association already
+     used, replacing the prior `chiSquare > criticalValue` comparison.
+  3. **`compareToIdManifest()`'s comment corrected** to state plainly it
+     answers only "does the same SET of ids exist," never order. A new,
+     genuinely separate, order-SENSITIVE contract is added:
+     `ORIGINAL_FORM_ORDER_IDS` (new,
+     `scripts/assessment-cue-audit-id-manifest.mjs`) freezes each of the
+     17 forms' exact authored order; `ORIGINAL_FORM_ORDER_MANIFEST` wraps
+     it with a per-form order-sensitive SHA-256 digest;
+     `compareToFormOrderManifest()` compares live per-form order against
+     it. Four genuinely separate questions are now each independently
+     reported: id-SET identity (`idManifestCheck`), per-form
+     ENCOUNTER-ORDER identity (`formOrderCheck`, new), mechanical
+     aggregate-metric drift (`baselineComparison`), and current Gate A
+     status (`bank.gateA`/`forms[].gateA`). Verified: reversing or
+     permuting questions within one form triggers order drift for that
+     form specifically while the id-set check still matches; an id
+     replacement triggers set drift; unchanged input matches both frozen
+     contracts; pilot selection (its own separate canonical-order
+     contract) remains fully input-order-independent regardless.
+     Additionally, the WHOLE-BANK aggregate scope is no longer treated as
+     one learner-facing encounter order for sequence purposes:
+     `evaluateGateA(metrics, { sequenceApplicable: false })` computes and
+     reports sequence findings informationally but excludes them from
+     `overall` — an artificial cross-module concatenation can no longer
+     create or clear a release gate via a property that was never
+     meaningful for it. Every per-form call remains fully
+     `sequenceApplicable: true` by default.
+  4. NBME provenance wording corrected to describe the two official URLs
+     precisely, per the direct re-inspection above; the overall
+     conclusion (NBME is unverified/secondary corroborating color, never
+     a basis for any threshold; CITL, fully verified, supplies no
+     numerical thresholds either — the project's numeric/effect-size
+     rules are its own operationalizations) is unchanged and restated
+     explicitly.
+- **Tests:** `tests/assessment-cue-audit.mjs` grew from 127 to 157
+  dependency-free checks. New coverage: the three N=20 counterexample
+  distributions and a full-Gate fixture for `[7,7,6,0]`; the N=19/20/21
+  regime-boundary consistency check; balanced-N=20 and 2-/3-option
+  Cohen's-w fixtures; the position-detail-completeness check (observed
+  distribution, expected distribution, effect measure, threshold,
+  material-deviation directions, final decision); independently-sourced
+  chi-square-critical-value cross-checks at α=0.01 and α=0.05 for df 1-7
+  and 1-3 respectively; the alpha-boundary pValue/statisticalResult
+  agreement check; per-form order-drift detection (reversal, permutation,
+  id replacement) and its independence from id-set identity; pilot
+  selection's continued input-order-independence; the
+  whole-bank-vs-per-form `sequenceApplicable` behavior, including that it
+  changes only sequence's contribution to `overall` and nothing else; and
+  deterministic-JSON preservation with every new field present. Two
+  mutation-testing-driven coverage gaps were found and closed with
+  permanent tests (see Mutation-tested below) —
+  `tests/e2e/assessment-cue-audit.spec.mjs` stays at 7 (no new
+  browser-specific behavior this round; re-run and reconfirmed passing).
+- **Mutation-tested (this round):** 7 targeted reversions against
+  `scripts/assessment-cue-audit.mjs` (never `index.html`), covering the
+  seven required categories (omitted/underrepresented answer positions;
+  the N=5n regime boundary; the Cohen's-w distribution-wide practical
+  effect calculation itself; the chi-square p-value calculation; per-form
+  order drift; separation of set/order/metric drift in the report; and
+  whole-bank-vs-learner-facing sequence scope). Two of the seven initially
+  showed **zero** failures instead of the expected relevant one(s) — both
+  investigated as genuine coverage gaps, not skipped:
+  - The chi-square-p-value mutation replaced the real computation with a
+    placeholder (`0.001` if past the reference critical value, else
+    `0.5`) that preserved the SAME significant/not-significant
+    classification by construction, evading a boundary test that only
+    checked the classification, not the numeric p-value itself. Fixed
+    with a permanent test asserting the exact numeric p-value for a known
+    `(chiSquare, df)` pair against an independently hand-computed
+    expected value (`chiSquare=120, df=3` → `pValue ≈ 7.71679×10⁻²⁶`).
+  - The `formOrderCheck`-stubbing mutation (`buildDeterministicReport()`
+    replaced with a hardcoded `{matches: true, perForm: {}}`) evaded
+    detection because every existing test calling
+    `buildDeterministicReport()` only ever passed the unchanged live bank,
+    which trivially "matches" a stub too. Fixed with a permanent test
+    that passes a deliberately module-reordered copy of the live bank
+    through `buildDeterministicReport()` and asserts the resulting
+    `formOrderCheck` reflects that real drift.
+  Every one of the 7 mutations was reverted to byte-identical via `diff`
+  before committing. See `docs/VALIDATION.md` for the full record.
+- **Mutation count, reconciled from retained evidence (not guessed):**
+  round 1 (QL-036): 8. Round 2 (QL-037): 8. Round 3 (QL-038): 4. Round 4
+  (this entry, QL-039): 7. **Cumulative total across all four rounds: 27.**
+- **Full local validation:** `npm test` (172 dependency-free DOM-behavior
+  checks + 70 governance checks + 157 assessment-cue checks + 5
+  deployed-revision checks, all passing) and the complete `npx playwright
+  test` suite run at a deterministic, fixed worker count (`--workers=2`,
+  rather than the variable auto-detected parallelism under which the
+  known pre-existing `storage-failure-warning.spec.mjs` flake has
+  previously appeared) — **252 passed, 6 skipped, 0 failed**, a fully
+  clean complete-suite result, not a partial-file rerun.
+- **Scope:** No question, answer, rationale, distractor feedback, domain,
+  topic, difficulty, or stable ID changed; `index.html` is unmodified. No
+  `QUESTION_GOVERNANCE` field populated; all 153 questions remain `draft`.
+  QL-033 is not marked corrected. Phase 0 stays unchecked in
+  `docs/ROADMAP.md` and Issue #24. Steps 4-9 of the Phase 0 protocol were
+  not begun.
+- **Prevention:** A "practical effect" measure that looks at only one
+  cell of a multi-cell distribution is not a distribution-wide measure,
+  no matter how well-justified its single-cell threshold is — symmetric
+  treatment of over- and under-representation requires a genuinely
+  aggregate statistic. A significant/not-significant Boolean is not a
+  p-value, and a test that only checks the Boolean cannot distinguish a
+  correct exact computation from a placeholder that merely preserves the
+  same threshold comparison — assert the actual numeric value against an
+  independently derived expectation, not only its relationship to a
+  threshold. A comment's claims are part of the contract too: a docstring
+  that overclaims what a function detects is itself a defect, independent
+  of whether the function's actual behavior is correct. A report field
+  populated by a stub that happens to match the one fixture every test
+  exercises is invisible to those tests — cover the field with an input
+  specifically constructed to differ from the trivial case.

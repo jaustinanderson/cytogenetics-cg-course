@@ -100,6 +100,41 @@ All notable repository changes are recorded here.
   changed, still Gate A correctly fails the bank and every form, still
   QL-033 not marked corrected. See `docs/QUALITY_LOG.md` QL-038 and
   `docs/ASSESSMENT_VALIDITY.md` for the full record.
+  **Corrected (QL-039):** a third independent review found the large-N
+  practical decision examined only the single largest answer position —
+  at N=20 (n=4), distributions `[7,7,6,0]`, `[8,6,6,0]`, `[8,8,4,0]`
+  (each leaving one position at zero correct answers) all passed —
+  replaced with Cohen's w, the standard scale-free multinomial effect
+  size (Cohen, 1988), using Cohen's own published medium-effect threshold
+  (0.3), verified to fail all three (w = 0.583, 0.600, 0.663) while a
+  balanced N=20 distribution still passes and the N=19/20/21 regime
+  boundary behaves consistently. Position balance was found to report
+  only a chi-square statistic and a critical-value-table Boolean, never
+  an actual p-value — corrected with an exact chi-square p-value via the
+  regularized incomplete gamma function, verified against published
+  critical-value tables at α=0.01 and α=0.05. `compareToIdManifest()`'s
+  own comment was found to claim it detected id reordering, directly
+  contradicted by its own next clause explaining the digest is
+  order-independent by construction — corrected, and a genuinely
+  separate, order-sensitive per-form encounter-order manifest added,
+  since the sequence check (QL-038) made each form's authored order a
+  real contract; the whole-bank aggregate is no longer treated as one
+  learner-facing sequence for gate purposes. NBME source-provenance
+  wording was found to describe the two official NBME URLs less
+  precisely than directly re-inspecting them supports — corrected: the
+  institutions page is the actual request-form page, and the
+  file/pdf-shaped URL serves only an HTML page shell with no PDF and no
+  request form of its own. Mutation count reconciled across all four
+  rounds: 8 + 8 + 4 + 7 = **27**; two of round 4's mutations surfaced
+  genuine test-coverage gaps, both closed with permanent tests before
+  being counted as passing. `tests/assessment-cue-audit.mjs` grew from
+  127 to 157 dependency-free checks; `tests/e2e/assessment-cue-audit.spec.mjs`
+  stayed at 7. A complete `npx playwright test` run at a deterministic
+  fixed worker count produced a fully clean result: 252 passed, 6
+  skipped, 0 failed. Still no question content changed, still Gate A
+  correctly fails the bank and every form, still QL-033 not marked
+  corrected. See `docs/QUALITY_LOG.md` QL-039 and
+  `docs/ASSESSMENT_VALIDITY.md` for the full record.
 - Added `docs/LEARNING_PLATFORM_ROADMAP.md`, a durable planning document
   (Issue #24, carried by PR #25): a long-term roadmap toward a
   trustworthy, adaptive, subject-independent learning platform — guiding

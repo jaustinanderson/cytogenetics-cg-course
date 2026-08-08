@@ -3109,6 +3109,79 @@ fails the whole bank and every one of its 17 forms. See
 `docs/QUALITY_LOG.md` QL-038 and `docs/ASSESSMENT_VALIDITY.md` for the
 full record.
 
+### Correction — the large-N practical decision missed underrepresentation; position balance never reported a real p-value; the id-manifest comment overclaimed order detection; NBME URL roles were imprecise, added 2026-08-08
+
+A third independent review, before merge, found four further problems.
+**(1)** The large-N practical decision examined only the single largest
+answer position, so it could not detect material UNDERrepresentation
+unless that imbalance also inflated some other position past the
+threshold — confirmed directly: at N=20, n=4, distributions `[7,7,6,0]`,
+`[8,6,6,0]`, `[8,8,4,0]` (every one leaving one position with zero correct
+answers) all passed. Replaced with Cohen's w (Cohen, 1988), the standard
+multinomial effect size, `w = sqrt(chiSquare/N)` — scale-free, symmetric
+to over- and under-representation, using Cohen's own published
+"medium-effect" threshold (0.3), not a number tuned to this bank; verified
+all three counterexamples now fail (w = 0.583, 0.600, 0.663), the
+N=19/20/21 regime boundary behaves consistently, and balanced N=20
+distributions still pass. **(2)** Position balance reported a chi-square
+statistic and a critical-value-table Boolean, never an actual p-value —
+corrected with `chiSquareUpperTailPValue()`, an exact upper-tail
+chi-square p-value via the regularized incomplete gamma function, verified
+against independently-sourced published critical values at α=0.01 and
+α=0.05 for df 1-7/1-3. **(3)** `compareToIdManifest()`'s comment claimed
+it detected "reordering where order is part of the contract," directly
+contradicted by its own next clause explaining the digest is
+order-independent by construction — corrected, and a genuinely separate,
+order-SENSITIVE per-form manifest (`ORIGINAL_FORM_ORDER_MANIFEST`,
+`compareToFormOrderManifest()`) added, since each form's authored
+encounter order is now a real contract (the sequence check examines it).
+The whole-bank aggregate is also no longer treated as one learner-facing
+sequence for gate purposes (`sequenceApplicable: false` there;
+`evaluateGateA()`'s default `true` elsewhere). **(4)** NBME
+source-provenance wording described the two official NBME URLs less
+precisely than directly re-inspecting them supports — corrected: the
+institutions page is the actual request-form page; the file/pdf-shaped
+URL serves only an HTML page shell with no PDF and no request form of its
+own.
+
+**Tests:** `tests/assessment-cue-audit.mjs` grew from 127 to 157
+dependency-free checks. `tests/e2e/assessment-cue-audit.spec.mjs` stays at
+7 (no new browser-specific behavior this round; re-run and reconfirmed
+passing).
+
+**Mutation-tested (round 4):** 7 targeted, temporary, fully reverted
+reversions against `scripts/assessment-cue-audit.mjs` (never
+`index.html`), covering omitted/underrepresented answer positions; the
+N=5n regime boundary; the Cohen's-w calculation itself; the chi-square
+p-value calculation; per-form order drift; separation of set/order/metric
+drift in the report; and whole-bank-vs-learner-facing sequence scope. Two
+of the seven initially produced zero failures instead of the expected
+relevant one(s) — both investigated as genuine coverage gaps and closed
+with permanent tests before being counted as passing mutation tests: a
+chi-square-p-value placeholder that preserved the correct
+significant/not-significant classification by construction (closed with
+an exact-numeric-value assertion against an independently hand-computed
+expectation), and a `formOrderCheck` stub that every existing
+`buildDeterministicReport()` test happened to pass through unchanged
+(closed with a test using a deliberately module-reordered input).
+
+**Mutation count, reconciled from retained evidence:** round 1 (QL-036):
+8. Round 2 (QL-037): 8. Round 3 (QL-038): 4. Round 4 (QL-039, this
+entry): 7. **Cumulative total: 27.**
+
+**Full local validation:** `npm test` (172 dependency-free DOM-behavior
+checks + 70 governance checks + 157 assessment-cue checks + 5
+deployed-revision checks, all passing) and the complete `npx playwright
+test` suite run at a deterministic, fixed worker count (`--workers=2`) —
+**252 passed, 6 skipped, 0 failed**, a fully clean complete-suite result.
+
+No question, answer, rationale, distractor feedback, domain, topic,
+difficulty, or stable ID changed. `index.html` is byte-for-byte unchanged.
+No `QUESTION_GOVERNANCE` field populated; all 153 questions remain
+`draft`. QL-033 is not marked corrected. Gate A still correctly fails the
+whole bank and every one of its 17 forms. See `docs/QUALITY_LOG.md`
+QL-039 and `docs/ASSESSMENT_VALIDITY.md` for the full record.
+
 ## Gates still open
 
 ### Browser behavior

@@ -21,9 +21,17 @@ not catch a mechanically predictable answer-key sequence, that a
 statistically significant but practically trivial large-N deviation could
 fail the gate by itself, and that the exact two-sided p-value convention
 was unnamed and not the only defensible one (`docs/QUALITY_LOG.md`
-QL-038). Every counterexample that prompted a correction, from either
-review, is recorded in the relevant section below, along with the fix and
-why it is now correct.
+QL-038). A **third** independent review, still before merge, found that
+the large-N practical decision examined only the single largest answer
+position and so missed material underrepresentation (a position with zero
+or few correct answers could still pass), that position balance never
+reported an actual chi-square p-value, that a comment wrongly claimed the
+frozen id manifest detected reordering it structurally cannot detect,
+and that the NBME source-provenance wording described the two official
+NBME URLs less precisely than directly re-inspecting them supports
+(`docs/QUALITY_LOG.md` QL-039). Every counterexample that prompted a
+correction, from any of the three reviews, is recorded in the relevant
+section below, along with the fix and why it is now correct.
 
 **What this document does NOT do:**
 
@@ -142,6 +150,66 @@ deterministic report now exposes `noDuplicateIds` (accurately named, same
 implementation) as a separate, narrower field, with `idManifestCheck`
 (the `compareToIdManifest()` result above) as the actual
 omission/addition/replacement detector.
+
+### 2.2 Per-form encounter-order manifest (added — a second independent review found order is now a genuine contract, and a misleading comment)
+
+**Issue identified, in two parts:**
+
+1. `compareToIdManifest()`'s own comment claimed it detected "reordering
+   where order is part of the contract" — self-contradictory with the very
+   next clause explaining the digest is computed over the **sorted** id
+   list and is therefore order-**independent** by construction. Confirmed
+   directly: reversing all 153 frozen ids before calling
+   `compareToIdManifest()` still reports `matches: true`. This is CORRECT
+   behavior for a set-identity check (which is precisely what "which 153
+   questions exist" requires), but the comment's claim about order was
+   simply wrong and has been removed.
+2. Separately, that comment's inaccuracy became more consequential once
+   the answer-key sequence check (section 4.10) started examining each
+   form's actual rendered order: `index.html`'s `buildQuiz()` renders
+   `QUIZZES[key]` in exact array order, with no shuffling of questions or
+   options, so each learner-facing form's **authored encounter order** is
+   now a genuine, independently trackable behavioral contract — one this
+   file had no dedicated frozen record for at all.
+
+**Correction:** `compareToIdManifest()`'s comment is corrected to state
+plainly that it answers exactly one question — does the same SET of ids
+exist — and cannot, by design, answer whether they are in the same order.
+A new, genuinely separate, ORDER-SENSITIVE contract is added:
+`scripts/assessment-cue-audit-id-manifest.mjs` freezes
+`ORIGINAL_FORM_ORDER_IDS`, the exact per-form authored order for all 17
+forms, captured the same point-in-time-snapshot way as the id-set
+manifest (never derived from the live bank at import time).
+`ORIGINAL_FORM_ORDER_MANIFEST` wraps each form's frozen ordered list with
+an order-sensitive SHA-256 digest (computed over the ordered array
+directly, deliberately **not** sorted first, unlike the id-set digest).
+`compareToFormOrderManifest(liveQuestionsByModule)` compares each form's
+live order against its frozen digest and reports `{matches, perForm}`.
+
+**Four genuinely separate questions, kept genuinely separate** (not
+conflated, and each independently reported in
+`buildDeterministicReport()`):
+
+| Question | Answered by | Order-sensitive? |
+| --- | --- | --- |
+| Does the same SET of 153 questions exist? | `idManifestCheck` (`compareToIdManifest()`) | No — by design |
+| Is each form's authored ENCOUNTER ORDER unchanged? | `formOrderCheck` (`compareToFormOrderManifest()`, new) | Yes — by design |
+| Have the frozen AGGREGATE measurements drifted from QL-033? | `baselineComparison` | N/A — mechanical count comparison |
+| Does the live bank pass Gate A RIGHT NOW? | `bank.gateA` / `forms[].gateA` | Independent of either manifest — a fresh evaluation of whatever exists today |
+
+Verified directly (`tests/assessment-cue-audit.mjs`): reversing or
+permuting questions **within** one form triggers order drift for that
+form specifically (`formOrderCheck.perForm.<module>.matches: false`)
+while `idManifestCheck.matches` stays `true` (the SET is unchanged); an id
+**replacement** triggers `idManifestCheck.matches: false` and, as a
+legitimate consequence (that position in the form now genuinely holds a
+different id), the corresponding form's order digest also changes;
+unchanged input matches both frozen contracts simultaneously; and pilot
+selection (section 6.1) remains fully input-order-independent despite
+per-form order now being separately tracked — reversing a form's internal
+array before calling `selectPilotBatch()` does not change which ids are
+selected, since that selection's own canonical-order contract is, and
+remains, independent of this one.
 
 ### Inventory coverage
 
@@ -322,16 +390,35 @@ described both a University of Illinois source and an NBME source as
 "directly inspected primary sources." Only the first claim was actually
 true. The NBME guide's wording was extracted via a third-party HTML mirror
 (`readkong.com`) because the original PDF was not machine-readable with
-the tooling available at the time — confirmed again for this correction:
-`https://www.nbme.org/file/nbme_item-writing-guide_r_6-pdf/` (the official
-download URL) returns an HTML landing/lead-capture page requiring form
-submission, not a directly downloadable PDF (`poppler-utils` `pdftotext`
-against the fetched response reports "May not be a PDF file" and cannot
-parse it as one); an archive.org mirror of the same guide could not be
-reached from this environment. The original guide was therefore **not**
-independently verified against its official source for this correction
-either, and calling it a "directly inspected primary source" was
-inaccurate both times.
+the tooling available at the time. The original guide was therefore
+**not** independently verified against its official source, and calling
+it a "directly inspected primary source" was inaccurate.
+
+**Corrected, precisely (round 4 — a second independent review found the
+prior correction's own description of the two official NBME URLs was
+imprecise, though its overall conclusion was right):** the two official
+URLs are DIFFERENT pages with different roles, each independently fetched
+and directly inspected for this correction:
+
+- `https://www.nbme.org/institutions/nbme-item-writing-guide/` is the
+  official REQUEST page. Its own visible text states: *"Request your copy
+  of the NBME Item-Writing Guide today... Complete the form to receive
+  your PDF download today."* It contains the actual lead-capture form.
+- `https://www.nbme.org/file/nbme_item-writing-guide_r_6-pdf/` is a
+  DIFFERENT URL (an attachment/media-file page, titled
+  "NBME_Item Writing Guide_R_6.pdf - NBME" in its own `<title>`) that
+  currently serves an HTML page shell — site navigation and generic
+  content, `content-type: text/html`, not `application/pdf`
+  (`poppler-utils` `pdftotext` against the fetched response reports "May
+  not be a PDF file" and cannot parse it as one) — rather than the PDF its
+  URL and title suggest. It does **not** itself expose the request form:
+  directly inspected, its only `<form>` elements are generic site-search
+  forms (`role="search"`), not a lead-capture form for this guide. Neither
+  page was submitted or bypassed to obtain the PDF (no attempt was made to
+  circumvent the request-form gate at the institutions page).
+- The ReadKong copy remains a third-party mirror, unverified against the
+  official sixth-edition PDF (which was never obtained for this
+  correction, by design — see above).
 
 **Corrected sourcing:**
 
@@ -372,20 +459,30 @@ inaccurate both times.
    purposes only."* (via
    <https://www.readkong.com/page/nbme-item-writing-guide-constructing-written-test-5281377>,
    a third-party mirror that self-identifies as reproducing this guide;
-   retrieved 2026-08-08). The official guide is gated behind a
-   lead-capture form at <https://www.nbme.org/institutions/nbme-item-writing-guide/>
-   and <https://www.nbme.org/file/nbme_item-writing-guide_r_6-pdf/>, which
+   retrieved 2026-08-08, unverified against the official sixth-edition
+   PDF). **Precisely, per round 4's independent re-check of both official
+   URLs (see the counterexample above):** the official guide is available
+   only by completing a request form at
+   <https://www.nbme.org/institutions/nbme-item-writing-guide/>, which
    this correction did not submit (no attempt was made to bypass or
-   circumvent that gate). **This citation is retained only as
-   unverified corroborating color consistent with the CITL guidance
-   above, not as a basis for any threshold or rule in this document** —
-   every numeric rule below is justified from CITL's guidance and this
-   document's own derivation, not from the NBME text.
+   circumvent that gate); the direct-download-shaped URL
+   <https://www.nbme.org/file/nbme_item-writing-guide_r_6-pdf/> does not
+   itself serve the PDF or expose the request form, only a generic HTML
+   page shell. **This citation is retained only as unverified
+   corroborating color consistent with the CITL guidance above, not as a
+   basis for any threshold or rule in this document** — every numeric rule
+   below is justified from CITL's guidance and this document's own
+   derivation, not from the NBME text.
 
-Both the CITL and NBME guidance are **qualitative** ("approximately equal,"
-"randomly distribute") — neither specifies exact numeric thresholds or a
-statistical test. The numeric thresholds and statistical procedure below
-are this document's own operationalization, justified in section 4.3.
+**CITL supplies no numerical thresholds.** Both the CITL and NBME
+guidance are **qualitative** ("approximately equal," "randomly
+distribute") — neither specifies exact numeric thresholds or a statistical
+test. Every numeric threshold and statistical procedure in this document
+(`PRACTICAL_MARGIN`, `COHENS_W_MEDIUM_EFFECT`, `SIGNIFICANCE_ALPHA`, the
+exact pigeonhole rule, the sequence-pattern rules) is this document's own
+**project-defined operationalization** of CITL's qualitative guidance, not
+a number CITL itself supplies — justified individually in sections 4.3,
+4.3b, and 4.10.
 
 ### 4.2 Candidate approaches considered
 
@@ -405,6 +502,11 @@ are this document's own operationalization, justified in section 4.3.
 | Deterministic structural detection (cycle/palindrome/run) for answer-key sequence patterns | Yes | **Yes** — no statistical claim made, exact at any N, and does not demand a mechanically rotating key (a rotating key is itself flagged). See 4.10 |
 | Doubled-minimum-tail convention for the exact two-sided Poisson-binomial p-value | Yes | **No — corrected.** Not self-defining for an asymmetric distribution and requires post-hoc clipping to stay <= 1. See 4.4a |
 | Probability-ordering convention for the exact two-sided Poisson-binomial p-value | Yes | **Yes** — well-defined for any distribution shape, the same convention underlying other asymmetric exact tests (e.g. Fisher's), precisely named as one defensible choice among several. See 4.4a |
+| Single-largest-position-share as the large-N practical/effect-size measure | Yes | **No — corrected.** Examines only one cell of the distribution, so it cannot detect material underrepresentation of a different position unless it incidentally also inflates another position's share past the threshold. See 4.3b |
+| Total-variation distance as the large-N distribution-wide practical measure | Yes | **No** — a reasonable alternative, but Cohen's w has an independently-sourced conventional threshold and a direct algebraic relationship to the chi-square statistic this file already computes, avoiding a second, unrelated distributional measure. See 4.3b |
+| Cohen's w as the large-N distribution-wide practical/effect-size measure | Yes | **Yes** — scale-free (unlike chi-square itself), symmetric to over- and under-representation by construction, and uses Cohen's own published "medium effect" convention (0.3), not a number tuned to this bank. See 4.3b |
+| A critical-value-table lookup reported in place of an actual chi-square p-value | Yes | **No — corrected.** A Boolean table comparison is not itself a p-value, and was limited to the table's own df range. See 4.6b |
+| Exact chi-square p-value via the regularized incomplete gamma function | Yes | **Yes** — closed-form, not an approximation beyond the chi-square test's own well-known validity assumption, and valid at any df, not only the previously tabulated range. See 4.6b |
 
 ### 4.3 Adopted rules — position balance (corrected: a two-regime model with one shared threshold)
 
@@ -519,13 +621,13 @@ now stated precisely as either the full, combined result (as this section
 proves) or explicitly labeled a position-only result (section 4.3's
 table) — the two are never used interchangeably.
 
-**Large-N statistical regime, `N >= REGIME_THRESHOLD(n)`:** the practical
-margin plus chi-square approach, unchanged in spirit from before this
-correction — practical margin (`PRACTICAL_MARGIN = 0.15`, additive above
-`1/n`, so 40% at n=4) as the primary, authoritative check, and chi-square
-goodness-of-fit (α=0.01) as corroboration, **always computable in this
-branch by construction** (`N >= REGIME_THRESHOLD(n)` guarantees every
-expected cell count `N/n >= CHI_SQUARE_MIN_EXPECTED_PER_CELL`).
+**Large-N statistical regime, `N >= REGIME_THRESHOLD(n)`:** a
+distribution-wide practical effect size (Cohen's w, corrected in round 4
+— section 4.3b) as the primary, authoritative check, and chi-square
+goodness-of-fit (α=0.01, its p-value corrected in round 4 — section 4.6b)
+as corroboration, **always computable in this branch by construction**
+(`N >= REGIME_THRESHOLD(n)` guarantees every expected cell count
+`N/n >= CHI_SQUARE_MIN_EXPECTED_PER_CELL`).
 
 **Precise, justified meaning of "inconclusive":** now reserved for exactly
 one case — `N < n` (fewer items than there are answer positions, too few
@@ -533,6 +635,90 @@ to say anything at all). For any `N >= n`, the scope always receives a
 definitive `pass` or `fail`, via whichever regime applies. Inconclusive is
 no longer the unavoidable result for a small, valid, well-authored
 assessment.
+
+### 4.3b Distribution-wide practical effect size (added — a second independent review found the practical decision examined only the largest position)
+
+**Counterexample reproduced:** the large-N practical decision (immediately
+above, before this correction) examined only the SINGLE LARGEST position's
+share against `1/n + PRACTICAL_MARGIN` — it never evaluated the complete
+distribution, so it could not detect material UNDERrepresentation (a
+position receiving zero or very few correct answers) unless that same
+imbalance happened to also push some OTHER position's share over the
+max-share threshold. Confirmed directly, at `N=20`, `n=4` (exactly
+`REGIME_THRESHOLD(4)`, the smallest N in this regime): position
+distributions `[7,7,6,0]`, `[8,6,6,0]`, and `[8,8,4,0]` — every one
+leaving position D with **zero** correct answers — all reported `pass`
+under the prior rule, since no individual share exceeded 40%. A complete,
+independently constructed full-Gate fixture using `[7,7,6,0]`, genuinely
+non-cued option lengths, and a hand-verified non-patterned answer
+sequence confirmed the same gap at the whole-gate level: `overall: pass`,
+despite position D never being correct.
+
+**Corrected measure: Cohen's w**, the standard multinomial/chi-square
+effect size (Cohen, J. (1988). *Statistical Power Analysis for the
+Behavioral Sciences*, 2nd ed., chapter 7): `w = sqrt(chiSquare / N)`.
+Compared against the alternatives before selecting it:
+
+- **Symmetric per-position deviations, reported but not decision-driving:**
+  retained as `positionDeviations`/`materialDeviations` in the detail
+  object (below) — genuinely useful for reporting WHICH positions and in
+  WHICH direction, but not, by itself, a single aggregate decision measure
+  a fixed threshold can be compared against.
+- **Total-variation distance:** considered; rejected in favor of Cohen's w
+  because w has an established, independently-sourced (not
+  self-invented) conventional threshold (below) and a direct algebraic
+  relationship to the chi-square statistic this file already computes for
+  corroboration, avoiding introducing a second, unrelated distributional
+  measure.
+- **Cohen's w (adopted):** unlike the raw chi-square statistic (which
+  grows with N and is therefore a SIGNIFICANCE measure, not a practical
+  one), w is scale-free — it measures the magnitude of the deviation
+  pattern across the WHOLE distribution, independent of sample size, so a
+  single fixed threshold is meaningful at every N in this regime. It is
+  symmetric to over- AND under-representation by construction, since it
+  is derived from the same squared-deviation sum every position
+  contributes to.
+
+**Threshold: `COHENS_W_MEDIUM_EFFECT = 0.3`**, Cohen's own published
+convention for a "medium" effect — an independently-sourced,
+non-arbitrary number, not tuned to this bank or to make any specific
+counterexample fail. (Reassuring, not engineered, consistency check: for
+`n=4`, a single position exactly at the OLD single-position margin
+boundary, `1/n + PRACTICAL_MARGIN`, with every other position exactly at
+its own expected value, algebraically produces `w` exactly equal to this
+same `0.3` threshold — the two definitions agree at that boundary case
+for `n=4`, which is a property of the numbers involved, not something
+chosen to make it so.)
+
+**Verified for `[7,7,6,0]`, `[8,6,6,0]`, `[8,8,4,0]`:** Cohen's w = 0.583,
+0.600, and 0.663 respectively — all a **large** effect by Cohen's own
+convention (>= 0.5), now correctly failing. **Verified the regime
+transition does not make a conspicuously worse distribution easier to
+pass:** a comparable omission at `N=19` (structural regime, exact
+pigeonhole rule) fails; the same shape at `N=20` and `N=21` (statistical
+regime, Cohen's w) also fails. **Verified balanced N=20 distributions
+still pass comfortably:** `[5,5,5,5]` gives `w=0`; `[6,5,5,4]` gives
+`w=0.141`, both well under the 0.3 threshold. **Verified for 2- and
+3-option forms** at their own `REGIME_THRESHOLD(n)`, not only n=4.
+
+**Per-position directional reporting, retained as diagnostic detail, not
+the decision:** every position's own share is compared against
+`[expectedProportion - PRACTICAL_MARGIN, expectedProportion + PRACTICAL_MARGIN]`
+(the same `PRACTICAL_MARGIN` this file already uses elsewhere) and tagged
+`"over"`, `"under"`, or `"within-margin"` — so the report states not just
+*that* a material deviation exists (Cohen's w) but exactly *which*
+position(s) and in *which* direction, satisfying the requirement to
+report the complete observed distribution, expected distribution,
+practical effect measure and threshold, direction of every material
+deviation, and final decision, all together in one place
+(`evaluatePositionBalance()`'s `detail` object).
+
+**Policy preserved:** statistical significance alone still does not
+automatically fail an educationally trivial deviation — section 4.6a's
+policy (practical effect authoritative, significance-alone raises a
+review flag) is unchanged by this correction; only what counts as "the
+practical effect" was corrected, from a single-cell share to the
+distribution-wide Cohen's w.
 
 ### 4.4 Length association (corrected — tie-aware, not a flat 1/n on the uniquely-longest rate alone)
 
@@ -786,31 +972,109 @@ statistically significant reports `fail` with `reviewFlag.required: false`
 (a fail is never also flagged for review — review flags exist only for
 otherwise-passing scopes).
 
+### 4.6b Chi-square p-value (added — a second independent review found position balance never reported one)
+
+**Counterexample reproduced:** position balance's `detail` object
+(before this correction) contained `chiSquare`, a critical-value-table
+lookup, and a Boolean `statisticalResult` — but no `pValue` field at all.
+A critical-value-table comparison is not itself a p-value: it only
+answers "does the statistic exceed the one tabulated value for this exact
+alpha," not "how extreme is this result." Length association's exact
+Poisson-binomial test already computed and reported a genuine p-value
+(section 4.4); position balance's chi-square test did not, despite the
+round-3 correction's own stated intent to "report the statistical result
+and p-value separately."
+
+**Correction:** `chiSquareUpperTailPValue(chiSquareStat, df)` computes the
+EXACT upper-tail chi-square p-value, `P(X >= chiSquareStat)`, via the
+closed-form relationship between the chi-square survival function and the
+regularized upper incomplete gamma function, `Q(df/2, chiSquareStat/2)`.
+Implemented as a standard series/continued-fraction evaluation of the
+incomplete gamma function (Numerical Recipes, 3rd ed., section 6.2) —
+`upperRegularizedIncompleteGamma(a, x)`, exported and independently
+usable. This is not limited to any small, tabulated df range (the prior
+critical-value table stopped at df=7, i.e. 8-option items); it is valid
+for any positive df.
+
+**Verified against an independently-sourced reference**, not derived from
+this implementation: a standard published chi-square critical-value table
+(the same one this file's own now-non-authoritative reference table
+records) gives, at α=0.01, critical values 6.635 (df=1) through 18.475
+(df=7); `chiSquareUpperTailPValue()` evaluated AT each published critical
+value returns ≈0.01000 at every one, and returns ≈0.05000 at the published
+α=0.05 critical values for df=1-3 — matching to 4-5 significant figures.
+**Coverage-gap correction during mutation testing:** an initial boundary
+test only checked that the reported p-value's significant/not-significant
+CLASSIFICATION agreed with a placeholder computation, which a mutated,
+non-numeric placeholder value could still satisfy by construction (it
+preserved the same threshold comparison without computing a real
+p-value) — a genuine test-coverage gap, closed with a permanent test
+asserting the exact NUMERIC p-value for a known chi-square/df pair against
+an independently hand-computed expected value (`chiSquare=120, df=3` →
+`pValue ≈ 7.71679×10⁻²⁶`), not merely its relationship to alpha.
+
+**One consistent alpha comparison everywhere:** `statisticalResult` is now
+derived from `pValue < SIGNIFICANCE_ALPHA` for position balance, exactly
+the same comparison length association already used — replacing the
+previous `chiSquare > criticalValue` comparison. The critical-value table
+is retained, renamed
+`CHI_SQUARE_CRITICAL_ALPHA_01_REFERENCE`, purely as an independently-
+sourced cross-check for tests and for optional display; it drives no
+decision.
+
+**Approximation and applicability, stated honestly:** `chiSquareUpperTailPValue()`
+computes the chi-square survival function exactly, given a
+chi-square-distributed statistic — no approximation happens in that step.
+The approximation that matters is upstream: the chi-square goodness-of-fit
+TEST assumes observed multinomial counts are well-approximated by a
+continuous chi-square distribution, valid only when every expected cell
+count is reasonably large (conventionally >= 5,
+`CHI_SQUARE_MIN_EXPECTED_PER_CELL`) — the same condition
+`REGIME_THRESHOLD(n)` already guarantees for every call site. The
+function itself does not enforce this condition; it is the caller's
+(`evaluatePositionBalance()`'s large-N branch, reached only when the
+condition holds) responsibility.
+
+**Deterministic JSON output preserved:** `chiSquareUpperTailPValue()` and
+`cohensW()` are pure functions of their numeric inputs, with no
+randomness or wall-clock dependency — verified directly, `--json` output
+remains byte-identical across repeated runs with every round-4 field
+(`pValue`, `practicalEffect`, `positionDeviations`, `formOrderCheck`)
+present.
+
 ### 4.7 Current result: the bank fails Gate A
 
 **Whole-bank overall: FAIL.** Position balance (statistical regime at
-N=153: 90.8% at position B against a 40% threshold; chi-square 355.52
-against a critical value of 11.345 — this exceeds the practical margin
-outright, so section 4.6a's policy correction does not change this
-result: `reviewFlag.required` is `false` here, exactly as intended, since
-review flags exist only for an otherwise-passing scope) and length
-association (86.9% longest-or-tied against a tie-aware expected rate of
-32.0% and a 47.0% allowed maximum; exact two-sided Poisson-binomial
-p-value ≈ 6.1×10⁻⁵⁰ under the corrected probability-ordering convention,
-section 4.4a — the prior doubled-tail convention's ≈1.2×10⁻⁴⁹ was in the
-same overwhelming-significance range; the convention change does not
-change any pass/fail conclusion for this bank) both fail. **The whole-bank
-sequence check (section 4.10) also fails** — a direct, expected
-consequence of the same 90.8%-at-one-position skew already established
-above: severe position imbalance necessarily produces long runs of the
-dominant position (the longest observed run is 32 consecutive items at
-position B), not an independent third defect. **Every one of the 17
-individual forms also currently fails** (reproduced by `npm run
-audit:assessment-cues`; exact per-form detail in its `--json` output) —
-now via a mix of the small-N structural rule (position), the always-exact
-length association test, and the sequence check, all three of which are,
-unlike before this correction, actually capable of reporting `pass` for a
-well-authored small form (section 4.3a). This is expected and correct —
+N=153: 90.8% at position B against a 40% threshold; Cohen's w = 1.524, an
+enormous effect far past the medium-effect threshold of 0.3, section
+4.3b; chi-square 355.52, exact p-value ≈ 9.5×10⁻⁷⁷ via
+`chiSquareUpperTailPValue()`, section 4.6b — this exceeds the practical
+effect-size threshold outright, so section 4.6a's policy correction does
+not change this result: `reviewFlag.required` is `false` here, exactly as
+intended, since review flags exist only for an otherwise-passing scope)
+and length association (86.9% longest-or-tied against a tie-aware
+expected rate of 32.0% and a 47.0% allowed maximum; exact two-sided
+Poisson-binomial p-value ≈ 6.1×10⁻⁵⁰ under the corrected
+probability-ordering convention, section 4.4a — the prior doubled-tail
+convention's ≈1.2×10⁻⁴⁹ was in the same overwhelming-significance range;
+the convention change does not change any pass/fail conclusion for this
+bank) both fail. **The whole-bank sequence check (section 4.10) is
+reported `not-applicable`** (section 4.10a — the whole bank is not one
+learner-facing encounter order, so its sequence findings are
+informational only and do not affect `overall`); run informationally, it
+does show findings (the longest observed run is 32 consecutive items at
+position B) — a direct, expected consequence of the same
+90.8%-at-one-position skew already established above, not an independent
+third defect. **Every one of the 17 individual forms also currently
+fails** (reproduced by `npm run audit:assessment-cues`; exact per-form
+detail in its `--json` output) — now via a mix of the small-N structural
+rule (position), the always-exact length association test, and (fully
+applicable per-form, unlike the whole bank) the sequence check, all three
+of which are, unlike before this correction, actually capable of
+reporting `pass` for a well-authored small form (section 4.3a). The
+frozen per-form encounter-order manifest also currently matches the live
+bank exactly (`formOrderCheck.matches: true`, section 2.2) — no form's
+authored order has drifted. This is expected and correct —
 no threshold was weakened to make the present bank pass; the bank's
 failure here reflects the bank, not an unreachable bar.
 
@@ -927,6 +1191,64 @@ scope-level check does not and cannot answer.
 repeated calls on identical input (verified by the same
 `buildDeterministicReport()` byte-identity test, section 7, which now also
 covers the `sequence` field in every scope's Gate A result).
+
+### 4.10a Whole-bank vs. learner-facing sequence scope (added — a second independent review found an artificial concatenation could create or clear a gate)
+
+**Issue identified:** section 4.10's sequence check assumes the scope
+passed to it is ONE continuous learner-facing encounter order. That
+premise is true for a single form (one `<details class="quiz">`,
+`index.html`'s `buildQuiz()`) and, if ever assembled into an actual quiz,
+a pilot batch — but it is **not** true for the WHOLE-BANK aggregate scope
+`buildDeterministicReport()` also evaluates: the concatenation of all 17
+forms' questions, in whatever order `flattenQuestionBank()` iterates
+`QUIZZES`'s module keys. No learner ever encounters all 153 questions as
+one continuous sequence; each module is its own separate quiz. Before
+this correction, `evaluateGateA()` computed and rolled sequence findings
+for the whole-bank scope into `overall` exactly as it did for a real
+form, meaning an artificial cross-module concatenation could, in
+principle, both CREATE a sequence-driven `fail` (if the concatenated order
+happened to look patterned) and CLEAR one (if it happened not to) —
+neither outcome would say anything true about any actual learner-facing
+form.
+
+**Correction:** `evaluateGateA(metrics, { sequenceApplicable })` accepts
+an explicit `sequenceApplicable` option, default `true`. When `false`,
+sequence findings are still computed and returned — informational,
+never silently dropped — but the returned `status` is overwritten to
+`"not-applicable"`, `applicable: false` is set, and the result is EXCLUDED
+from the `overall` pass/fail roll-up. `buildDeterministicReport()` passes
+`sequenceApplicable: false` for the whole-bank scope specifically; every
+per-FORM call (each module, genuinely one learner-facing quiz) uses the
+default `true`, so sequence remains fully authoritative there. Position
+balance and length association are UNCHANGED by this option at any
+scope — both are genuinely meaningful in aggregate regardless of learner
+traversal order, so the whole bank's position and length evaluation stays
+fully intact and authoritative.
+
+**Choice made explicit, per the two options considered:** whole-bank
+sequence is **not** retained as authoritative (the alternative — keeping
+it authoritative and documenting a "concrete learner-facing encounter
+order" for the whole bank — was rejected, because no such order exists in
+this application; each module is its own independent quiz with its own
+independent encounter order, and there is no mechanism, current or
+planned, by which a learner traverses all 17 in one continuous session).
+Whole-bank sequence is reported for transparency only.
+
+**Verified directly:** a synthetic scope with an exact repeating-cycle
+answer key (which would fail sequence if evaluated as a form) reports
+`overall: fail` when evaluated with the default `sequenceApplicable: true`,
+and `overall: pass` for the identical position/length data when evaluated
+with `sequenceApplicable: false` — proving the flag is what changes the
+outcome, not a coincidence of some other component. Position and length
+results are asserted byte-identical between the two calls.
+`buildDeterministicReport()`'s whole-bank Gate A reports
+`sequence.applicable: false` / `status: "not-applicable"`; every one of
+its 17 per-form Gate A results reports `sequence.applicable: true`. The
+live bank's whole-bank sequence check, run informationally, does show
+findings (the longest run is 32 consecutive items at position B) — an
+expected, directly explained consequence of the SAME 90.8%-at-one-position
+skew already established in section 4.7, not an independent third defect;
+it does not, and must not, affect `overall`.
 
 ---
 
