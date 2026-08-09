@@ -5316,3 +5316,137 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   which layer is doing the validating, and closing that gap (here, by
   asserting on which function's name appears in the thrown error) is part
   of the mutation-testing discipline, not an optional refinement.
+
+## QL-042 — `isStatisticallySignificant()` accepted impossible probability/alpha inputs; `cohensW()` still accepted a fractional N; the round-6 commit message and two docs miscounted the review as "fifth"; the chi-square p-value's exactness and df-generality claims were overstated (Issue #24, Phase 0 steps 1-3)
+
+- **Status:** Corrected on the same branch
+  (`claude/phase-0-ql033-foundation`), draft PR still open against `main`
+  for independent review, not yet merged. QL-033 itself remains confirmed
+  and unresolved; this entry corrects the QL-036 through QL-041 *tooling*
+  further, not the bank.
+- **Finding — three narrow gaps, each reproduced by direct construction
+  before any fix (full detail in `docs/ASSESSMENT_VALIDITY.md`):**
+  1. **`isStatisticallySignificant(pValue, alpha)` validated only
+     finiteness, not the probability domains its own name implies.**
+     Confirmed directly: `isStatisticallySignificant(-0.1, 0.01)` returned
+     `true`; `isStatisticallySignificant(1.1, 0.01)` returned `false`
+     instead of rejecting an impossible p-value; `isStatisticallySignificant(0.01,
+     -0.5)` returned `false`; `isStatisticallySignificant(0.01, 2)`
+     returned `true` — none of these describe a real p-value or
+     significance level.
+  2. **`cohensW()`'s round-6 finiteness/positivity check for `N` still
+     accepted a fractional value.** Confirmed directly: `cohensW(1, 2.5)`
+     silently computed `0.6324555320336759` instead of throwing, even
+     though `N` is this audit's authored-question count — the same
+     quantity `assertValidPositionCounts()` already requires to be a
+     positive integer.
+  3. **A miscounted review ordinal and an overstated numerical-domain
+     claim survived round 6.** The round-6 commit message, `CHANGELOG.md`'s
+     QL-041 entry, and `docs/VALIDATION.md`'s QL-041 entry each said "a
+     fifth independent review" for what QL-041 itself and the PR body
+     both correctly identify as the SIXTH review. Separately,
+     `CHANGELOG.md` and `docs/ASSESSMENT_VALIDITY.md` described the
+     chi-square p-value as "exact" and "valid at any df" without the
+     qualifications round 5 had otherwise already established elsewhere
+     in the same document — the survival function itself is exact and
+     closed-form, but this implementation only numerically evaluates it
+     in finite-precision floating-point, and this audit's `df` is always
+     a positive integer, not an arbitrary positive real.
+- **Impact:** None shipped — PR #26 remained draft/unmerged throughout;
+  found and fixed before merge.
+- **Correction (full detail in `docs/ASSESSMENT_VALIDITY.md` sections
+  4.3f, 4.6b, 4.6c):**
+  1. **`isStatisticallySignificant()` now validates its probability
+     domains.** `pValue` must be finite and within `[0,1]`; `alpha` must
+     be finite and strictly within the open interval `(0,1)` (an alpha of
+     exactly `0` or `1` is not a real significance level). Both throw a
+     descriptive `RangeError` naming the caller-facing parameter. The
+     existing strict decision rule (`pValue < alpha`) and the exact-equality
+     policy (`pValue === alpha` does not reject, established in QL-041)
+     are unchanged. The valid endpoints `pValue=0` and `pValue=1` remain
+     accepted.
+  2. **`cohensW()` now requires `N` to be a positive integer.** `chiSquare`
+     itself remains a valid finite nonnegative real number — it is a
+     statistic, not a count, and fractional values (e.g. `9.68`) are
+     normal and continue to be accepted; only `N`'s domain narrowed.
+  3. **The round-6 commit message was amended in place** (verified the
+     remote branch still pointed exactly at the expected prior head
+     before amending; changed only "fifth" to "sixth"; the amendment's
+     tree is byte-identical to the original commit's tree, confirmed via
+     `git diff --stat`, so no file content changed) and re-pushed with an
+     exact `--force-with-lease` tied to the verified prior SHA. `CHANGELOG.md`
+     and `docs/VALIDATION.md`'s QL-041 entries are corrected to "a sixth
+     independent review" in this commit. The chi-square p-value wording in
+     `CHANGELOG.md` and `docs/ASSESSMENT_VALIDITY.md` (both the section
+     4.6b prose and its summary-table row) now reads "numerically evaluated
+     chi-square upper-tail p-value through the regularized upper incomplete
+     gamma function," distinguishing the exact closed-form survival
+     function, its finite-precision numerical evaluation, the upstream
+     chi-square goodness-of-fit test's own asymptotic validity assumption,
+     and this audit's intentionally supported positive-integer `df` (not
+     claimed to extend to arbitrary non-integer `df`, even though the
+     underlying incomplete gamma function is itself well-defined there).
+     Historical round-specific text describing what a PAST round's own
+     review found (e.g. `docs/CLAUDE_HANDOFF.md`'s "a fifth independent
+     review" describing round 5/QL-040 itself, and an unrelated QL-035
+     entry from a different milestone) is left untouched — only the
+     current, misattributed claims were corrected.
+- **Tests:** `tests/assessment-cue-audit.mjs` grew from 201 to 206
+  dependency-free checks. New coverage: `isStatisticallySignificant()`
+  rejecting out-of-`[0,1]` p-values and out-of-`(0,1)` alphas (including
+  the boundary values `0` and `1` for alpha, and `NaN`/`Infinity` for
+  both parameters); confirmation the valid `pValue` endpoints `0`/`1` and
+  the existing strict/exact-equality decision policy are unaffected;
+  `cohensW()` rejecting fractional, zero, negative, `NaN`, and infinite
+  `N`; confirmation `cohensW()` still accepts every valid integer-`N`
+  fixture and a fractional `chiSquare` statistic.
+  `tests/e2e/assessment-cue-audit.spec.mjs` stays at 7 (14/14 across both
+  projects; no new browser-specific behavior this round).
+- **Mutation-tested (this round):** 4 targeted reversions against
+  `scripts/assessment-cue-audit.mjs` (never `index.html`): bypassing
+  `isStatisticallySignificant()`'s `pValue` range check; bypassing its
+  `alpha` range check; reverting its `<` back to `<=` (caught by all
+  three of the tests that specifically exercise exact equality at the
+  boundary — the round-6 boundary test, the independence test, and this
+  round's new endpoint test — no others); and removing `cohensW()`'s
+  integer-`N` requirement. Each failed exactly its intended,
+  directly-attributable test(s) and no others — no coverage gaps this
+  round. All 4 reverted to byte-identical via `diff` before committing.
+- **Mutation count, reconciled from retained evidence (not guessed):**
+  round 1 (QL-036): 8. Round 2 (QL-037): 8. Round 3 (QL-038): 4. Round 4
+  (QL-039): 7. Round 5 (QL-040): 6. Round 6 (QL-041): 12. Round 7 (this
+  entry, QL-042): 4. **Cumulative total across all seven rounds: 49.**
+- **Full local validation:** `npm test` (all suites, including the
+  `validate` structural/documentation check, `test:behavior`,
+  `test:governance`, 206 assessment-cue checks, and
+  `test:verify-deployed-revision`, all passing), `npm run
+  audit:assessment-cues -- --json` run twice with byte-identical output
+  confirmed via `diff`, the targeted `tests/e2e/assessment-cue-audit.spec.mjs`
+  Playwright suite (14/14 passing), and the complete Playwright suite run
+  at a deterministic, fixed worker count (`--workers=2`).
+- **Scope:** No question, answer, rationale, distractor feedback, domain,
+  topic, difficulty, or stable ID changed; `index.html` is unmodified. No
+  `QUESTION_GOVERNANCE` field populated; all 153 questions remain
+  `draft`. QL-033 is not marked corrected. Phase 0 stays unchecked in
+  `docs/ROADMAP.md` and Issue #24. Steps 4-9 of the Phase 0 protocol were
+  not begun. No Gate A/Gate B policy or threshold changed.
+- **Prevention:** A validation function's own NAME is a contract — a
+  function called `isStatisticallySignificant` that accepts a p-value of
+  `-0.1` or an alpha of `2` is not merely permissive, it is silently
+  wrong about a domain its own name promises to enforce; finiteness is a
+  necessary but not sufficient check whenever the value in question is
+  additionally known to be a probability. A quantity's REAL-WORLD
+  identity determines its validation contract, not merely its
+  mathematical type — `N` and `chiSquare` are both "just numbers" to the
+  type system, but `N` counts discrete authored questions and `chiSquare`
+  is a continuous statistic, so only one of them may legitimately be
+  fractional; validating them identically hides that distinction. An
+  ordinal claim ("the fifth review") is a factual claim like any other,
+  cross-checked against the surrounding document's own numbering (the QL
+  entry number, the PR body's own round count) before it is written, not
+  copied forward from the previous round's text and incremented by
+  assumption. "Exact" and "valid for any X" are absolute claims that must
+  be scoped precisely the first time and re-verified whenever a
+  downstream correction (here, round 6's own integer-`df` requirement)
+  narrows what was previously true — a claim can go stale even when
+  nothing in the sentence itself was edited.

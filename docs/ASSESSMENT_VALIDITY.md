@@ -515,7 +515,7 @@ a number CITL itself supplies — justified individually in sections 4.3,
 | Total-variation distance as the large-N distribution-wide practical measure | Yes | **No** — a reasonable alternative, but Cohen's w has an independently-sourced conventional threshold and a direct algebraic relationship to the chi-square statistic this file already computes, avoiding a second, unrelated distributional measure. See 4.3b |
 | Cohen's w as the large-N distribution-wide practical/effect-size measure | Yes | **Yes** — scale-free (unlike chi-square itself), symmetric to over- and under-representation by construction, and uses Cohen's own published "medium effect" convention (0.3), not a number tuned to this bank. See 4.3b |
 | A critical-value-table lookup reported in place of an actual chi-square p-value | Yes | **No — corrected.** A Boolean table comparison is not itself a p-value, and was limited to the table's own df range. See 4.6b |
-| Exact chi-square p-value via the regularized incomplete gamma function | Yes | **Yes** — closed-form, not an approximation beyond the chi-square test's own well-known validity assumption, and valid at any df, not only the previously tabulated range. See 4.6b |
+| A numerically evaluated chi-square upper-tail p-value via the regularized incomplete gamma function | Yes | **Yes** — the survival function itself is closed-form and exact; this implementation numerically evaluates it in finite-precision floating-point, not claimed to carry zero error, and not an approximation beyond the upstream chi-square goodness-of-fit test's own well-known validity assumption. Not limited to the previously tabulated df range, but restricted to the positive-integer `df` this audit actually uses, not arbitrary non-integer `df`. See 4.6b |
 | Two separately written `pValue < SIGNIFICANCE_ALPHA` comparisons (position balance, length association) | Yes | **No — corrected (round 6).** Identical in effect but two separate expressions that could silently diverge under a future edit to only one. See 4.6c |
 | A single shared `isStatisticallySignificant(pValue, alpha)` comparator, strict `<` | Yes | **Yes** — the SINGLE production comparison path both functions call; `pValue === alpha` does not reject, tested directly with explicit p-values, not only statistic-derived fixtures. See 4.6c |
 | An unnormalized illustrative distribution to justify the w=0.30 threshold | Yes | **No — corrected.** `[0.40,0.25,0.25,0.25]` sums to 1.15, not a valid distribution; the claimed algebraic equivalence to the prior margin rule was false. See 4.3b |
@@ -526,6 +526,9 @@ a number CITL itself supplies — justified individually in sections 4.3,
 | One reusable validation function per input shape, rejecting malformed input with a descriptive error | Yes | **Yes** — the same discipline `assertValidQuestionShape()` already applies to question objects, applied consistently to every aggregate/probability entry point. See 4.3c |
 | Sign-only domain checks (`<= 0`/`< 0`) as a complete numeric-input guard | Yes | **No — corrected (round 6).** Silently `false` for `NaN` and does not exclude `Infinity`; `chiSquareUpperTailPValue(NaN, 3)`, `cohensW(1, Infinity)`, and others returned a silently wrong number instead of throwing. See 4.3f |
 | A shared `assertFiniteNumber()` guard plus cross-field consistency checks for length-association items | Yes | **Yes** — every numeric argument to `chiSquareUpperTailPValue()`/`cohensW()`/`upperRegularizedIncompleteGamma()` must be finite (`df` additionally an integer), `assertValidObservedIndex()` validates `N` as well as `observed`, and `assertValidLengthAssociationItem()` rejects the two internally-impossible `nullProbabilityCorrectAtMax` cases. See 4.3f |
+| Finiteness alone as `cohensW()`'s complete `N` contract | Yes | **No — corrected (round 7).** `N` is this audit's authored-question count, the same quantity `assertValidPositionCounts()` already requires to be a positive integer; `cohensW(1, 2.5)` silently computed a number instead of throwing. See 4.3f |
+| Finiteness alone as `isStatisticallySignificant()`'s complete pValue/alpha contract | Yes | **No — corrected (round 7).** `isStatisticallySignificant(-0.1, 0.01)` returned `true` and `isStatisticallySignificant(0.01, 2)` returned `true` — neither a real p-value nor a real significance level. See 4.6c |
+| `pValue` required in `[0,1]`, `alpha` required strictly within `(0,1)`, strict `<` and `pValue === alpha` policy unchanged | Yes | **Yes** — both throw a descriptive error naming the caller-facing parameter; the valid endpoints `pValue=0`/`pValue=1` remain accepted. See 4.6c |
 
 ### 4.3 Adopted rules — position balance (corrected: a two-regime model with one shared threshold)
 
@@ -1047,6 +1050,20 @@ continuing to accept the valid degenerate all-tied case
 without throwing — this correction rejects only genuinely impossible
 input, and changes no normal live-bank result.
 
+**Counterexample reproduced (round 7 — `cohensW()`'s own `N` check was
+still incomplete):** `cohensW()`'s finiteness/positivity check above
+still accepted a fractional `N`. Confirmed directly: `cohensW(1, 2.5)`
+silently computed `0.6324555320336759` instead of throwing. `N` in this
+audit is always the number of authored questions in scope — the same
+quantity `assertValidPositionCounts()` already requires to be a positive
+integer (section 4.3c) — so a fractional `N` can only mean a caller bug,
+exactly the reasoning `chiSquareUpperTailPValue()`'s own integer-`df`
+requirement above already applies to a different parameter.
+`cohensW()` now additionally requires `N` to be an integer. `chiSquare`
+itself is unaffected by this correction — it is a real-valued statistic,
+not a count, and fractional values (e.g. `9.68`) remain valid and
+continue to be accepted.
+
 ### 4.4 Length association (corrected — tie-aware, not a flat 1/n on the uniquely-longest rate alone)
 
 **Counterexample reproduced (the evasion the prior design missed):**
@@ -1312,15 +1329,28 @@ Poisson-binomial test already computed and reported a genuine p-value
 round-3 correction's own stated intent to "report the statistical result
 and p-value separately."
 
-**Correction:** `chiSquareUpperTailPValue(chiSquareStat, df)` computes the
-upper-tail chi-square p-value, `P(X >= chiSquareStat)`, via the closed-form
-relationship between the chi-square survival function and the regularized
-upper incomplete gamma function, `Q(df/2, chiSquareStat/2)`. Implemented
-as a standard series-and-continued-fraction evaluation of the incomplete
-gamma function — `upperRegularizedIncompleteGamma(a, x)`, exported and
+**Correction:** `chiSquareUpperTailPValue(chiSquareStat, df)` numerically
+evaluates the upper-tail chi-square p-value, `P(X >= chiSquareStat)`,
+through the closed-form relationship between the chi-square survival
+function and the regularized upper incomplete gamma function,
+`Q(df/2, chiSquareStat/2)`. Implemented as a standard
+series-and-continued-fraction evaluation of the incomplete gamma
+function — `upperRegularizedIncompleteGamma(a, x)`, exported and
 independently usable. Not limited to any small, tabulated df range (the
-retired critical-value table stopped at df=7, i.e. 8-option items); valid
-for any positive df.
+retired critical-value table stopped at df=7, i.e. 8-option items).
+
+**Supported degrees of freedom, stated precisely (round 7 — an earlier
+version of this sentence overstated the domain as "valid for any positive
+df"):** `df` in this audit is always `optionCount - 1`, so it is always a
+positive integer in real use, and `chiSquareUpperTailPValue()` now
+requires `df` to be a positive integer, rejecting a fractional value
+rather than silently computing one (confirmed before this fix:
+`chiSquareUpperTailPValue(5, 2.5)` silently computed `0.12308857115265875`
+instead of throwing — see 4.3f). The underlying regularized incomplete
+gamma function is mathematically well-defined for non-integer `a`
+(equivalently, non-integer `df`) as well, but this audit does not exercise
+or claim to validate that broader domain — only the positive-integer `df`
+this audit actually uses.
 
 **Terminology, corrected precisely (round 5 — two distinct approximation
 questions, previously conflated by calling the result "EXACT" without
@@ -1449,6 +1479,29 @@ misleadingly-named "at the boundary" test is retitled and reduced to its
 two genuinely below/above fixtures; the exact-equality case is covered
 only by the new, explicit-p-value test above, which is what an exact
 boundary claim actually requires.
+
+**Counterexample reproduced (round 7 — `isStatisticallySignificant()`
+validated only finiteness, not the probability domains its own name
+implies):** confirmed directly: `isStatisticallySignificant(-0.1, 0.01)`
+returned `true`; `isStatisticallySignificant(1.1, 0.01)` returned `false`
+instead of rejecting the malformed p-value; `isStatisticallySignificant(0.01,
+-0.5)` returned `false`; `isStatisticallySignificant(0.01, 2)` returned
+`true` — none of `-0.1`, `1.1`, `-0.5`, or `2` describe a real probability
+or a real significance level, yet the function silently returned a
+Boolean for each.
+
+**Correction:** `isStatisticallySignificant()` now additionally requires
+`pValue` to lie within the closed interval `[0,1]` (a p-value is a
+probability; `0` and `1` are themselves valid, maximally
+significant/non-significant endpoints and remain accepted) and `alpha`
+to lie strictly within the open interval `(0,1)` (an alpha of exactly `0`
+would never reject any p-value, and an alpha of exactly `1` would always
+reject any p-value less than 1 — neither is a real significance level).
+Both throw a descriptive `RangeError` naming the caller-facing parameter.
+The existing strict decision rule (`pValue < alpha`) and the exact-equality
+policy established above (`pValue === alpha` does not reject) are
+unchanged by this correction — verified directly with the same explicit
+boundary values this section's earlier test already exercises.
 
 ### 4.7 Current result: the bank fails Gate A
 

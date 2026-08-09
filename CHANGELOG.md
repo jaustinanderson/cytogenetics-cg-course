@@ -110,9 +110,10 @@ All notable repository changes are recorded here.
   balanced N=20 distribution still passes and the N=19/20/21 regime
   boundary behaves consistently. Position balance was found to report
   only a chi-square statistic and a critical-value-table Boolean, never
-  an actual p-value — corrected with an exact chi-square p-value via the
-  regularized incomplete gamma function, verified against published
-  critical-value tables at α=0.01 and α=0.05. `compareToIdManifest()`'s
+  an actual p-value — corrected with a numerically evaluated chi-square
+  upper-tail p-value through the regularized upper incomplete gamma
+  function, verified against published critical-value tables at α=0.01
+  and α=0.05. `compareToIdManifest()`'s
   own comment was found to claim it detected id reordering, directly
   contradicted by its own next clause explaining the digest is
   order-independent by construction — corrected, and a genuinely
@@ -175,7 +176,7 @@ All notable repository changes are recorded here.
   bank and every form, still QL-033 not marked corrected. See
   `docs/QUALITY_LOG.md` QL-040 and `docs/ASSESSMENT_VALIDITY.md` for the
   full record.
-  **Corrected (QL-041):** a fifth independent review found Cohen's own
+  **Corrected (QL-041):** a sixth independent review found Cohen's own
   printed "concentrated" m=4 example (`.380+.207+.207+.207 = 1.001`) was
   mislabeled "genuinely normalized" -- now split into `h1Published`
   (verbatim, never claimed to sum to exactly 1) and a separately,
@@ -218,6 +219,43 @@ All notable repository changes are recorded here.
   correctly fails the bank and
   every form, still QL-033 not marked corrected. See
   `docs/QUALITY_LOG.md` QL-041 and `docs/ASSESSMENT_VALIDITY.md` for the
+  full record.
+  **Corrected (QL-042):** a seventh independent review found
+  `isStatisticallySignificant()` validated only finiteness, not the
+  probability domains its own name implies --
+  `isStatisticallySignificant(-0.1, 0.01)` returned `true` and
+  `isStatisticallySignificant(0.01, 2)` returned `true`, neither a real
+  p-value nor a real significance level. `pValue` now must be finite and
+  within `[0,1]`; `alpha` must be finite and strictly within the open
+  interval `(0,1)`; both throw a descriptive error naming the
+  caller-facing parameter, with the existing strict `<` rule and
+  `pValue === alpha` exact-equality policy unchanged. `cohensW()`'s
+  round-6 check still accepted a fractional `N` --
+  `cohensW(1, 2.5)` silently computed `0.6324555320336759` instead of
+  throwing, even though `N` is this audit's authored-question count, the
+  same quantity `assertValidPositionCounts()` already requires to be a
+  positive integer -- now corrected, while `chiSquare` itself (a
+  statistic, not a count) continues to accept fractional values. The
+  round-6 commit message, this file's own QL-041 entry, and
+  `docs/VALIDATION.md`'s QL-041 entry each said "a fifth independent
+  review" for what was actually the sixth -- the commit message was
+  amended in place (tree byte-identical, re-pushed with an exact
+  `--force-with-lease`) and the two docs corrected above/below. The
+  chi-square p-value was described as "exact chi-square p-value" and
+  "valid at any df" without qualification -- corrected to "numerically
+  evaluated chi-square upper-tail p-value through the regularized upper
+  incomplete gamma function," distinguishing the exact closed-form
+  survival function from its finite-precision evaluation, the upstream
+  asymptotic goodness-of-fit approximation, and this audit's
+  intentionally supported positive-integer `df`. Mutation count
+  reconciled across all seven rounds: 8+8+4+7+6+12+4 = **49**, with no
+  coverage gaps in round 7's own 4 mutations.
+  `tests/assessment-cue-audit.mjs` grew from 201 to 206 dependency-free
+  checks; `tests/e2e/assessment-cue-audit.spec.mjs` stayed at 7 (14/14
+  across both projects). Still no question content changed, still Gate A
+  correctly fails the bank and every form, still QL-033 not marked
+  corrected. No Gate A/Gate B policy or threshold changed. See
+  `docs/QUALITY_LOG.md` QL-042 and `docs/ASSESSMENT_VALIDITY.md` for the
   full record.
 - Added `docs/LEARNING_PLATFORM_ROADMAP.md`, a durable planning document
   (Issue #24, carried by PR #25): a long-term roadmap toward a

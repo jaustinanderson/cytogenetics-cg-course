@@ -674,6 +674,17 @@ export function chiSquareUpperTailPValue(chiSquareStat, df) {
 export function isStatisticallySignificant(pValue, alpha) {
   assertFiniteNumber(pValue, "isStatisticallySignificant: pValue");
   assertFiniteNumber(alpha, "isStatisticallySignificant: alpha");
+  // CORRECTED (round 7 -- a probability outside [0,1], or a significance
+  // level outside the open interval (0,1), cannot correspond to any real
+  // p-value/alpha -- finiteness alone let isStatisticallySignificant(-0.1,
+  // 0.01) return true and isStatisticallySignificant(0.01, 2) return true,
+  // both confirmed before this fix.
+  if (pValue < 0 || pValue > 1) {
+    throw new RangeError(`isStatisticallySignificant: pValue must be a finite number in [0,1] (got ${pValue})`);
+  }
+  if (alpha <= 0 || alpha >= 1) {
+    throw new RangeError(`isStatisticallySignificant: alpha must be a finite number strictly within (0,1) (got ${alpha})`);
+  }
   return pValue < alpha;
 }
 
@@ -816,6 +827,13 @@ export function cohensW(chiSquare, N) {
   assertFiniteNumber(chiSquare, "cohensW: chiSquare");
   assertFiniteNumber(N, "cohensW: N");
   if (N <= 0) { throw new RangeError("cohensW: N must be positive"); }
+  // CORRECTED (round 7): N is this audit's authored-question count, the
+  // same quantity assertValidPositionCounts() already requires to be a
+  // positive integer -- a fractional N is impossible for a real bank.
+  // Confirmed before this fix: cohensW(1, 2.5) silently computed
+  // 0.6324555320336759 instead of throwing. chiSquare itself remains a
+  // valid finite nonnegative real number (not necessarily an integer).
+  if (!Number.isInteger(N)) { throw new RangeError(`cohensW: N must be an integer (got ${N}) -- this audit's N is always an authored-question count`); }
   if (chiSquare < 0) { throw new RangeError("cohensW: chiSquare must be non-negative"); }
   return Math.sqrt(chiSquare / N);
 }

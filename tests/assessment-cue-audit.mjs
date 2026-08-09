@@ -1293,6 +1293,37 @@ test("counterexample (issue 3, round 6) resolved: evaluatePositionBalance() and 
   assert.equal(length.detail.statisticalResult === "rejects-null", isStatisticallySignificant(length.detail.pValue, SIGNIFICANCE_ALPHA));
 });
 
+// ---------------------------------------------------------------------------
+// 20. isStatisticallySignificant() validates its probability domains
+//     (issue 1, round 7). Finiteness alone accepted impossible p-values
+//     and alpha levels.
+// ---------------------------------------------------------------------------
+
+test("counterexample (issue 1, round 7) resolved: isStatisticallySignificant() rejects an out-of-[0,1] pValue instead of silently comparing it -- confirmed before this fix: isStatisticallySignificant(-0.1, 0.01) returned true, isStatisticallySignificant(1.1, 0.01) returned false, neither describing a real p-value", () => {
+  assert.throws(() => isStatisticallySignificant(-0.1, 0.01), RangeError);
+  assert.throws(() => isStatisticallySignificant(1.1, 0.01), RangeError);
+  assert.throws(() => isStatisticallySignificant(NaN, 0.01), RangeError);
+  assert.throws(() => isStatisticallySignificant(Infinity, 0.01), RangeError);
+  assert.throws(() => isStatisticallySignificant(-Infinity, 0.01), RangeError);
+});
+
+test("counterexample (issue 1, round 7) resolved: isStatisticallySignificant() rejects an alpha outside the open interval (0,1) instead of silently comparing it -- confirmed before this fix: isStatisticallySignificant(0.01, -0.5) returned false and isStatisticallySignificant(0.01, 2) returned true, neither describing a real significance level", () => {
+  assert.throws(() => isStatisticallySignificant(0.01, -0.5), RangeError);
+  assert.throws(() => isStatisticallySignificant(0.01, 2), RangeError);
+  assert.throws(() => isStatisticallySignificant(0.01, 0), RangeError, "alpha=0 would never reject any pValue -- not a real significance level");
+  assert.throws(() => isStatisticallySignificant(0.01, 1), RangeError, "alpha=1 would always reject any pValue < 1 -- not a real significance level");
+  assert.throws(() => isStatisticallySignificant(0.01, NaN), RangeError);
+  assert.throws(() => isStatisticallySignificant(0.01, Infinity), RangeError);
+});
+
+test("isStatisticallySignificant() accepts the valid pValue endpoints 0 and 1, and preserves the strict decision rule and exact-equality policy unchanged by the new range checks", () => {
+  assert.equal(isStatisticallySignificant(0, 0.01), true, "pValue=0 is a valid, maximally significant p-value");
+  assert.equal(isStatisticallySignificant(1, 0.01), false, "pValue=1 is a valid, maximally non-significant p-value");
+  assert.equal(isStatisticallySignificant(0.009, 0.01), true, "still strict < below alpha");
+  assert.equal(isStatisticallySignificant(0.01, 0.01), false, "p === alpha must still NOT reject -- the round-6 exact-equality policy is unaffected by this round's added range checks");
+  assert.equal(isStatisticallySignificant(0.011, 0.01), false, "still strict < above alpha");
+});
+
 test("position balance no longer reports maxProportion as a top-level decision field -- the practical decision is Cohen's w; per-position shares are in positionDeviations", () => {
   const result = evaluatePositionBalance({ optionCount: 4, total: 20, positionCounts: [7, 7, 6, 0] });
   assert.equal("maxProportion" in result.detail, false);
@@ -1829,6 +1860,22 @@ test("counterexample (issue 4, round 6) resolved: cohensW rejects NaN/Infinity c
   assert.throws(() => cohensW(NaN, 100), RangeError, "confirmed before this fix: silently returned NaN");
   assert.throws(() => cohensW(1, Infinity), RangeError, "confirmed before this fix: silently returned 0 -- sqrt(1/Infinity), a misleadingly finite, plausible-looking result for an impossible input");
   assert.throws(() => cohensW(Infinity, 100), RangeError);
+});
+
+test("counterexample (issue 2, round 7) resolved: cohensW requires N (this audit's authored-question count) to be a positive integer, rejecting fractional N -- confirmed before this fix: cohensW(1, 2.5) silently computed 0.6324555320336759 instead of throwing, inconsistent with assertValidPositionCounts()'s own integer-N requirement", () => {
+  assert.throws(() => cohensW(1, 2.5), RangeError);
+  assert.throws(() => cohensW(9.68, 100.5), RangeError);
+  assert.throws(() => cohensW(1, 0), RangeError);
+  assert.throws(() => cohensW(1, -5), RangeError);
+  assert.throws(() => cohensW(1, NaN), RangeError);
+  assert.throws(() => cohensW(1, Infinity), RangeError);
+});
+
+test("cohensW still accepts every valid integer-N fixture, and preserves a fractional (non-integer) chiSquare statistic -- N and chiSquare have genuinely different domains, and this round's correction only narrows N's", () => {
+  assert.doesNotThrow(() => cohensW(9.68, 100));
+  assert.doesNotThrow(() => cohensW(0, 20));
+  assert.doesNotThrow(() => cohensW(3.14159, 25), "chiSquare is a real-valued statistic -- fractional values are normal and must remain accepted");
+  assert.ok(Math.abs(cohensW(9.68, 100) - 0.3111269837220809) < 1e-9);
 });
 
 test("counterexample (issue 4, round 6) resolved: assertValidObservedIndex rejects a NaN/non-finite/non-integer N, not just a malformed observed -- confirmed before this fix: assertValidObservedIndex(1, NaN) silently returned instead of throwing, since every comparison against NaN is false", () => {

@@ -3261,7 +3261,7 @@ QL-040 and `docs/ASSESSMENT_VALIDITY.md` for the full record.
 
 ### Correction — Cohen's published vector was mislabeled "genuinely normalized"; `primaryContributors` stopped at exactly 50%, not a majority; a p-value boundary test claimed "at" alpha for a fixture that was below it; a self-referential p-value provenance claim survived unfixed from round 5; several impossible inputs still reached public helpers, added 2026-08-08
 
-A fifth independent review, before merge, found four narrow
+A sixth independent review, before merge, found four narrow
 truthfulness/validation gaps. **(1)** Cohen's own printed "concentrated"
 m=4 example (`.380+.207+.207+.207 = 1.001`, not 1 — ordinary 3-decimal
 publication rounding) was called "genuinely normalized." Split into
@@ -3350,6 +3350,91 @@ No `QUESTION_GOVERNANCE` field populated; all 153 questions remain
 `draft`. QL-033 is not marked corrected. Gate A still correctly fails the
 whole bank and every one of its 17 forms. See `docs/QUALITY_LOG.md`
 QL-041 and `docs/ASSESSMENT_VALIDITY.md` for the full record.
+
+### Correction — `isStatisticallySignificant()` accepted impossible probability/alpha inputs; `cohensW()` still accepted a fractional N; the round-6 commit message and two docs miscounted the review as "fifth"; the chi-square p-value's exactness and df-generality claims were overstated, added 2026-08-09
+
+A seventh independent review, before merge, found three narrow gaps.
+**(1)** `isStatisticallySignificant()` validated only finiteness, not the
+probability domains its own name implies. Confirmed directly:
+`isStatisticallySignificant(-0.1, 0.01)` returned `true`;
+`isStatisticallySignificant(1.1, 0.01)` returned `false` instead of
+rejecting the malformed p-value; `isStatisticallySignificant(0.01, -0.5)`
+returned `false`; `isStatisticallySignificant(0.01, 2)` returned `true` —
+none describe a real p-value or significance level. `pValue` now must be
+finite and within `[0,1]`; `alpha` must be finite and strictly within the
+open interval `(0,1)`; both throw a descriptive `RangeError` naming the
+caller-facing parameter. The existing strict decision rule
+(`pValue < alpha`) and the exact-equality policy (`pValue === alpha` does
+not reject, established round 6) are unchanged; the valid endpoints
+`pValue=0`/`pValue=1` remain accepted. **(2)** `cohensW()`'s round-6
+finiteness/positivity check for `N` still accepted a fractional value.
+Confirmed directly: `cohensW(1, 2.5)` silently computed
+`0.6324555320336759` instead of throwing, even though `N` is this
+audit's authored-question count — the same quantity
+`assertValidPositionCounts()` already requires to be a positive integer.
+`cohensW()` now additionally requires `N` to be an integer; `chiSquare`
+itself (a statistic, not a count) continues to accept fractional values.
+**(3)** The round-6 commit message, `CHANGELOG.md`'s QL-041 entry, and
+this file's own QL-041 entry each said "a fifth independent review" for
+what QL-041 itself and the PR body both correctly identify as the sixth
+— corrected in all three locations (the commit message amended in place,
+verified the remote branch still pointed exactly at the expected prior
+head before amending, tree byte-identical to the original commit
+confirmed via `git diff --stat`, re-pushed with an exact
+`--force-with-lease` tied to the verified prior SHA). Separately,
+`CHANGELOG.md` and `docs/ASSESSMENT_VALIDITY.md` described the chi-square
+p-value as "exact" and "valid at any df" without qualification — now
+reads "numerically evaluated chi-square upper-tail p-value through the
+regularized upper incomplete gamma function," distinguishing the exact
+closed-form survival function, its finite-precision numerical evaluation,
+the upstream chi-square goodness-of-fit test's own asymptotic validity
+assumption, and this audit's intentionally supported positive-integer
+`df` (not claimed to extend to arbitrary non-integer `df`, even though
+the underlying incomplete gamma function is itself well-defined there).
+Historical round-specific text describing what a PAST round's own review
+found (round 5's own "fifth independent review" language in
+`docs/CLAUDE_HANDOFF.md`, and an unrelated QL-035 entry from a different
+milestone) is left untouched — only the current, misattributed claims
+were corrected.
+
+**Tests:** `tests/assessment-cue-audit.mjs` grew from 201 to 206
+dependency-free checks. `tests/e2e/assessment-cue-audit.spec.mjs` stays
+at 7 (14/14 across both projects; no new browser-specific behavior this
+round).
+
+**Mutation-tested (round 7):** 4 targeted, temporary, fully reverted
+reversions against `scripts/assessment-cue-audit.mjs` (never
+`index.html`): bypassing `isStatisticallySignificant()`'s `pValue` range
+check; bypassing its `alpha` range check; reverting its `<` back to `<=`
+(caught by all three tests specifically exercising exact equality at the
+boundary — the round-6 boundary test, the independence test, and this
+round's new endpoint test — and no others); and removing `cohensW()`'s
+integer-`N` requirement. Each failed exactly its intended,
+directly-attributable test(s) and no others — no coverage gaps this
+round. All 4 reverted to byte-identical via `diff` before committing.
+
+**Mutation count, reconciled from retained evidence:** round 1 (QL-036):
+8. Round 2 (QL-037): 8. Round 3 (QL-038): 4. Round 4 (QL-039): 7. Round 5
+(QL-040): 6. Round 6 (QL-041): 12. Round 7 (QL-042, this entry): 4.
+**Cumulative total: 49.**
+
+**Full local validation:** `npm test` (172 dependency-free DOM-behavior
+checks + 70 governance checks + **206 assessment-cue checks** + 5
+deployed-revision checks, all passing, including the `validate`
+structural/documentation check), `npm run audit:assessment-cues -- --json`
+run twice in immediate succession (byte-identical via `diff`), the
+targeted `tests/e2e/assessment-cue-audit.spec.mjs` suite (14/14 passing),
+and the complete `npx playwright test` suite run at a deterministic,
+fixed worker count (`--workers=2`) — **252 passed, 6 skipped, 0 failed**,
+a fully clean complete-suite result, matching rounds 5 and 6.
+
+No question, answer, rationale, distractor feedback, domain, topic,
+difficulty, or stable ID changed. `index.html` is byte-for-byte unchanged.
+No `QUESTION_GOVERNANCE` field populated; all 153 questions remain
+`draft`. QL-033 is not marked corrected. No Gate A/Gate B policy or
+threshold changed. Gate A still correctly fails the whole bank and every
+one of its 17 forms. See `docs/QUALITY_LOG.md` QL-042 and
+`docs/ASSESSMENT_VALIDITY.md` for the full record.
 
 ## Gates still open
 

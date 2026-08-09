@@ -2066,6 +2066,38 @@ worker count (`--workers=2`) produced another fully clean result: 252
 passed, 6 skipped, 0 failed. See `docs/QUALITY_LOG.md` QL-041 for the
 full record.
 
+**A seventh independent review (same PR, before merge) found
+`isStatisticallySignificant()` validated only finiteness, not the
+probability domains its own name implies; `cohensW()`'s round-6
+finiteness/positivity check for `N` still accepted a fractional value;
+and a miscounted review ordinal plus an overstated numerical-domain claim
+survived round 6.** `isStatisticallySignificant(-0.1, 0.01)` returned
+`true` and `isStatisticallySignificant(0.01, 2)` returned `true` --
+neither a real p-value nor a real significance level. `pValue` now must
+be finite and within `[0,1]`; `alpha` must be finite and strictly within
+the open interval `(0,1)`; both throw a descriptive error naming the
+caller-facing parameter, with the existing strict `<` rule and
+`pValue === alpha` exact-equality policy unchanged. `cohensW(1, 2.5)`
+silently computed `0.6324555320336759` instead of throwing -- `N` (this
+audit's authored-question count) now must be a positive integer, while
+`chiSquare` itself (a statistic, not a count) continues to accept
+fractional values. The round-6 commit message, `CHANGELOG.md`, and
+`docs/VALIDATION.md` each said "a fifth independent review" for what was
+actually the sixth -- the commit message was amended in place (tree
+byte-identical, verified via `git diff --stat`, re-pushed with an exact
+`--force-with-lease`) and the two docs corrected. The chi-square p-value
+was described as "exact" and "valid at any df" without qualification --
+now reads "numerically evaluated... through the regularized upper
+incomplete gamma function," distinguishing the exact closed-form survival
+function from its finite-precision evaluation, the upstream asymptotic
+goodness-of-fit approximation, and this audit's intentionally supported
+positive-integer `df`. Mutation count reconciled across all seven rounds:
+8+8+4+7+6+12+4 = **49**, with no coverage gaps in round 7's own 4
+mutations. A complete `npx playwright test` run at a deterministic fixed
+worker count (`--workers=2`) produced another fully clean result: 252
+passed, 6 skipped, 0 failed. See `docs/QUALITY_LOG.md` QL-042 for the
+full record.
+
 **Nothing here is a correction to product code or scientific content.**
 `index.html` is unmodified; no question, answer, rationale, distractor
 feedback, domain, topic, difficulty, or stable ID changed; no
