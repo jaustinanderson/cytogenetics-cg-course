@@ -21,7 +21,7 @@
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync, copyFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, appendFileSync, mkdirSync, rmSync, copyFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -419,6 +419,199 @@ function runScannerAgainstRealRepo() {
     };
   }
 }
+
+// ---------------------------------------------------------------------------
+// 16. Independent-review correction (round 8): the scanner no longer
+//     exempts its own tracked source. Finding 1 -- `path == SELF`
+//     previously skipped scripts/check_public_safety.py entirely, so a
+//     sensitive value added directly to the scanner's own file was never
+//     detected, contradicting the module's own docstring and every
+//     "tracked UTF-8 text is scanned" claim.
+// ---------------------------------------------------------------------------
+
+test("counterexample (finding 1, round 8) resolved: a runtime-constructed sensitive value placed in a temporary copy of the scanner's OWN source is rejected, not silently exempted", () => {
+  const dir = makeFixtureRepo();
+  const email = fake.personalEmail("gmail.com");
+  const scannerPath = path.join(dir, "scripts", "check_public_safety.py");
+  appendFileSync(scannerPath, `\n# regression-test poison line: ${email}\n`, "utf8");
+  commit(dir, "poison the scanner's own tracked source");
+  const result = runScanner(dir);
+  assert.notEqual(result.code, 0, "a sensitive value in the scanner's own source must be rejected, not exempted");
+  assert.ok(result.stderr.includes("check_public_safety.py"), "the finding must name the scanner's own file");
+  assert.ok(result.stderr.includes("personal-email"));
+  assert.ok(!result.stderr.includes(email), "must not print the matched address");
+});
+
+test("mutation guard (finding 1, round 8): reintroducing the old 'path == SELF' exemption causes the SAME poisoned scanner source to be silently missed -- proving the regression test above is not vacuous", () => {
+  const dir = makeFixtureRepo();
+  const scannerPath = path.join(dir, "scripts", "check_public_safety.py");
+  const fixedSource = readFileSync(scannerPath, "utf8");
+  assert.ok(
+    !fixedSource.includes("if path == SELF or not path.is_file()"),
+    "the fixed scanner must not already contain the old self-exemption's actual code line",
+  );
+
+  const mutatedSource = fixedSource
+    .replace(
+      "ROOT = Path(__file__).resolve().parents[1]",
+      "ROOT = Path(__file__).resolve().parents[1]\nSELF = Path(__file__).resolve()",
+    )
+    .replace(
+      "if not path.is_file() or path.stat().st_size > MAX_TEXT_BYTES:",
+      "if path == SELF or not path.is_file() or path.stat().st_size > MAX_TEXT_BYTES:",
+    );
+  assert.notEqual(mutatedSource, fixedSource, "the mutation must actually change the source");
+  writeFileSync(scannerPath, mutatedSource, "utf8");
+
+  const email = fake.personalEmail("gmail.com");
+  appendFileSync(scannerPath, `\n# regression-test poison line: ${email}\n`, "utf8");
+  commit(dir, "poison the mutated scanner's own source");
+  const result = runScanner(dir);
+  assert.equal(result.code, 0, "the reintroduced self-exemption must cause a false pass -- exactly the counterexample this correction fixes");
+});
+
+// ---------------------------------------------------------------------------
+// 17. Independent-review correction (round 8): validated, fail-closed
+//     PR/push commit-range resolution. Finding 2 -- the workflow's old
+//     fallback (`HEAD^..HEAD`) silently narrowed a multi-commit range to
+//     only the newest commit whenever the base could not be resolved.
+//     `resolve_commit_range()` (exercised here via the scanner's
+//     `--base`/`--head` CLI, the SAME interface the workflow now calls)
+//     replaces that with explicit validation and a fail-closed policy.
+// ---------------------------------------------------------------------------
+
+function makeMultiCommitFixture() {
+  const dir = makeFixtureRepo();
+  const base = commit(dir, "base");
+  const email = fake.personalEmail("yahoo.com");
+  writeTrackedFile(dir, "mid.txt", "intermediate\n");
+  const mid = commit(dir, "intermediate commit with a personal author email", {
+    authorEmail: email,
+    authorName: "Someone",
+  });
+  writeTrackedFile(dir, "final.txt", "final\n");
+  const head = commit(dir, "final clean commit");
+  return { dir, base, mid, head, email };
+}
+
+function runScannerArgs(dir, args) {
+  return runScanner(dir, args);
+}
+
+test("counterexample (finding 2, round 8) resolved: a normal PR/push range (valid, immediately resolvable base) scans EVERY introduced commit, catching a personal email in an EARLIER commit the old single-parent fallback would have missed", () => {
+  const { dir, base, head, email } = makeMultiCommitFixture();
+  const result = runScannerArgs(dir, ["--base", base, "--head", head]);
+  assert.notEqual(result.code, 0);
+  assert.ok(result.stderr.includes("personal-author-email"));
+  assert.ok(!result.stderr.includes(email));
+});
+
+test("counterexample (finding 2, round 8) reproduced: the FORMER 'HEAD^..HEAD' single-parent fallback, applied to the SAME fixture, misses the earlier commit entirely -- this is the exact defect the correction removes", () => {
+  const { dir, head } = makeMultiCommitFixture();
+  const formerFallbackRange = `${head}^..${head}`;
+  const result = runScannerArgs(dir, ["--commit-range", formerFallbackRange]);
+  assert.equal(result.code, 0, "the old single-parent fallback silently misses the earlier commit -- confirmed reproduced");
+});
+
+test("an unavailable nonzero base (on a later/divergent part of main not covered by a branch-scoped checkout, e.g. after the PR base moved) is fetched on demand and the full range is still scanned correctly", () => {
+  // Models a realistic "base not initially present" shape: a feature
+  // branch forked from an early main commit, then main advanced with a
+  // LATER commit that becomes the PR's actual base by the time CI runs.
+  // A checkout scoped to only the feature branch's own ref chain would
+  // never have fetched that later main commit.
+  const fullDir = mkdtempSync(path.join(tmpdir(), "public-safety-fixture-full-"));
+  scratchDirs.push(fullDir);
+  git(fullDir, ["init", "--quiet", "-b", "main"]);
+  git(fullDir, ["config", "user.name", "Fixture Author"]);
+  git(fullDir, ["config", "user.email", "fixture-author@example.invalid"]);
+  writeTrackedFile(fullDir, "genesis.txt", "genesis\n");
+  commit(fullDir, "genesis");
+  git(fullDir, ["checkout", "--quiet", "-b", "feature"]);
+  const email = fake.personalEmail("outlook.com");
+  writeTrackedFile(fullDir, "mid.txt", "intermediate\n");
+  commit(fullDir, "intermediate commit with a personal author email", { authorEmail: email, authorName: "Someone" });
+  writeTrackedFile(fullDir, "final.txt", "final\n");
+  const head = commit(fullDir, "final clean commit");
+  git(fullDir, ["checkout", "--quiet", "main"]);
+  writeTrackedFile(fullDir, "later.txt", "later main commit\n");
+  const base = commit(fullDir, "later main commit -- the actual PR base by the time CI runs");
+
+  const partialDir = mkdtempSync(path.join(tmpdir(), "public-safety-fixture-partial-"));
+  scratchDirs.push(partialDir);
+  rmSync(partialDir, { recursive: true, force: true }); // git clone requires a non-existent (or empty) target
+  execFileSync(
+    "git",
+    ["clone", "--quiet", "--no-tags", "--single-branch", "--branch", "feature", `file://${fullDir}`, partialDir],
+    { encoding: "utf8" },
+  );
+  mkdirSync(path.join(partialDir, "scripts"), { recursive: true });
+  copyFileSync(SCANNER_SOURCE, path.join(partialDir, "scripts", "check_public_safety.py"));
+
+  // Confirm the branch-scoped clone genuinely does not have the base commit yet.
+  assert.throws(() => git(partialDir, ["cat-file", "-e", `${base}^{commit}`], { stdio: ["ignore", "ignore", "ignore"] }));
+
+  const result = runScannerArgs(partialDir, ["--base", base, "--head", head]);
+  assert.notEqual(result.code, 0, "expected the fetched-then-scanned full range to catch the earlier commit");
+  assert.ok(result.stderr.includes("personal-author-email"));
+  assert.ok(!result.stderr.includes(email));
+});
+
+test("counterexample (finding 2, round 8) resolved: a nonzero base that CANNOT be resolved even after a targeted fetch attempt fails nonzero -- it never silently narrows to a single-commit scan", () => {
+  const { dir, head } = makeMultiCommitFixture();
+  const unresolvableBase = "0123456789abcdef0123456789abcdef01234567"; // well-formed, but not a real commit anywhere
+  const result = runScannerArgs(dir, ["--base", unresolvableBase, "--head", head]);
+  assert.notEqual(result.code, 0, "an unresolvable nonzero base must fail, not silently scan only the newest commit");
+  assert.ok(!result.stdout.includes("passed"));
+  assert.ok(!result.stderr.includes(unresolvableBase.slice(0, 12)) || result.stderr.includes("could not be resolved"), "the error must describe resolution failure, not a finding");
+});
+
+test("counterexample (finding 2, round 8) resolved: a genuine all-zeros base (branch-creation push) scans every commit reachable from head, per the documented policy", () => {
+  const dir = makeFixtureRepo();
+  const email = fake.personalEmail("icloud.com");
+  writeTrackedFile(dir, "first.txt", "first\n");
+  commit(dir, "first commit on a brand-new branch, with a personal author email", { authorEmail: email, authorName: "Someone" });
+  writeTrackedFile(dir, "second.txt", "second\n");
+  const head = commit(dir, "second commit");
+  const zeroBase = "0000000000000000000000000000000000000000";
+  const result = runScannerArgs(dir, ["--base", zeroBase, "--head", head]);
+  assert.notEqual(result.code, 0, "the zero-base branch-creation policy must scan the full reachable history, catching the first commit");
+  assert.ok(result.stderr.includes("personal-author-email"));
+  assert.ok(!result.stderr.includes(email));
+});
+
+test("counterexample (finding 2, round 8) resolved: an invalid/nonexistent head fails nonzero with a clean, structural error, never a silent pass", () => {
+  const dir = makeFixtureRepo();
+  const base = commit(dir, "base");
+  const bogusHead = "fedcba9876543210fedcba9876543210fedcba9";
+  const result = runScannerArgs(dir, ["--base", base, "--head", bogusHead]);
+  assert.notEqual(result.code, 0);
+  assert.ok(!result.stdout.includes("passed"));
+  assert.ok(result.stderr.includes("does not exist"));
+});
+
+test("a single-commit update (base is exactly head's parent) resolves to and scans exactly that one commit via --base/--head, the same as the established --commit-range interface", () => {
+  const dir = makeFixtureRepo();
+  const base = commit(dir, "base");
+  writeTrackedFile(dir, "only.txt", "content\n");
+  const head = commit(dir, "the only newly introduced commit");
+  const result = runScannerArgs(dir, ["--base", base, "--head", head]);
+  assert.equal(result.code, 0, `expected a clean single-commit update to pass, got: ${result.stderr}`);
+});
+
+test("mutation guard (finding 2, round 8): reintroducing a single-parent fallback for an unresolved base causes the multi-commit counterexample to be silently missed again -- proving the resolved-range tests above are not vacuous", () => {
+  const { dir, head } = makeMultiCommitFixture();
+  const scannerPath = path.join(dir, "scripts", "check_public_safety.py");
+  const fixedSource = readFileSync(scannerPath, "utf8");
+  const needle = 'raise RangeResolutionError(\n                f"base commit {base!r} could not be resolved, even after a targeted fetch -- "\n                "refusing to silently narrow the scanned range to only the newest commit"\n            )';
+  assert.ok(fixedSource.includes(needle), "expected to find the exact fail-closed branch to mutate");
+  const mutatedSource = fixedSource.replace(needle, "return f\"{head}^..{head}\"");
+  assert.notEqual(mutatedSource, fixedSource, "the mutation must actually change the source");
+  writeFileSync(scannerPath, mutatedSource, "utf8");
+
+  const unresolvableBase = "0123456789abcdef0123456789abcdef01234567";
+  const result = runScannerArgs(dir, ["--base", unresolvableBase, "--head", head]);
+  assert.equal(result.code, 0, "the reintroduced single-parent fallback must cause a false pass on the multi-commit counterexample -- exactly the defect this correction removes");
+});
 
 cleanupFixtures();
 

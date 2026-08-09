@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """Fail closed on high-confidence public-repository privacy mistakes.
 
-The check scans tracked, UTF-8 text files and (when requested) the author and
-committer addresses on newly introduced commits. It intentionally reports the
+The check scans every tracked, UTF-8 text file -- including this script's own
+source -- up to a documented size limit, and (when requested) the author and
+committer addresses on newly introduced commits. A file is skipped only for a
+structural reason (not a regular file, undecodable as UTF-8, or over the size
+limit), never because of its path or identity. It intentionally reports the
 rule and location without echoing the matched value.
 """
 
@@ -17,7 +20,6 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SELF = Path(__file__).resolve()
 ALLOW_MARKER = "public-safety: allow"
 MAX_TEXT_BYTES = 5 * 1024 * 1024
 
@@ -89,9 +91,18 @@ def is_reportable_ip(value: str) -> bool:
 
 
 def scan_tree() -> list[str]:
+    # No self-exemption: this script's own tracked source is scanned like
+    # any other tracked file (round 8, independent-review correction --
+    # `path == SELF` previously skipped this file entirely, so a personal
+    # email, credential, token, private-key header, or reportable IP added
+    # directly to this file would never have been detected, contradicting
+    # this module's own docstring and every "tracked UTF-8 text is
+    # scanned" claim in the PR/README). Only genuinely unreadable content
+    # -- not a regular file, over the size limit, binary, or non-UTF-8 --
+    # is still skipped, exactly as documented.
     findings: list[str] = []
     for path in tracked_files():
-        if path == SELF or not path.is_file() or path.stat().st_size > MAX_TEXT_BYTES:
+        if not path.is_file() or path.stat().st_size > MAX_TEXT_BYTES:
             continue
         raw = path.read_bytes()
         if b"\0" in raw:
@@ -131,11 +142,103 @@ def scan_commit_range(commit_range: str) -> list[str]:
     return findings
 
 
+class RangeResolutionError(RuntimeError):
+    """A safe, fully-covering commit range could not be resolved."""
+
+
+ZERO_SHA_RE = re.compile(r"^0+$")
+
+
+def _commit_exists(sha: str) -> bool:
+    result = subprocess.run(
+        ["git", "-C", str(ROOT), "cat-file", "-e", f"{sha}^{{commit}}"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return result.returncode == 0
+
+
+def _try_fetch_commit(sha: str) -> None:
+    """Best-effort targeted fetch of exactly one commit; failures are not
+    fatal here -- the caller re-checks existence afterward and fails
+    closed itself if the commit still cannot be resolved."""
+    subprocess.run(
+        ["git", "-C", str(ROOT), "fetch", "--quiet", "origin", sha],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def resolve_commit_range(base: str | None, head: str | None) -> str:
+    """Resolve the exact, fully-covering git revision range that must be
+    passed to `scan_commit_range()` for one CI event (a pull request or a
+    push), used identically by the workflow (via `--base`/`--head`) and
+    by the regression suite, so range selection has exactly one
+    implementation instead of duplicated, untestable shell logic.
+
+    Correction (round 8, independent review): the previous caller-side
+    (workflow) fallback used a single-parent range, `HEAD^..HEAD`,
+    whenever the base could not be resolved -- in a multi-commit
+    PR/push, that silently scans only the newest commit's metadata,
+    missing a personal author/committer address on any earlier newly
+    introduced commit. That fallback no longer exists anywhere in this
+    codebase; every path below either resolves the full, correct range
+    or fails closed.
+
+    - `head` must be supplied and must resolve to a real commit -- this
+      is always the exact event revision already checked out.
+    - A non-empty, non-zero `base` must resolve to a real commit. If it
+      does not resolve locally, ONE targeted `git fetch` of exactly that
+      SHA is attempted (covers a shallow or partial clone that has the
+      head but not yet the base). If it still does not resolve, this
+      raises `RangeResolutionError` -- it never silently narrows the
+      scanned range to only the newest commit.
+    - An all-zeros `base` is GitHub's documented signal for a genuine
+      branch-creation push with no real prior state on this ref. The
+      conservative, documented policy for that exact shape is to scan
+      every commit reachable from `head` (there is no narrower range
+      that is still correct) -- this is a deliberate, named case, not a
+      fallback of convenience for an unresolved value.
+    - A missing/empty `base` in any other shape is treated the same as
+      an unresolved base: fail rather than silently narrow.
+    """
+    if not head or not _commit_exists(head):
+        raise RangeResolutionError(f"head commit {head!r} does not exist or was not fetched")
+    if base and ZERO_SHA_RE.fullmatch(base):
+        return head
+    if base:
+        if not _commit_exists(base):
+            _try_fetch_commit(base)
+        if not _commit_exists(base):
+            raise RangeResolutionError(
+                f"base commit {base!r} could not be resolved, even after a targeted fetch -- "
+                "refusing to silently narrow the scanned range to only the newest commit"
+            )
+        return f"{base}..{head}"
+    raise RangeResolutionError(
+        "no base commit was supplied and this is not a zero-base branch-creation event -- "
+        "refusing to silently narrow the scanned range to only the newest commit"
+    )
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--commit-range",
-        help="Git revision range containing only newly introduced commits",
+        help=(
+            "An explicit git revision range containing only newly introduced "
+            "commits. Advanced/low-level: prefer --base/--head so range "
+            "resolution (including the zero-base and unresolved-base "
+            "policies) is validated rather than assumed correct by the caller."
+        ),
+    )
+    parser.add_argument(
+        "--base",
+        help="The PR base SHA, or the push 'before' SHA (may be all-zeros for a new branch).",
+    )
+    parser.add_argument(
+        "--head",
+        help="The exact event head SHA. Required together with --base.",
     )
     return parser.parse_args()
 
@@ -143,7 +246,14 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     findings = scan_tree()
-    if args.commit_range:
+    if args.base is not None or args.head is not None:
+        try:
+            commit_range = resolve_commit_range(args.base, args.head)
+        except RangeResolutionError as error:
+            print(f"Public-safety check failed: {error}", file=sys.stderr)
+            return 1
+        findings.extend(scan_commit_range(commit_range))
+    elif args.commit_range:
         findings.extend(scan_commit_range(args.commit_range))
     findings = sorted(set(findings))
     if findings:
