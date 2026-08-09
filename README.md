@@ -11,12 +11,14 @@ local progress tracking, performance analytics, and automated validation.
 > validated. The full question bank has not yet completed a documented,
 > question-by-question scientific review for public release.
 
-> **Authorship and AI assistance:** Austin owns the educational scope, domain
-> constraints, product direction, acceptance criteria, and release decisions.
-> AI coding tools assisted with portions of implementation, testing, and
-> documentation. That assistance is disclosed in the repository history and
-> does not substitute for scientific review; the evidence-backed review status
-> below remains the authority for every content claim.
+> **Authorship and AI assistance:** Austin directs the product, supplies the
+> cytogenetics domain judgment, sets the constraints, and makes acceptance
+> and release decisions. AI coding tools have contributed substantially to
+> implementation, testing, research support, and documentation. That
+> contribution is not scientific review, independent review, psychometric
+> validation, or evidence of scientific correctness — the recorded
+> question-governance and scientific-review status below remains
+> authoritative for every content claim.
 
 See [Scientific Review Status](./docs/SCIENTIFIC_REVIEW.md) for the current,
 itemized record of what has and has not been independently reviewed. The
@@ -237,6 +239,12 @@ The committed test suite checks:
 - exercise, flashcard, and image-manifest counts
 - embedded-image license and redistribution metadata
 - atomic rejection of malformed or duplicate injected questions
+- the public-safety scanner's own contracts (`scripts/check_public_safety.py`,
+  `tests/public-safety.mjs`): rejection of personal email addresses, private
+  keys, and representative provider API/service tokens in tracked text or
+  newly introduced commit author/committer metadata; acceptance of GitHub
+  noreply addresses, loopback/documentation IP ranges, and obvious
+  placeholders; and that findings never echo the matched sensitive value
 - DOM-level navigation, quiz, exercise, migration, persistence, Reset,
   import/export, print, public API, event, and analytics behavior
 - implemented keyboard and accessibility affordances that can be evaluated
