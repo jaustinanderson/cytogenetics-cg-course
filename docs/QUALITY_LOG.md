@@ -4261,3 +4261,1192 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   (structural completeness vs. qualification) can create the illusion of
   coverage where only one of them is load-bearing at the point that
   matters (record validity at load, not just release-gate qualification).
+
+## QL-036 — QL-033 foundation delivered: frozen baseline, Gate A/Gate B design, deterministic pilot batch (Issue #24, Phase 0 steps 1-3)
+
+- **Status:** Delivered on branch `claude/phase-0-ql033-foundation`, draft
+  PR open against `main` for independent review, not yet merged. This is
+  **foundation only** — QL-033 itself remains confirmed and unresolved;
+  see `docs/ASSESSMENT_VALIDITY.md` for the complete record this entry
+  summarizes.
+- **Scope:** `docs/LEARNING_PLATFORM_ROADMAP.md` Phase 0's first three
+  batched-remediation steps — (1) freeze and independently reproduce the
+  original QL-033 baseline, (2) define the Gate A bank/form statistical
+  guardrails and the Gate B item-writing/cue-review rubric, (3) select a
+  deterministic, representative pilot batch. Steps 4-9 (actual item
+  rewriting, review, re-audit, scaling) are explicitly **not** performed
+  here.
+- **Tooling delivered:** `scripts/assessment-cue-audit.mjs`, the single
+  authoritative implementation of every measurement, Gate A rule, and
+  pilot-selection algorithm this entry describes, imported (never
+  re-implemented) by `tests/assessment-cue-audit.mjs` (53 dependency-free
+  checks) and `tests/e2e/assessment-cue-audit.spec.mjs` (10 real-browser
+  cross-check tests across both configured projects). `npm run
+  audit:assessment-cues` runs the human-readable report; `-- --json`
+  produces deterministic machine-readable output.
+- **Baseline reproduction:** independently re-derived (not copied from
+  QL-033's own text) against the live 153-question bank: position counts
+  A=11/B=139/C=3/D=0, uniquely-longest 114/153, longest-or-tied 133/153 —
+  an exact match to QL-033's original figures, confirmed by a dedicated
+  test that would fail if the bank or the measurement diverged from the
+  frozen record.
+- **Length-measurement finding (superseded — QL-037):** this entry
+  originally claimed QL-033's original metric was "independently
+  identified" as plain JavaScript `.length`. **That overstated the
+  evidence — see QL-037: reproducing the frozen counts is evidence the
+  original method was character-count-shaped, not proof of exactly which
+  implementation was used; no original script survives to check.** QL-033's
+  metric was independently identified (by testing candidate metrics until
+  one reproduced the recorded counts, not assumed) as plain JavaScript
+  `.length` (raw UTF-16 code units) — confirmed distinct from a word-count
+  metric, which produces different counts (89/153, 138/153) on the same
+  data. A more robust canonical metric (`canonicalLength()`: strip literal
+  markup, decode HTML entities, NFC-normalize, collapse whitespace, strip
+  one trailing decorative punctuation mark, count grapheme clusters) was
+  defined for future use **(superseded — QL-037: this design measured a
+  different string than `index.html` actually renders to learners; see
+  QL-037 for the corrected metric)**; it currently reproduces the identical
+  counts to the historical metric on every one of the 153 questions'
+  options (no markup, entities, irregular whitespace, or non-BMP
+  characters exist in the current bank), so no divergence from the frozen
+  baseline exists yet — but the historical numbers are preserved as an
+  immutable record (`ORIGINAL_BASELINE`, `Object.freeze()`d) regardless, so
+  a future divergence, if one ever occurs, can never silently overwrite
+  them.
+- **A genuine implementation bug found and fixed during this same
+  work, before any test asserted the wrong behavior as correct:** an
+  early version of `canonicalLength()` decoded HTML entities before
+  stripping tags. That order let an escaped tag typed as literal source
+  text (e.g. `&lt;tag&gt;`, meant to be read as the visible characters
+  `<tag>`) decode into something that then looked exactly like a real tag
+  and get wrongly stripped — undercounting genuinely visible text as zero
+  characters. Caught by a test written against the *intended* behavior
+  (not against whatever the first implementation happened to do), before
+  any code merged. Fixed by stripping literal tags first, decoding
+  entities second; a dedicated regression test and a test confirming a
+  real current option's literal `>` comparison-operator character
+  (`"Countable > analyzable > karyotypable"`, module 9) is never
+  mis-stripped were both added. No current measurement was affected by
+  either the bug or the fix (verified: zero current options contain
+  markup or entities), but a future authored item using either could have
+  been silently mismeasured had this not been caught here.
+- **Gate A defined**, with two authoritative, directly-inspected sources
+  (University of Illinois CITL "Improving Your Test Questions," items #11
+  and #14; NBME Item-Writing Guide, November 2020, "Correct Option Stands
+  Out," page 21 — both quoted verbatim with retrieval dates in
+  `docs/ASSESSMENT_VALIDITY.md`), an explicit, justified numeric threshold
+  (`PRACTICAL_MARGIN = 0.15`, an additive allowance above the `1/n` chance
+  rate — 40% max share at n=4), a zero-floor rule for a never-used
+  position, and a statistical corroboration (chi-square / normal
+  approximation, α=0.01, only computed above the standard minimum
+  expected-cell-count of 5, otherwise honestly reported
+  `not-computed`/`inconclusive` rather than silently passed. **The
+  current bank, and every one of its 17 individual forms, is reported as
+  FAILING Gate A** — confirmed by a dedicated test, and by design: no
+  threshold was weakened to make the present bank pass.
+- **Gate B defined**: a 17-point human-reviewer rubric in
+  `docs/ASSESSMENT_VALIDITY.md` covering distractor plausibility,
+  parallel construction, grammatical/keyword/absolute-word cues,
+  paired-opposite and all/none-of-the-above risks, padding risk,
+  rationale/feedback alignment, stable-ID-preservation-vs-supersession
+  criteria, and quarantine as a legitimate outcome. Explicitly kept
+  distinct from scientific correctness, `QUESTION_GOVERNANCE` lifecycle,
+  Gate A's bank-level statistics, diagnostic eligibility, and future
+  psychometric validation. No question has been reviewed against it.
+- **Deterministic pilot batch selected**: 13 of 153 questions
+  (`final-q33`, `m1-q1`, `m1-q2`, `m1-q3`, `m12-q6`, `m15-q1`, `m16-q1`,
+  `m2-q1`, `m2-q3`, `m4-q1`, `m6-q1`, `m6-q4`, `m7-q2`), via a purely
+  mechanical, cherry-pick-resistant rule (first-encountered representative
+  per domain × cueClass stratum in canonical file order, then
+  supplemental coverage passes for difficulty, answer position, form
+  context, and distractor-feedback structure) — confirmed deterministic
+  across repeated runs by a dedicated test. Selection records only
+  mechanical facts (stratum, current cue measurement, current governance
+  state) — no item's scientific content was evaluated, and selection is
+  explicitly not authorization to rewrite.
+- **Two honest domain-level findings surfaced by this work** (not
+  previously broken out in QL-033's original bank-wide entry): the
+  `operations` domain's correct answer is the uniquely longest option in
+  all 10 of its questions (100%); the `molecular` domain has zero
+  `not-longest` items across its 14 questions (13 uniquely-longest, 1
+  tied-longest). Recorded here and in `docs/ASSESSMENT_VALIDITY.md` for
+  whoever performs the later item-rewriting batches.
+- **Impact:** None shipped to production — draft PR, not yet merged. No
+  question, answer, rationale, distractor feedback, domain, topic,
+  difficulty, or stable ID was changed; `index.html` is byte-for-byte
+  unchanged by this work. No `QUESTION_GOVERNANCE` field was populated;
+  all 153 questions remain `draft`. QL-033 is not marked corrected.
+- **Tests:** 53 new dependency-free checks (`tests/assessment-cue-audit.mjs`)
+  covering the frozen-baseline reproduction, both length metrics
+  (including the entity/tag-order regression above), malformed-input
+  rejection, 2/3/4-option generalization, Gate A boundary/threshold
+  behavior (inconclusive/pass/fail transitions, chi-square validity
+  floor, both-direction length-rate flagging), the current bank's and
+  every form's confirmed Gate A failure, and pilot-selection determinism
+  and coverage. 10 new real-browser Playwright checks
+  (`tests/e2e/assessment-cue-audit.spec.mjs`) confirming
+  `window.CytoCourse.getQuestions()` and the dependency-free audit agree
+  exactly, and that reading the audit's inputs touches no progress,
+  storage, or event.
+- **Mutation-tested:** 8 targeted reversions against
+  `scripts/assessment-cue-audit.mjs` (never `index.html`) — position-
+  change detection, correct-answer-length-change detection, tie-handling
+  correctness, module omission, module double-counting, generalization
+  collapse (hardcoded option count), Gate A threshold weakening, and
+  pilot-selection determinism — each failed exactly its intended,
+  directly-attributable test(s) and no others, reverted to byte-identical
+  via `diff` before committing. The Gate A threshold-weakening mutation
+  was caught by the per-form test specifically; the whole-bank test
+  remained independently failing at N=153 even at the weakened margin,
+  expected redundancy rather than a masked gap. See
+  `docs/VALIDATION.md` for the full record.
+- **Full local validation:** `npm test` (172 dependency-free DOM-behavior
+  checks + 70 governance checks + 53 assessment-cue checks + 5
+  deployed-revision checks) and the complete `npx playwright test` suite,
+  both green except pre-existing, already-documented flakes confirmed
+  transient by isolated re-run.
+- **Scope:** No product code behavior changed for any existing feature;
+  `index.html` is unmodified. No scientific review, psychometric
+  validation, or QL-033 correction was performed or claimed.
+- **Prevention:** When defining a statistical or measurement threshold,
+  reproduce the number the threshold is meant to catch independently
+  (here, the historical QL-033 counts) before trusting any derived
+  metric — and write the tests against the *intended* correct behavior
+  first, not against whatever the first draft implementation happens to
+  output, which is exactly what caught the entity/tag-order bug above
+  before it reached a committed baseline.
+
+## QL-037 — QL-036's Gate A design was unreachable for real small forms; its length metric measured the wrong string; nine further reproducibility/validity gaps (Issue #24, Phase 0 steps 1-3)
+
+- **Status:** Corrected on the same branch
+  (`claude/phase-0-ql033-foundation`), draft PR open against `main` for
+  independent review, not yet merged. QL-033 itself remains confirmed and
+  unresolved; this entry corrects the QL-036 *tooling*, not the bank.
+- **Finding — ten problems, each reproduced by direct construction before
+  any fix (full detail in `docs/ASSESSMENT_VALIDITY.md`):**
+  1. **Gate A was mathematically unreachable for real small forms.**
+     `evaluatePositionBalance()`/`evaluateLengthBalance()` treated any
+     scope below `5n` observations as `inconclusive` unless it failed.
+     Confirmed: a perfectly balanced synthetic 5-item, 4-option form
+     reported `inconclusive`, never `pass` — and every real course form
+     has 5-9 items, the pilot has 13. No real form or the pilot could
+     ever pass, contradicting Phase 0's own exit criteria.
+  2. **The canonical length metric measured a different string than the
+     one actually rendered.** `index.html`'s `esc()` round-trips option
+     text through `textContent`/`innerHTML` losslessly — a literal
+     `<b>Bold</b>` or `&amp;` displays to the learner as those literal
+     characters, never interpreted. The prior `canonicalLength()` stripped
+     tag-shaped text, decoded entities, and stripped trailing punctuation
+     — all three measured text the learner never sees.
+  3. **Mixed option-count scopes were never actually evaluated for
+     length.** `evaluateGateA()` made the length result `inconclusive`
+     whenever more than one option-count group was present, despite the
+     feature's claimed generic 2/3/4-option support.
+  4. **The length null model ignored tie structure.** Comparing only the
+     uniquely-longest rate against a flat `1/n` missed a bank that always
+     keys a member of a *tied* maximum-length set. Confirmed: a 50-item
+     synthetic bank with 20% uniquely-longest (looks normal against a
+     flat 25% baseline) and 80% two-way-tied-with-correct-always-included
+     (100% in the max-length set) passed the old check entirely.
+  5. **Statistical computability and regime-selection logic disagreed.**
+     The z-test's `N*p*(1-p) >= 5` condition and the status logic's
+     `N >= 5n` condition were separately derived and could diverge; the
+     length check was also mis-labeled a "two-proportion z-test" (it was
+     one-sample).
+  6. **Pilot selection depended on input array order**, and the committed
+     test claiming to prove otherwise did not: its `strataOf()` helper
+     filtered to `stratum === "domain-x-cueClass"` then mapped to
+     `.stratum`, producing only the constant Set `{"domain-x-cueClass"}`
+     regardless of which domains/cueClasses were actually selected —
+     vacuously true, unable to catch the order-dependence it was named
+     for.
+  7. **`ORIGINAL_BASELINE` froze only aggregate counts, not the exact
+     153 ids.** A hypothetical id removed and replaced by an unrelated
+     one could preserve every aggregate count. `noDuplicateOrOmittedIds`
+     checked only uniqueness (`idSet.size === length`) despite its name.
+  8. **Historical-method provenance was overstated.** Reproducing
+     QL-033's aggregate counts with raw `.length` was presented as
+     evidence of the *original* one-off method; no original script
+     survives to actually prove that.
+  9. **The NBME citation was mislabeled.** Both CITL and NBME were called
+     "directly inspected primary sources," but the NBME wording was
+     extracted from a third-party mirror because the official PDF is
+     gated behind a lead-capture form (confirmed again for this
+     correction: the official download URL returns an HTML landing page,
+     not a PDF; an archive.org mirror could not be reached).
+  10. **The `--json` CLI output embedded `new Date().toISOString()`**,
+      so identical input produced byte-different output across runs,
+      contradicting the deterministic-output claim.
+- **Impact:** None shipped — PR #26 remained draft/unmerged throughout;
+  found and fixed before merge.
+- **Correction (full detail, exact mathematics, and every reproduced
+  counterexample in `docs/ASSESSMENT_VALIDITY.md`):**
+  1. **Two-regime Gate A for position balance**, both driven by one
+     shared threshold `REGIME_THRESHOLD(n) = 5n`: below it, a fully
+     derived, zero-free-parameter **exact pigeonhole rule** (every
+     position's count must be `floor(N/n)` or `ceil(N/n)`, the
+     mathematically tightest achievable balance) decides pass/fail with
+     no statistic attempted; at or above it, the existing practical-
+     margin-plus-chi-square approach (now guaranteed computable by the
+     same threshold). `inconclusive` is now reserved for exactly `N < n`.
+     Verified: synthetic balanced 5/6/7/8/9/13-item forms all now pass;
+     correspondingly imbalanced ones still fail.
+  2. **`canonicalLength()` rewritten** to NFC-normalize, collapse
+     whitespace (a genuine rendering effect — no `white-space:pre`
+     override on `.qopt`), and count grapheme clusters — no entity
+     decoding, no tag stripping, no punctuation stripping. A new
+     real-browser **rendered-text oracle**
+     (`tests/e2e/assessment-cue-audit.spec.mjs`) injects synthetic
+     runtime-only option text (literal tags, entities, NFC/NFD, emoji,
+     whitespace, punctuation) via the existing `addQuestions()` API and
+     directly compares the metric against the real rendered `.qopt` text.
+  3. **Length association evaluated once per scope, ungrouped**, since
+     the corrected per-item model (below) needs no option-count grouping.
+  4. **Tie-aware length model**: per item, `P(correct in max-length set)
+     = k_i/n_i` (tie count over option count), aggregated as an exact
+     **Poisson-binomial** distribution (independent Bernoulli trials with
+     different probabilities) via a new `O(N^2)` DP
+     (`poissonBinomialPMF`/`poissonBinomialTwoSidedPValue`) — exact and
+     valid at any N, needing no separate small/large-N split for this
+     check. Symmetric both directions, documented why. Verified against
+     the exact evasion scenario in Finding 4, now correctly failing.
+  5. **`REGIME_THRESHOLD(n)`** is now the single named value used
+     everywhere a "is this large enough" decision is made for position
+     balance; the length check's exact test needs no such threshold at
+     all, eliminating this class of disagreement structurally. Naming
+     corrected throughout.
+  6. **Pilot selection sorts into a canonical order first**
+     (`compareCanonicalOrder`, derived only from each id — numeric module
+     comparison, `final` sorting last — never from array position), then
+     applies the same stratum-first-encountered rule. Verified: reversing
+     or pseudo-randomly shuffling the live bank's 153-item input array now
+     produces the *exact same* selected ids. `FROZEN_PILOT_MANIFEST`
+     records the resulting ordered list; a test enforces it exactly.
+  7. **`ORIGINAL_ID_MANIFEST`** (new
+     `scripts/assessment-cue-audit-id-manifest.mjs`) freezes the literal
+     153 ids independently of the live bank, plus a SHA-256 digest.
+     `compareToIdManifest()` detects removal, addition, replacement, and
+     duplication. `noDuplicateOrOmittedIds` renamed to the accurately
+     scoped `noDuplicateIds`; `idManifestCheck` is the real
+     omission/addition/replacement detector.
+  8. Every historical-method claim corrected to the exact strength the
+     evidence supports: raw `.length` *independently reproduces* the
+     frozen counts; word count does not; the *original* one-off method
+     cannot be proven from retained evidence, since none survives.
+  9. NBME downgraded from "directly inspected primary source" to an
+     explicitly labeled, unverified secondary mirror citation, kept only
+     as corroborating color; CITL (fully, directly verified, covering
+     both required guidance points) is now the sole basis for every
+     numeric threshold and rule.
+  10. The deterministic JSON payload
+      (`buildDeterministicReport()`) no longer contains any wall-clock
+      value; execution metadata is generated separately and passed only
+      to the human-readable console banner.
+- **Tests:** `tests/assessment-cue-audit.mjs` rewritten and expanded from
+  53 to 81 dependency-free checks, each new one directly reproducing its
+  counterexample before asserting the fix: balanced/imbalanced position
+  fixtures at N=5,6,7,8,9,13; the exact `REGIME_THRESHOLD` boundary
+  (below/at/above); the tie-evasion scenario from Finding 4, all-way-tie
+  zero-information case, and both-direction symmetry; mixed-option-count
+  pass and fail fixtures; reversed- and shuffled-input pilot-selection
+  equality (a real, strong assertion, not the prior vacuous one);
+  frozen-pilot-manifest exact match; id-manifest removal/addition/
+  replacement/duplication detection; deterministic-JSON byte-identity
+  across repeated calls with no timestamp present. `tests/e2e/assessment-cue-audit.spec.mjs`
+  expanded to 7 real-browser checks, including the rendered-text oracle
+  and reversed-order pilot-selection equality against the live bank.
+- **Mutation-tested:** 8 targeted reversions against
+  `scripts/assessment-cue-audit.mjs` (never `index.html`), covering every
+  required category, each failed exactly its intended, directly-attributable
+  test(s) and no others, reverted to byte-identical via `diff` before
+  committing. See `docs/VALIDATION.md` for the full record. **Count
+  precision (corrected retroactively — QL-038):** this is this round's
+  (round 2's) count specifically, separate from round 1's (QL-036's) own 8
+  mutations and round 3's (QL-038's) 4 — see QL-038 for the reconciled,
+  cumulative total across all three rounds. An earlier PR-body draft
+  described "8 mutations across two rounds," which undercounted the actual
+  total; that wording has been corrected in the PR body.
+- **Full local validation:** `npm test` (172 dependency-free DOM-behavior
+  checks + 70 governance checks + 82 assessment-cue checks + 5
+  deployed-revision checks) and the complete `npx playwright test` suite,
+  both green except pre-existing, already-documented flakes confirmed
+  transient by isolated re-run.
+- **Scope:** No question, answer, rationale, distractor feedback, domain,
+  topic, difficulty, or stable ID changed; `index.html` is unmodified. No
+  `QUESTION_GOVERNANCE` field populated; all 153 questions remain `draft`.
+  QL-033 is not marked corrected. Phase 0 stays unchecked in
+  `docs/ROADMAP.md` and Issue #24.
+- **Prevention:** A validity check's *achievability* is itself a
+  correctness property, not just its detection power — a check that can
+  never be satisfied by good-faith content is as much a defect as one
+  that never detects bad content, and both need a directly-constructed
+  counterexample (a synthetic fixture proven to pass, or proven to evade
+  detection) before being trusted, not only a check against the one
+  already-known-bad real bank.
+
+## QL-038 — QL-037's own tests only proved position balance in isolation, not the combined Gate A; aggregate balance alone missed predictable answer-key sequences; statistical significance alone could fail a practically trivial deviation; the exact two-sided p-value convention was unnamed (Issue #24, Phase 0 steps 1-3)
+
+- **Status:** Corrected on the same branch
+  (`claude/phase-0-ql033-foundation`), draft PR still open against `main`
+  for independent review, not yet merged. QL-033 itself remains confirmed
+  and unresolved; this entry corrects the QL-036/QL-037 *tooling* further,
+  not the bank.
+- **Finding — four problems, each reproduced by direct construction before
+  any fix (full detail in `docs/ASSESSMENT_VALIDITY.md`):**
+  1. **QL-037's own size-loop tests, and the documentation table they
+     supported, only ever exercised `evaluatePositionBalance()` directly.**
+     No test constructed a full question form and asserted
+     `evaluateGateA(...).overall === "pass"`, including the tie-aware
+     length component. This was a test/documentation coverage gap — the
+     underlying `evaluateGateA()` was independently confirmed, by direct
+     construction, to already support a full-Gate pass at every required
+     size once a genuinely decoupled fixture was used; an initial naive
+     fixture construction was found to accidentally introduce its own
+     length cue and, separately, to use a plain `i % n` rotation that is
+     itself a repeating cycle (see Finding 2) — both caught before being
+     used as "proof," not shipped as false evidence.
+  2. **Aggregate position balance does not detect a predictable answer-key
+     sequence.** Confirmed directly: `A,B,C,D,A,B,C,D,A` (N=9, n=4)
+     satisfies `exactPigeonholeBalance()` perfectly
+     (`positionCounts=[3,2,2,2]`, `balanced: true`) while being an
+     obviously learnable cycle; nothing in Gate A examined sequence order
+     before this correction.
+  3. **A statistically significant but practically trivial large-N
+     deviation could fail Gate A on significance alone.** Confirmed
+     directly: `N=100,000`, `n=4`, position counts
+     `[25,500, 24,834, 24,834, 24,832]` — maximum observed share 25.5%,
+     far inside the 40% practical threshold — yet chi-square (13.33)
+     exceeds the α=0.01 critical value (11.345), so the prior
+     `practicalFail || statisticalResult === "rejects-uniform"` decision
+     failed this scope on statistical significance alone. The same defect
+     existed in length association's decision rule.
+  4. **The exact two-sided Poisson-binomial p-value convention was
+     unnamed, and not the only defensible one.** The prior
+     `poissonBinomialTwoSidedPValue()` used a doubled-minimum-tail
+     convention (`2 * min(P(X<=obs), P(X>=obs))`, clipped to 1) without
+     stating so, and without acknowledging that "two-sided" is not
+     self-defining for an asymmetric discrete distribution (this
+     Poisson-binomial generally is asymmetric, since per-item null
+     probabilities differ item to item).
+- **Impact:** None shipped — PR #26 remained draft/unmerged throughout;
+  found and fixed before merge.
+- **Correction (full detail, exact mathematics, and every reproduced
+  counterexample in `docs/ASSESSMENT_VALIDITY.md` sections 4.3a, 4.4a,
+  4.6a, 4.10):**
+  1. **Full-Gate achievability directly proven**, not merely
+     position-balance achievability: for every required size (5, 6, 7, 8,
+     9, 13), three independently constructed full forms — one fully
+     balanced/non-cyclic/non-cued (proven `overall: pass`), one with ONLY
+     position perturbed (proven `overall: fail` via position specifically,
+     length and sequence unaffected), one with ONLY length perturbed
+     (proven `overall: fail` via length specifically, position and
+     sequence unaffected) — using a construction (`buildIndependentItem()`)
+     that gives independent control over which slot is correct and
+     whether that slot is the item's own length-max slot, so a passing
+     fixture cannot be a lucky coincidence of the two properties. A mixed
+     2-/3-/4-option scope, each group sized for a definitive small-N
+     result, also reaches a complete `pass` with no group, nor length, nor
+     sequence, inconclusive. Every "Gate A passes" claim in the PR and
+     documentation is now stated precisely as either the full combined
+     result or explicitly labeled position-only.
+  2. **New answer-key sequence detection** (`detectAnswerSequencePatterns()`,
+     `evaluateAnswerSequence()`), reported as its own field
+     (`evaluateGateA().sequence`), separate from position balance and
+     length association but still contributing to `overall`. Deterministic
+     structural detection, not a statistical test (an inferential test
+     over the space of balanced sequences at N=5-13 would itself claim
+     statistical meaning from one short, static sample — rejected for
+     exactly the reason Finding 3/Correction 3 rejects that elsewhere):
+     exact short repeating cycles (period `1..min(n, floor(N/2))`,
+     confirmed at least twice), whole-sequence palindromes (`N>=4`), and
+     excessive identical-position runs (`>= n` consecutive). A detected
+     finding is `fail` (an exact cycle/palindrome/run is unambiguous, not
+     something for a reviewer to adjudicate); `inconclusive` only for
+     `N < n`. Does not demand a mechanically rotating key — a rotating key
+     is exactly what the repeating-cycle check flags.
+  3. **Practical-vs-statistical decision policy corrected**, applied
+     identically to position balance's large-N regime and to length
+     association: the practical/effect-size margin is now the SOLE
+     authoritative driver of `fail`; a statistically significant result
+     that stays within the practical margin no longer fails the gate by
+     itself, and instead raises an explicit `reviewFlag` (`{required,
+     reason}`), aggregated onto `evaluateGateA()`'s own `reviewRequired` /
+     `reviewFlaggedComponents`. A genuine practical-margin violation still
+     fails regardless of statistical power (this was already true in the
+     small-N structural regime, which never attempts a statistic; it is
+     now equally true in the large-N regime). Verified: the exact
+     boundary counterexample above now returns `pass` with
+     `reviewFlag.required: true`; a margin-exceeding-but-underpowered
+     scope still fails; a scope that both exceeds the margin and is
+     significant fails with `reviewFlag.required: false` (a fail is never
+     softened into a review).
+  4. **Poisson-binomial two-sided p-value switched to the
+     PROBABILITY-ORDERING convention** (the sum of every outcome no more
+     likely than the one observed), precisely named
+     (`"exact-poisson-binomial-two-sided-probability-ordering"`) and
+     explicitly documented as one defensible convention among several, not
+     the only one. Verified against independently hand-computed (not
+     implementation-derived) fixtures: probabilities `[0.9, 0.5, 0.5]`
+     give hand-derived `pmf = [0.025, 0.275, 0.475, 0.225]`; the
+     probability-ordering p-values `[0.025, 0.525, 1.0, 0.25]` differ from
+     the prior doubled-minimum-tail convention's `[0.05, 0.6, 1.0, 0.45]`
+     at every non-modal outcome and coincide only at the mode. Boundary
+     (`p=0`, `p=1`) and fully degenerate all-tied cases independently
+     hand-verified. The live bank's length-association p-value moved from
+     ≈1.2×10⁻⁴⁹ (prior convention) to ≈6.1×10⁻⁵⁰ (corrected convention) —
+     both astronomically significant; the convention change does not
+     change any pass/fail conclusion for the live bank.
+- **Tests:** `tests/assessment-cue-audit.mjs` grew from 82 to 127
+  dependency-free checks. New coverage: 18 full-form fixtures (3 per
+  required size × 6 sizes) proving complete-Gate-A pass/fail with each
+  perturbation isolated; a mixed-option-count complete-Gate-A pass
+  fixture; the literal cyclic/alternating/mirrored/excessive-run
+  counterexamples from the task, each independently verified caught; a
+  hand-verified balanced-non-cyclic order for every required size proving
+  a genuinely non-obvious key is not penalized; sequence
+  inconclusive-only-below-N-behavior and its non-statistical-claim
+  property; the exact large-N practical-vs-statistical boundary
+  counterexample for both position and length, plus the
+  margin-exceeds-but-underpowered and margin-exceeds-and-significant
+  cases; nine hand-computed Poisson-binomial p-value fixtures (asymmetric
+  divergence, symmetric coincidence, modal agreement, both single-item
+  boundary probabilities, degenerate all-tie). No existing e2e coverage
+  needed new browser-specific tests — every corrected behavior is pure
+  computation over already-verified rendered/measured data, not a new
+  rendering-dependent claim, so the existing 7 real-browser checks in
+  `tests/e2e/assessment-cue-audit.spec.mjs` (unchanged this round) remain
+  sufficient and were re-run and reconfirmed passing.
+- **Mutation-tested (this round):** 4 targeted reversions against
+  `scripts/assessment-cue-audit.mjs` (never `index.html`), covering the
+  four required categories (full-Gate-vs-position-only coverage,
+  sequence-pattern detection, practical/statistical decision separation,
+  the exact two-sided calculation), each failed exactly its intended,
+  directly-attributable test(s) and no others, reverted to byte-identical
+  via `diff` before committing. See `docs/VALIDATION.md` for the full
+  record.
+- **Mutation count, reconciled from retained evidence (not guessed):**
+  round 1 (QL-036, this PR's first commit): **8**. Round 2 (QL-037, this
+  PR's second commit): **8**. Round 3 (this entry, this PR's third
+  commit): **4**. **Cumulative total across all three rounds: 20.** The
+  PR body's prior "8 mutations across two rounds" wording undercounted
+  round 2 alone and omitted round 1 entirely; corrected in the current PR
+  body to state the reconciled per-round and cumulative counts explicitly.
+- **Full local validation:** `npm test` (172 dependency-free DOM-behavior
+  checks + 70 governance checks + 127 assessment-cue checks + 5
+  deployed-revision checks) and the complete `npx playwright test` suite,
+  both green except pre-existing, already-documented flakes confirmed
+  transient by isolated re-run.
+- **Scope:** No question, answer, rationale, distractor feedback, domain,
+  topic, difficulty, or stable ID changed; `index.html` is unmodified. No
+  `QUESTION_GOVERNANCE` field populated; all 153 questions remain `draft`.
+  QL-033 is not marked corrected. Phase 0 stays unchecked in
+  `docs/ROADMAP.md` and Issue #24. Steps 4-9 of the Phase 0 protocol were
+  not begun.
+- **Prevention:** Position/length balance alone is not the full claim a
+  "Gate A pass" makes — a test suite (and the documentation drawn from it)
+  must exercise the exact aggregate object callers actually consult
+  (`evaluateGateA()`), not only a lower-level helper it happens to call,
+  or a coverage gap can silently persist behind an otherwise-real fix.
+  Aggregate distributional balance and sequence predictability are
+  genuinely different properties of the same data and must be checked
+  separately — one can hold without the other. "Statistically detectable"
+  and "practically meaningful" are also different claims; conflating them
+  in a single fail condition guarantees a large enough sample will
+  eventually manufacture a failure out of noise. An "exact" statistical
+  convention is not automatically unique; asymmetric distributions in
+  particular can support more than one defensible p-value definition, and
+  the choice deserves a name and a stated rationale, not silent
+  application.
+
+## QL-039 — the large-N practical decision missed material underrepresentation; position balance never reported a real p-value; the frozen manifest's own comment overclaimed order detection; NBME URL roles were described imprecisely (Issue #24, Phase 0 steps 1-3)
+
+- **Status:** Corrected on the same branch
+  (`claude/phase-0-ql033-foundation`), draft PR still open against `main`
+  for independent review, not yet merged. QL-033 itself remains confirmed
+  and unresolved; this entry corrects the QL-036/QL-037/QL-038 *tooling*
+  further, not the bank.
+- **Finding — four problems, each reproduced by direct construction
+  before any fix (full detail in `docs/ASSESSMENT_VALIDITY.md`):**
+  1. **The large-N practical/effect-size decision examined only the
+     single largest answer position**, never the complete distribution,
+     so it could not detect material UNDERrepresentation unless that same
+     imbalance happened to also inflate some other position's share past
+     the threshold. Confirmed directly: at `N=20`, `n=4` (the smallest N
+     in the large-N regime for 4-option items), distributions `[7,7,6,0]`,
+     `[8,6,6,0]`, and `[8,8,4,0]` — every one leaving position D with
+     **zero** correct answers — all reported `pass`. A complete, fully
+     independent full-Gate fixture confirmed the same gap at the
+     whole-gate level.
+  2. **Position balance never reported an actual p-value.** Its `detail`
+     object contained a chi-square statistic and a Boolean
+     critical-value-table comparison, but no `pValue` field — a
+     critical-value lookup is not itself a p-value, and this directly
+     contradicted the round-3 correction's own stated intent to report
+     the statistical result and p-value separately (length association's
+     exact Poisson-binomial test already did this correctly).
+  3. **`compareToIdManifest()`'s own comment claimed it detected
+     "reordering where order is part of the contract,"** immediately
+     contradicted by the very next clause, which correctly explains the
+     digest is computed over the SORTED id list and is therefore
+     order-independent by construction. Confirmed directly: reversing all
+     153 frozen ids still reports `matches: true` (correct behavior for a
+     set-identity check; the comment's claim about order was simply
+     wrong). Separately, this became more consequential once the sequence
+     check (QL-038) started examining each form's real rendered order,
+     which had no frozen record of its own at all.
+  4. **NBME source-provenance wording described the two official NBME
+     URLs less precisely than directly re-inspecting them supports.**
+     Both official URLs were re-fetched and directly inspected for this
+     correction: `https://www.nbme.org/institutions/nbme-item-writing-guide/`
+     is the official request page (its own text: *"Complete the form to
+     receive your PDF download today"*); the separate URL
+     `https://www.nbme.org/file/nbme_item-writing-guide_r_6-pdf/` serves
+     an HTML attachment/page-shell (`content-type: text/html`, `pdftotext`
+     cannot parse it as a PDF) that does **not** itself expose the request
+     form (its only `<form>` elements are generic site-search forms).
+- **Impact:** None shipped — PR #26 remained draft/unmerged throughout;
+  found and fixed before merge.
+- **Correction (full detail, exact mathematics, and every reproduced
+  counterexample in `docs/ASSESSMENT_VALIDITY.md` sections 2.2, 4.3b,
+  4.6b):**
+  1. **Cohen's w** (Cohen, J. (1988), *Statistical Power Analysis for the
+     Behavioral Sciences*, 2nd ed.), `w = sqrt(chiSquare / N)`, replaces
+     the single-largest-position-share rule as the large-N practical
+     decision. Scale-free (unlike raw chi-square, which grows with N),
+     symmetric to over- and under-representation by construction, with
+     Cohen's own published "medium effect" threshold (`0.3`) adopted as
+     the fail threshold — an independently-sourced number, not tuned to
+     this bank. Per-position directional deviations are retained as
+     diagnostic detail (`positionDeviations`/`materialDeviations`),
+     reusing the existing `PRACTICAL_MARGIN`, so the report states not
+     just THAT a material deviation exists but WHICH position(s) and in
+     WHICH direction. Verified: all three counterexample distributions
+     now fail (w = 0.583, 0.600, 0.663 — all a "large" Cohen's effect);
+     the N=19/structural-regime and N=20/21-statistical-regime results
+     agree for a comparable omission (no easier-to-pass transition);
+     balanced N=20 distributions still pass comfortably (w=0 and
+     w=0.141); verified for 2- and 3-option forms, not only 4-option.
+     The existing policy that statistical significance alone does not
+     fail an educationally trivial deviation (QL-038) is unchanged.
+  2. **`chiSquareUpperTailPValue(chiSquareStat, df)`** computes the exact
+     upper-tail chi-square p-value via the regularized upper incomplete
+     gamma function (standard series/continued-fraction algorithm,
+     Numerical Recipes 3rd ed. §6.2), valid at any positive df (not
+     limited to the previously tabulated df 1-7). Verified against an
+     independently-sourced published critical-value table at both
+     α=0.01 and α=0.05, matching to 4-5 significant figures at every
+     tabulated point. Position balance now uses the same
+     `pValue < SIGNIFICANCE_ALPHA` comparison length association already
+     used, replacing the prior `chiSquare > criticalValue` comparison.
+  3. **`compareToIdManifest()`'s comment corrected** to state plainly it
+     answers only "does the same SET of ids exist," never order. A new,
+     genuinely separate, order-SENSITIVE contract is added:
+     `ORIGINAL_FORM_ORDER_IDS` (new,
+     `scripts/assessment-cue-audit-id-manifest.mjs`) freezes each of the
+     17 forms' exact authored order; `ORIGINAL_FORM_ORDER_MANIFEST` wraps
+     it with a per-form order-sensitive SHA-256 digest;
+     `compareToFormOrderManifest()` compares live per-form order against
+     it. Four genuinely separate questions are now each independently
+     reported: id-SET identity (`idManifestCheck`), per-form
+     ENCOUNTER-ORDER identity (`formOrderCheck`, new), mechanical
+     aggregate-metric drift (`baselineComparison`), and current Gate A
+     status (`bank.gateA`/`forms[].gateA`). Verified: reversing or
+     permuting questions within one form triggers order drift for that
+     form specifically while the id-set check still matches; an id
+     replacement triggers set drift; unchanged input matches both frozen
+     contracts; pilot selection (its own separate canonical-order
+     contract) remains fully input-order-independent regardless.
+     Additionally, the WHOLE-BANK aggregate scope is no longer treated as
+     one learner-facing encounter order for sequence purposes:
+     `evaluateGateA(metrics, { sequenceApplicable: false })` computes and
+     reports sequence findings informationally but excludes them from
+     `overall` — an artificial cross-module concatenation can no longer
+     create or clear a release gate via a property that was never
+     meaningful for it. Every per-form call remains fully
+     `sequenceApplicable: true` by default.
+  4. NBME provenance wording corrected to describe the two official URLs
+     precisely, per the direct re-inspection above; the overall
+     conclusion (NBME is unverified/secondary corroborating color, never
+     a basis for any threshold; CITL, fully verified, supplies no
+     numerical thresholds either — the project's numeric/effect-size
+     rules are its own operationalizations) is unchanged and restated
+     explicitly.
+- **Tests:** `tests/assessment-cue-audit.mjs` grew from 127 to 157
+  dependency-free checks. New coverage: the three N=20 counterexample
+  distributions and a full-Gate fixture for `[7,7,6,0]`; the N=19/20/21
+  regime-boundary consistency check; balanced-N=20 and 2-/3-option
+  Cohen's-w fixtures; the position-detail-completeness check (observed
+  distribution, expected distribution, effect measure, threshold,
+  material-deviation directions, final decision); independently-sourced
+  chi-square-critical-value cross-checks at α=0.01 and α=0.05 for df 1-7
+  and 1-3 respectively; the alpha-boundary pValue/statisticalResult
+  agreement check; per-form order-drift detection (reversal, permutation,
+  id replacement) and its independence from id-set identity; pilot
+  selection's continued input-order-independence; the
+  whole-bank-vs-per-form `sequenceApplicable` behavior, including that it
+  changes only sequence's contribution to `overall` and nothing else; and
+  deterministic-JSON preservation with every new field present. Two
+  mutation-testing-driven coverage gaps were found and closed with
+  permanent tests (see Mutation-tested below) —
+  `tests/e2e/assessment-cue-audit.spec.mjs` stays at 7 (no new
+  browser-specific behavior this round; re-run and reconfirmed passing).
+- **Mutation-tested (this round):** 7 targeted reversions against
+  `scripts/assessment-cue-audit.mjs` (never `index.html`), covering the
+  seven required categories (omitted/underrepresented answer positions;
+  the N=5n regime boundary; the Cohen's-w distribution-wide practical
+  effect calculation itself; the chi-square p-value calculation; per-form
+  order drift; separation of set/order/metric drift in the report; and
+  whole-bank-vs-learner-facing sequence scope). Two of the seven initially
+  showed **zero** failures instead of the expected relevant one(s) — both
+  investigated as genuine coverage gaps, not skipped:
+  - The chi-square-p-value mutation replaced the real computation with a
+    placeholder (`0.001` if past the reference critical value, else
+    `0.5`) that preserved the SAME significant/not-significant
+    classification by construction, evading a boundary test that only
+    checked the classification, not the numeric p-value itself. Fixed
+    with a permanent test asserting the exact numeric p-value for a known
+    `(chiSquare, df)` pair against an independently hand-computed
+    expected value (`chiSquare=120, df=3` → `pValue ≈ 7.71679×10⁻²⁶`).
+  - The `formOrderCheck`-stubbing mutation (`buildDeterministicReport()`
+    replaced with a hardcoded `{matches: true, perForm: {}}`) evaded
+    detection because every existing test calling
+    `buildDeterministicReport()` only ever passed the unchanged live bank,
+    which trivially "matches" a stub too. Fixed with a permanent test
+    that passes a deliberately module-reordered copy of the live bank
+    through `buildDeterministicReport()` and asserts the resulting
+    `formOrderCheck` reflects that real drift.
+  Every one of the 7 mutations was reverted to byte-identical via `diff`
+  before committing. See `docs/VALIDATION.md` for the full record.
+- **Mutation count, reconciled from retained evidence (not guessed):**
+  round 1 (QL-036): 8. Round 2 (QL-037): 8. Round 3 (QL-038): 4. Round 4
+  (this entry, QL-039): 7. **Cumulative total across all four rounds: 27.**
+- **Full local validation:** `npm test` (172 dependency-free DOM-behavior
+  checks + 70 governance checks + 157 assessment-cue checks + 5
+  deployed-revision checks, all passing) and the complete `npx playwright
+  test` suite run at a deterministic, fixed worker count (`--workers=2`,
+  rather than the variable auto-detected parallelism under which the
+  known pre-existing `storage-failure-warning.spec.mjs` flake has
+  previously appeared) — **252 passed, 6 skipped, 0 failed**, a fully
+  clean complete-suite result, not a partial-file rerun.
+- **Scope:** No question, answer, rationale, distractor feedback, domain,
+  topic, difficulty, or stable ID changed; `index.html` is unmodified. No
+  `QUESTION_GOVERNANCE` field populated; all 153 questions remain `draft`.
+  QL-033 is not marked corrected. Phase 0 stays unchecked in
+  `docs/ROADMAP.md` and Issue #24. Steps 4-9 of the Phase 0 protocol were
+  not begun.
+- **Prevention:** A "practical effect" measure that looks at only one
+  cell of a multi-cell distribution is not a distribution-wide measure,
+  no matter how well-justified its single-cell threshold is — symmetric
+  treatment of over- and under-representation requires a genuinely
+  aggregate statistic. A significant/not-significant Boolean is not a
+  p-value, and a test that only checks the Boolean cannot distinguish a
+  correct exact computation from a placeholder that merely preserves the
+  same threshold comparison — assert the actual numeric value against an
+  independently derived expectation, not only its relationship to a
+  threshold. A comment's claims are part of the contract too: a docstring
+  that overclaims what a function detects is itself a defect, independent
+  of whether the function's actual behavior is correct. A report field
+  populated by a stub that happens to match the one fixture every test
+  exercises is invisible to those tests — cover the field with an input
+  specifically constructed to differ from the trivial case.
+
+## QL-040 — the Cohen's-w rationale rested on an impossible probability distribution; aggregate failures could be reported unexplained; aggregate helpers trusted malformed input; the round-4 "independent" p-value oracle reused the same recurrence; the regime-transition claim was overstated (Issue #24, Phase 0 steps 1-3)
+
+- **Status:** Corrected on the same branch
+  (`claude/phase-0-ql033-foundation`), draft PR still open against `main`
+  for independent review, not yet merged. QL-033 itself remains confirmed
+  and unresolved; this entry corrects the QL-036 through QL-039 *tooling*
+  further, not the bank.
+- **Finding — five problems, each reproduced by direct construction
+  before any fix (full detail in `docs/ASSESSMENT_VALIDITY.md`):**
+  1. **The Cohen's-w rationale's own justification was mathematically
+     impossible.** The code comment and documentation claimed the
+     `w=0.30` threshold was algebraically equivalent, at its boundary, to
+     the prior single-cell margin rule, illustrated with a distribution
+     `[0.40, 0.25, 0.25, 0.25]`. Confirmed directly:
+     `0.40+0.25+0.25+0.25 = 1.15`, not a valid probability distribution
+     at all — the claimed equivalence was false.
+  2. **A distribution-wide practical failure could be reported with no
+     explanation of which position(s) drove it.** Confirmed directly:
+     `N=100`, `n=4`, `positionCounts=[38,24,19,19]` — chi-square=9.68,
+     Cohen's w≈0.3111, correctly **failing** — yet every individual share
+     fell inside the separately retained per-cell diagnostic margin, so
+     `materialDeviations` was empty and every cell was labeled only
+     "within-margin," with no indication position 0 (38% vs 25%
+     expected) was the dominant driver. Cohen's w itself has no
+     direction; only individual positions do.
+  3. **The aggregate helpers trusted caller-supplied summaries without
+     validating them.** Confirmed directly: `exactPigeonholeBalance([2,1,1],
+     4, 5)` — an array with only 3 entries for 4 positions, summing to 4
+     rather than N=5 — reported `balanced: true`; `poissonBinomialPMF([1.5,
+     0.5])` produced a NEGATIVE probability mass (`-0.25`); a round-3 test
+     fixture used fractional "counts" (`[16.8,8,7.6,7.6]`), which cannot
+     correspond to any real authored-question tally.
+  4. **The round-4 "independent" p-value verification was not genuinely
+     independent.** Its hand-computed expected value for `chiSquare=120,
+     df=3` was described as computed "via the same verified
+     incomplete-gamma algorithm" — the same recurrence as the
+     implementation under test, not a separate numerical oracle.
+  5. **The regime-transition "no easier to pass" claim was overstated.**
+     Verified only against severe, comparable-shape (zero-position)
+     omissions at N=19/20/21, but not shown to hold universally. Confirmed
+     directly: `N=19`, `[6,5,4,4]` fails (structural regime, exact
+     pigeonhole rule); `N=20`, `[7,5,4,4]` — with a LARGER raw maximum
+     count (7 > 6) — **passes** (statistical regime, Cohen's w ≈ 0.245).
+- **Impact:** None shipped — PR #26 remained draft/unmerged throughout;
+  found and fixed before merge.
+- **Correction (full detail, exact mathematics, and every reproduced
+  counterexample in `docs/ASSESSMENT_VALIDITY.md` sections 4.3b, 4.3c,
+  4.3d, 4.3e, 4.6b):**
+  1. **Cohen's-w rationale replaced with Cohen's own directly-quoted,
+     genuinely normalized illustrative examples.** Source directly
+     inspected: Jacob Cohen, *Statistical Power Analysis for the
+     Behavioral Sciences*, 2nd edition, Lawrence Erlbaum Associates,
+     1988, chapter 7, section 7.2.3, printed pages 224-227 (publicly
+     hosted scan, verified 2026-08-08 against the title page). Cohen's
+     own m=4 medium-effect (w=.30) illustration (page 226, verbatim):
+     H0=.250 .250 .250 .250, H1=.380 .207 .207 .207 ("a w=.30 departure
+     from equiprobability in which the effect is concentrated in the
+     first category") — sums to 1.001 (Cohen's own printed rounding),
+     a valid distribution. `COHENS_M4_ILLUSTRATIVE_EXAMPLES` (new)
+     transcribes this alongside Cohen's small (w=.10), equally-spaced
+     medium (w=.30), and large (w=.50) m=4 examples, each independently
+     verified to sum to 1 and reproduce Cohen's own stated w. The
+     threshold is now framed explicitly as an ADOPTED, conservative,
+     project-defined operational release gate — quoting Cohen's own
+     caution that the conventions are "a general frame of reference...
+     not to take them too literally" — never as uniquely correct,
+     an item-validity result, or mathematically forced.
+  2. **Full directional/contribution reporting added.** Every position in
+     `evaluatePositionBalance()`'s `positionDeviations` now reports
+     observed/expected count and proportion, SIGNED count/proportion
+     deviation, `direction` ("above"/"below"/"equal", derived purely from
+     the deviation's sign), `chiSquareContribution`, and
+     `exceedsDiagnosticMargin` (the renamed, accurately-scoped former
+     "material deviation" concept — diagnostic only, never the decision
+     rule). A new `primaryContributors` field identifies the position(s)
+     accounting for a majority (>50%) of the aggregate chi-square,
+     always populated when Cohen's w fails, even when no individual cell
+     exceeds the diagnostic margin. Verified: the `[38,24,19,19]`
+     counterexample's `primaryContributors` correctly identifies position
+     0 (69.8% of the total chi-square, direction "above").
+  3. **One reusable validation function per input shape added**, the same
+     discipline `assertValidQuestionShape()` already applies to question
+     objects: `assertValidPositionCounts()` (used by
+     `exactPigeonholeBalance()`/`evaluatePositionBalance()`),
+     `assertValidProbabilities()`/`assertValidObservedIndex()` (used by
+     both Poisson-binomial functions), and
+     `assertValidLengthAssociationItem()` (used by
+     `evaluateLengthAssociation()`). Every malformed case above now
+     throws a descriptive `TypeError`. The fractional-count test fixture
+     is replaced with a valid integer fixture (`N=20`, `[8,4,4,4]`,
+     w≈0.346) testing the identical policy without an impossible input.
+     Verified: every valid fixture used elsewhere in this file's own
+     tests, including the full live 153-question bank, passes validation
+     unchanged.
+  4. **Genuinely independent p-value verification added.** Two analytic
+     closed forms, derived by hand from the chi-square distribution's own
+     definition (not this implementation's recurrence): df=2 gives
+     `exp(-x/2)` (chi-square(2) is Exponential(mean=2)); df=4 gives
+     `exp(-x/2)*(1+x/2)` (chi-square(4) is Gamma(shape=2,scale=2)),
+     verified at x=10 to at least 9 decimal places. Also newly verified:
+     the published NIST/SEMATECH e-Handbook critical-value table
+     (National Institute of Standards and Technology, directly fetched
+     2026-08-08), extended to α=0.05 for df 1-7 (previously only df 1-3).
+     The Numerical Recipes attribution for the underlying algorithm is
+     removed: its official bookreader is subscription-gated, and only its
+     table of contents (confirming a corresponding section exists, not
+     its content) was actually inspected. Terminology corrected: the
+     computed p-value is a numerical evaluation of the exact mathematical
+     survival function, not itself called "exact" without that
+     qualification. Mutation-tested: a coarser table-based check alone
+     did not catch a deliberately introduced small numerical error in the
+     gamma-function coefficients, but the new tight-tolerance analytic
+     fixtures did — direct evidence the independent oracle is more than a
+     formality.
+  5. **The regime-transition claim narrowed to what the evidence actually
+     proves.** The N=19/20/21 "fails at every size" result is now stated
+     as applying specifically to severe, comparable-shape (zero-position)
+     omissions. A new, explicit statement records the genuine, ACCEPTED,
+     limited discontinuity (N=19 `[6,5,4,4]` fails; N=20 `[7,5,4,4]`
+     passes despite a larger raw maximum) as an intentional consequence
+     of the two regimes using deliberately different standards (an exact
+     authoring allocation for small forms vs. a practical effect-size
+     tolerance for large ones) — not a defect, and not patched with an
+     arbitrary added threshold. Both claims are verified side by side so
+     neither can silently overwrite the other.
+- **Tests:** `tests/assessment-cue-audit.mjs` grew from 157 to 187
+  dependency-free checks. New coverage: normalization and w-reproduction
+  checks for every `COHENS_M4_ILLUSTRATIVE_EXAMPLES` fixture (closing the
+  impossible-example gap); the `[38,24,19,19]` directional-explainability
+  counterexample and its `primaryContributors`; a perfectly uniform
+  distribution's all-"equal" report; a distribution with both aggregate
+  and per-cell violations; 2-/3-option directional-reporting equivalence;
+  deterministic-JSON schema coverage; malformed positionCounts (wrong
+  length, wrong sum, negative/non-finite/fractional counts, malformed
+  optionCount/N); malformed probabilities (out-of-range, non-finite) and
+  observed indices; malformed length-association items; live-bank
+  behavior preserved under the new validation; analytic df=2/df=4
+  fixtures; NIST α=0.01 and α=0.05 checks extended to df 1-7;
+  finite/monotonic sanity checks; the genuine N=19/20/21 discontinuity
+  alongside the narrowed severe-omission claim; valid integer fixtures at
+  5n-1/5n/5n+1 for both severe and near-balanced shapes.
+  `tests/e2e/assessment-cue-audit.spec.mjs` stays at 7 (no new
+  browser-specific behavior this round; re-run and reconfirmed passing).
+- **Mutation-tested (this round):** 6 targeted reversions against
+  `scripts/assessment-cue-audit.mjs` (never `index.html`), covering the
+  six required categories (the impossible/unnormalized Cohen rationale;
+  aggregate-failure contributor reporting; malformed position counts;
+  malformed probability inputs; independent analytic p-value fixtures;
+  narrowed regime-transition claims). Each failed exactly its intended,
+  directly-attributable test(s) and no others — no coverage gaps this
+  round (unlike prior rounds, where 2 of round 4's 7 mutations surfaced
+  gaps). Notably, the analytic-p-value mutation (a small perturbation to
+  a Lanczos coefficient) was caught by the new tight-tolerance analytic
+  fixtures while the coarser NIST-table cross-check did NOT catch it at
+  its looser tolerance — direct evidence the genuinely independent,
+  tighter oracle added by this round is not redundant with the round-4
+  table check. All 6 reverted to byte-identical via `diff` before
+  committing. See `docs/VALIDATION.md` for the full record.
+- **Mutation count, reconciled from retained evidence (not guessed):**
+  round 1 (QL-036): 8. Round 2 (QL-037): 8. Round 3 (QL-038): 4. Round 4
+  (QL-039): 7. Round 5 (this entry, QL-040): 6. **Cumulative total across
+  all five rounds: 33.**
+- **Full local validation:** `npm test` (172 dependency-free DOM-behavior
+  checks + 70 governance checks + 187 assessment-cue checks + 5
+  deployed-revision checks, all passing, including the `validate`
+  structural/documentation check) and the complete `npx playwright test`
+  suite run at a deterministic, fixed worker count (`--workers=2`).
+- **Scope:** No question, answer, rationale, distractor feedback, domain,
+  topic, difficulty, or stable ID changed; `index.html` is unmodified. No
+  `QUESTION_GOVERNANCE` field populated; all 153 questions remain `draft`.
+  QL-033 is not marked corrected. Phase 0 stays unchecked in
+  `docs/ROADMAP.md` and Issue #24. Steps 4-9 of the Phase 0 protocol were
+  not begun.
+- **Prevention:** A cited numeric example is a factual claim like any
+  other and must itself be verified (does this distribution sum to 1?)
+  before it is used to justify a threshold — an illustrative example that
+  fails its own domain's basic constraint undermines the argument it was
+  meant to support, regardless of how reasonable the adopted threshold
+  itself may be. A single scalar decision (a magnitude like Cohen's w)
+  is not automatically an explanation; when a report exists to inform a
+  human reviewer, the reviewer needs to know WHERE and in WHICH direction
+  a problem lies, not only THAT one exists. "Independently verified"
+  requires an oracle that does not share the implementation's own
+  recurrence, formula, or code path — reusing the same algorithm with
+  different inputs is cross-checking, not independent verification, and
+  the two catch genuinely different classes of error (this round's own
+  mutation-testing result — a coarse table check missing what a tight
+  analytic check caught — demonstrates the distinction is not academic).
+  A true, narrowly-scoped empirical claim ("fails for this specific
+  shape at these three sizes") must not be generalized into a broader
+  claim ("the transition is monotonic") the same evidence does not
+  support — and when a genuine exception is found, the right response is
+  usually to document the boundary precisely, not to add machinery whose
+  only purpose is making one known example come out differently.
+
+## QL-041 — Cohen's rounded published vector was mislabeled "genuinely normalized"; primaryContributors stopped at exactly 50%, not a majority; a p-value boundary test claimed "at" alpha for a fixture that was below it; a self-referential p-value provenance claim survived from round 5; several impossible numeric/field inputs still reached public helpers (Issue #24, Phase 0 steps 1-3)
+
+- **Status:** Corrected on the same branch
+  (`claude/phase-0-ql033-foundation`), draft PR still open against `main`
+  for independent review, not yet merged. QL-033 itself remains confirmed
+  and unresolved; this entry corrects the QL-036 through QL-040 *tooling*
+  further, not the bank.
+- **Finding — four narrow truthfulness/validation gaps, each reproduced by
+  direct construction before any fix (full detail in
+  `docs/ASSESSMENT_VALIDITY.md`):**
+  1. **Cohen's published, rounded illustrative vector was called
+     "genuinely normalized."** `.380+.207+.207+.207 = 1.001`, not 1 —
+     ordinary 3-decimal publication rounding, not a literal
+     normalization. QL-040's own test only proved the sum was within
+     `0.002` of 1 while its name claimed an exact proof.
+  2. **`primaryContributors` stopped accumulating at exactly 50% of the
+     total chi-square, described in prose as "a majority."** Confirmed
+     directly: `N=20`, `n=4`, `positionCounts=[6,3,3,8]` — position 3
+     alone contributes exactly half the total chi-square; the prior
+     `cumulativeContribution >= chiSquare / 2` stopped there.
+  3. **A p-value boundary test's "at the alpha boundary" fixture
+     (`chiSquare=11.3688`, df=3) was actually below alpha (p≈0.00989), not
+     at it** — no test anywhere exercised `pValue === SIGNIFICANCE_ALPHA`
+     directly.
+  4. **A self-referential p-value provenance claim survived from round
+     5.** The retained `chiSquare=120, df=3` test's comment still
+     described its expected value as "independently hand-computed... via
+     the same verified incomplete-gamma algorithm" — round 5 identified
+     this exact problem during its own mutation testing but never
+     actually corrected the stale comment.
+  5. **Several impossible inputs still reached public numerical helpers
+     or the length-association evaluator.** Confirmed directly:
+     `chiSquareUpperTailPValue(NaN, 3)`, `chiSquareUpperTailPValue(Infinity,
+     3)`, and `chiSquareUpperTailPValue(5, 2.5)` (non-integer df) each
+     silently returned a number instead of throwing; `cohensW(1, Infinity)`
+     silently returned `0`; `assertValidObservedIndex(1, NaN)` silently
+     returned without throwing; a length-association item with
+     `nullProbabilityCorrectAtMax: 0` (impossible — an item's own longest
+     option is always tied with itself) and one with
+     `nullProbabilityCorrectAtMax: 1, correctAtMax: false` (internally
+     impossible) were both silently accepted.
+- **Impact:** None shipped — PR #26 remained draft/unmerged throughout;
+  found and fixed before merge.
+- **Correction (full detail, exact mathematics, and every reproduced
+  counterexample in `docs/ASSESSMENT_VALIDITY.md` sections 4.3b, 4.3d,
+  4.3f, 4.6c):**
+  1. **Cohen's verbatim printed values and the genuinely normalized
+     computational fixture are now distinct.** `COHENS_M4_ILLUSTRATIVE_EXAMPLES`'s
+     "concentrated" entry now carries `h1Published` (Cohen's verbatim
+     `[.380,.207,.207,.207]`, never claimed to sum to exactly 1) and a
+     separate `h1` (rescaled to sum to exactly 1, transformation applied
+     in code, not hand-typed, not presented as Cohen's own values). The
+     normalization test's tolerance tightened from `0.002` to `1e-9`
+     (genuine, not publication-rounding), with a dedicated test proving
+     `h1Published` honestly sums to `1.001`. The other three examples
+     (small w=.10, equally-spaced medium w=.30, large w=.50) were already
+     exact and needed no split. This does not change the "ADOPTED, NOT
+     UNIQUELY CORRECT" framing of the `w=0.30` threshold.
+  2. **`primaryContributors` now requires a STRICT majority (`> 50%`, not
+     `>= 50%`), with tie-inclusive extension at the cutoff.** Once the
+     strict threshold is crossed, every immediately-following position
+     tied at the exact same `chiSquareContribution` as the position that
+     just crossed it is included too, rather than arbitrarily stopping
+     after only one of several tied positions. For the `[6,3,3,8]`
+     counterexample, `primaryContributors` is now `{3, 1, 2}` (cumulative
+     94.4%) rather than `{3}` alone (exactly 50%).
+     `primaryContributorsCumulativeContribution`/`primaryContributorsCumulativeShare`
+     report the exact accumulated total and share explicitly.
+  3. **A single exported `isStatisticallySignificant(pValue, alpha)`**
+     (`pValue < alpha`, strictly — `pValue === alpha` does not reject) is
+     now the SINGLE production comparison path both
+     `evaluatePositionBalance()` and `evaluateLengthAssociation()` call,
+     replacing two separately written inline expressions. Tested directly
+     with explicit p-values `0.009`/`SIGNIFICANCE_ALPHA` itself/`0.011` —
+     the exact-equality case no statistic-derived fixture could hit — and
+     confirmed to be a pure generic comparator independent of any
+     chi-square computation. The misleading "at the boundary" test is
+     retitled and reduced to its two genuinely below/above fixtures.
+  4. **The `chiSquare=120, df=3` test is relabeled honestly as an
+     INTEGRATION/consistency check**, not an independence claim — it
+     confirms `evaluatePositionBalance()` reports the exact output of a
+     direct call to `chiSquareUpperTailPValue()`, not a placeholder. The
+     genuinely independent oracles remain the analytic df=2/df=4 closed
+     forms and the NIST published table (QL-039/QL-040), unaffected.
+  5. **A shared `assertFiniteNumber()` guard** now backs
+     `upperRegularizedIncompleteGamma()`, `chiSquareUpperTailPValue()`
+     (which additionally requires an integer `df`), and `cohensW()` —
+     replacing duplicated sign-only checks that were silently `false` for
+     `NaN` and did not exclude `Infinity`. `assertValidObservedIndex()`
+     now validates `N` (not only `observed`). `assertValidLengthAssociationItem()`
+     now rejects `nullProbabilityCorrectAtMax === 0` and the combination
+     `nullProbabilityCorrectAtMax === 1` with `correctAtMax === false`,
+     while continuing to accept the valid degenerate all-tied case.
+     Verified: a caller passing a malformed `chiSquareStat`/`df` sees an
+     error naming ITS OWN argument, not merely an internal helper's
+     unrelated parameter.
+- **Tests:** `tests/assessment-cue-audit.mjs` grew from 187 to 201
+  dependency-free checks. New coverage: tightened Cohen's-fixture
+  normalization plus a dedicated `h1Published`-vs-`h1` mutation guard; the
+  exact-50%/tie-inclusive `primaryContributors` counterexample and a
+  general cumulative-reporting check; `isStatisticallySignificant()`
+  tested with explicit p-values at, below, and above alpha, plus its
+  independence from `chiSquareUpperTailPValue()`; a corrected below/above
+  (not "at") boundary test; a message-attribution test proving
+  `chiSquareUpperTailPValue()` validates its own arguments rather than
+  only relying on a downstream function's check; NaN/Infinity/non-integer
+  rejection tests for `chiSquareUpperTailPValue()`, `cohensW()`, and
+  `upperRegularizedIncompleteGamma()`; `assertValidObservedIndex()`'s `N`
+  validation; both new `assertValidLengthAssociationItem()` cross-field
+  invariants, including confirming the valid degenerate case is still
+  accepted. `tests/e2e/assessment-cue-audit.spec.mjs` stays at 7 (14/14
+  across both projects; no new browser-specific behavior this round;
+  re-run and reconfirmed passing).
+- **Mutation-tested (this round):** 12 targeted reversions against
+  `scripts/assessment-cue-audit.mjs` (never `index.html`). One initial
+  attempt (removing `chiSquareUpperTailPValue()`'s own finiteness checks)
+  surfaced a genuine coverage gap — `upperRegularizedIncompleteGamma()`'s
+  own downstream check still threw, so no test failed even though the
+  boundary's OWN validation had been removed — closed by adding a test
+  asserting the thrown error names `chiSquareUpperTailPValue`'s own
+  `chiSquareStat`/`df`, not an internal helper's unrelated `a`/`x`; the
+  mutation was then re-applied and correctly caught. All other 11
+  mutations (the false-normalization restore; the `>=` revert; the
+  tie-extension removal; the `isStatisticallySignificant` `<`-to-`<=`
+  flip; the hardcoded-placeholder pValue; `cohensW`'s and
+  `upperRegularizedIncompleteGamma`'s finiteness-check removals; the
+  integer-df check removal; `assertValidObservedIndex`'s `N`-check
+  removal; and both `assertValidLengthAssociationItem` invariant
+  removals) each failed exactly their intended, directly-attributable
+  test(s) and no others on the first attempt. All 12 reverted to
+  byte-identical via `diff` before committing. See `docs/VALIDATION.md`
+  for the full record.
+- **Mutation count, reconciled from retained evidence (not guessed):**
+  round 1 (QL-036): 8. Round 2 (QL-037): 8. Round 3 (QL-038): 4. Round 4
+  (QL-039): 7. Round 5 (QL-040): 6. Round 6 (this entry, QL-041): 12.
+  **Cumulative total across all six rounds: 45.**
+- **Full local validation:** `npm test` (all suites, including the
+  `validate` structural/documentation check, `test:behavior`,
+  `test:governance`, 201 assessment-cue checks, and
+  `test:verify-deployed-revision`, all passing), `npm run
+  audit:assessment-cues -- --json` run twice with byte-identical output
+  confirmed via `diff`, the targeted `tests/e2e/assessment-cue-audit.spec.mjs`
+  Playwright suite (14/14 passing), and the complete Playwright suite run
+  at a deterministic, fixed worker count (`--workers=2`).
+- **Scope:** No question, answer, rationale, distractor feedback, domain,
+  topic, difficulty, or stable ID changed; `index.html` is unmodified. No
+  `QUESTION_GOVERNANCE` field populated; all 153 questions remain `draft`.
+  QL-033 is not marked corrected. Phase 0 stays unchecked in
+  `docs/ROADMAP.md` and Issue #24. Steps 4-9 of the Phase 0 protocol were
+  not begun.
+- **Prevention:** A test whose NAME claims an exact proof must have an
+  assertion that actually proves it — a 0.2%-tolerance check is not
+  evidence for an exact-sum claim, and the gap between the two is exactly
+  where a false claim hides. "Majority" means strictly more than half;
+  `>=` at the 50% mark is a tie, not a majority, and prose describing a
+  result must match the comparison operator that actually produced it,
+  not the operator the author intended. A boundary claim ("at the alpha
+  threshold") requires a fixture that actually sits at that threshold —
+  a fixture merely close to it, on one side, proves something narrower
+  and should be named accordingly. Identifying a problem during mutation
+  testing and recording that it was found is not the same as fixing it —
+  QL-040 named this exact self-referential-comment problem and it
+  survived, unfixed, into this round; a finding is only closed when the
+  artifact it describes has actually changed. Layered validation (a
+  boundary check plus a downstream function's own check) can silently
+  absorb a removed check without any test failing — a mutation that
+  produces zero test failures is not evidence the removed code was
+  unnecessary, it is evidence the test suite cannot currently distinguish
+  which layer is doing the validating, and closing that gap (here, by
+  asserting on which function's name appears in the thrown error) is part
+  of the mutation-testing discipline, not an optional refinement.
+
+## QL-042 — `isStatisticallySignificant()` accepted impossible probability/alpha inputs; `cohensW()` still accepted a fractional N; the round-6 commit message and two docs miscounted the review as "fifth"; the chi-square p-value's exactness and df-generality claims were overstated (Issue #24, Phase 0 steps 1-3)
+
+- **Status:** Corrected on the same branch
+  (`claude/phase-0-ql033-foundation`), draft PR still open against `main`
+  for independent review, not yet merged. QL-033 itself remains confirmed
+  and unresolved; this entry corrects the QL-036 through QL-041 *tooling*
+  further, not the bank.
+- **Finding — three narrow gaps, each reproduced by direct construction
+  before any fix (full detail in `docs/ASSESSMENT_VALIDITY.md`):**
+  1. **`isStatisticallySignificant(pValue, alpha)` validated only
+     finiteness, not the probability domains its own name implies.**
+     Confirmed directly: `isStatisticallySignificant(-0.1, 0.01)` returned
+     `true`; `isStatisticallySignificant(1.1, 0.01)` returned `false`
+     instead of rejecting an impossible p-value; `isStatisticallySignificant(0.01,
+     -0.5)` returned `false`; `isStatisticallySignificant(0.01, 2)`
+     returned `true` — none of these describe a real p-value or
+     significance level.
+  2. **`cohensW()`'s round-6 finiteness/positivity check for `N` still
+     accepted a fractional value.** Confirmed directly: `cohensW(1, 2.5)`
+     silently computed `0.6324555320336759` instead of throwing, even
+     though `N` is this audit's authored-question count — the same
+     quantity `assertValidPositionCounts()` already requires to be a
+     positive integer.
+  3. **A miscounted review ordinal and an overstated numerical-domain
+     claim survived round 6.** The round-6 commit message, `CHANGELOG.md`'s
+     QL-041 entry, and `docs/VALIDATION.md`'s QL-041 entry each said "a
+     fifth independent review" for what QL-041 itself and the PR body
+     both correctly identify as the SIXTH review. Separately,
+     `CHANGELOG.md` and `docs/ASSESSMENT_VALIDITY.md` described the
+     chi-square p-value as "exact" and "valid at any df" without the
+     qualifications round 5 had otherwise already established elsewhere
+     in the same document — the survival function itself is exact and
+     closed-form, but this implementation only numerically evaluates it
+     in finite-precision floating-point, and this audit's `df` is always
+     a positive integer, not an arbitrary positive real.
+- **Impact:** None shipped — PR #26 remained draft/unmerged throughout;
+  found and fixed before merge.
+- **Correction (full detail in `docs/ASSESSMENT_VALIDITY.md` sections
+  4.3f, 4.6b, 4.6c):**
+  1. **`isStatisticallySignificant()` now validates its probability
+     domains.** `pValue` must be finite and within `[0,1]`; `alpha` must
+     be finite and strictly within the open interval `(0,1)` (an alpha of
+     exactly `0` or `1` is not a real significance level). Both throw a
+     descriptive `RangeError` naming the caller-facing parameter. The
+     existing strict decision rule (`pValue < alpha`) and the exact-equality
+     policy (`pValue === alpha` does not reject, established in QL-041)
+     are unchanged. The valid endpoints `pValue=0` and `pValue=1` remain
+     accepted.
+  2. **`cohensW()` now requires `N` to be a positive integer.** `chiSquare`
+     itself remains a valid finite nonnegative real number — it is a
+     statistic, not a count, and fractional values (e.g. `9.68`) are
+     normal and continue to be accepted; only `N`'s domain narrowed.
+  3. **The round-6 commit message was amended in place** (verified the
+     remote branch still pointed exactly at the expected prior head
+     before amending; changed only "fifth" to "sixth"; the amendment's
+     tree is byte-identical to the original commit's tree, confirmed via
+     `git diff --stat`, so no file content changed) and re-pushed with an
+     exact `--force-with-lease` tied to the verified prior SHA. `CHANGELOG.md`
+     and `docs/VALIDATION.md`'s QL-041 entries are corrected to "a sixth
+     independent review" in this commit. The chi-square p-value wording in
+     `CHANGELOG.md` and `docs/ASSESSMENT_VALIDITY.md` (both the section
+     4.6b prose and its summary-table row) now reads "numerically evaluated
+     chi-square upper-tail p-value through the regularized upper incomplete
+     gamma function," distinguishing the exact closed-form survival
+     function, its finite-precision numerical evaluation, the upstream
+     chi-square goodness-of-fit test's own asymptotic validity assumption,
+     and this audit's intentionally supported positive-integer `df` (not
+     claimed to extend to arbitrary non-integer `df`, even though the
+     underlying incomplete gamma function is itself well-defined there).
+     Historical round-specific text describing what a PAST round's own
+     review found (e.g. `docs/CLAUDE_HANDOFF.md`'s "a fifth independent
+     review" describing round 5/QL-040 itself, and an unrelated QL-035
+     entry from a different milestone) is left untouched — only the
+     current, misattributed claims were corrected.
+- **Tests:** `tests/assessment-cue-audit.mjs` grew from 201 to 206
+  dependency-free checks. New coverage: `isStatisticallySignificant()`
+  rejecting out-of-`[0,1]` p-values and out-of-`(0,1)` alphas (including
+  the boundary values `0` and `1` for alpha, and `NaN`/`Infinity` for
+  both parameters); confirmation the valid `pValue` endpoints `0`/`1` and
+  the existing strict/exact-equality decision policy are unaffected;
+  `cohensW()` rejecting fractional, zero, negative, `NaN`, and infinite
+  `N`; confirmation `cohensW()` still accepts every valid integer-`N`
+  fixture and a fractional `chiSquare` statistic.
+  `tests/e2e/assessment-cue-audit.spec.mjs` stays at 7 (14/14 across both
+  projects; no new browser-specific behavior this round).
+- **Mutation-tested (this round):** 4 targeted reversions against
+  `scripts/assessment-cue-audit.mjs` (never `index.html`): bypassing
+  `isStatisticallySignificant()`'s `pValue` range check; bypassing its
+  `alpha` range check; reverting its `<` back to `<=` (caught by all
+  three of the tests that specifically exercise exact equality at the
+  boundary — the round-6 boundary test, the independence test, and this
+  round's new endpoint test — no others); and removing `cohensW()`'s
+  integer-`N` requirement. Each failed exactly its intended,
+  directly-attributable test(s) and no others — no coverage gaps this
+  round. All 4 reverted to byte-identical via `diff` before committing.
+- **Mutation count, reconciled from retained evidence (not guessed):**
+  round 1 (QL-036): 8. Round 2 (QL-037): 8. Round 3 (QL-038): 4. Round 4
+  (QL-039): 7. Round 5 (QL-040): 6. Round 6 (QL-041): 12. Round 7 (this
+  entry, QL-042): 4. **Cumulative total across all seven rounds: 49.**
+- **Full local validation:** `npm test` (all suites, including the
+  `validate` structural/documentation check, `test:behavior`,
+  `test:governance`, 206 assessment-cue checks, and
+  `test:verify-deployed-revision`, all passing), `npm run
+  audit:assessment-cues -- --json` run twice with byte-identical output
+  confirmed via `diff`, the targeted `tests/e2e/assessment-cue-audit.spec.mjs`
+  Playwright suite (14/14 passing), and the complete Playwright suite run
+  at a deterministic, fixed worker count (`--workers=2`).
+- **Scope:** No question, answer, rationale, distractor feedback, domain,
+  topic, difficulty, or stable ID changed; `index.html` is unmodified. No
+  `QUESTION_GOVERNANCE` field populated; all 153 questions remain
+  `draft`. QL-033 is not marked corrected. Phase 0 stays unchecked in
+  `docs/ROADMAP.md` and Issue #24. Steps 4-9 of the Phase 0 protocol were
+  not begun. No Gate A/Gate B policy or threshold changed.
+- **Prevention:** A validation function's own NAME is a contract — a
+  function called `isStatisticallySignificant` that accepts a p-value of
+  `-0.1` or an alpha of `2` is not merely permissive, it is silently
+  wrong about a domain its own name promises to enforce; finiteness is a
+  necessary but not sufficient check whenever the value in question is
+  additionally known to be a probability. A quantity's REAL-WORLD
+  identity determines its validation contract, not merely its
+  mathematical type — `N` and `chiSquare` are both "just numbers" to the
+  type system, but `N` counts discrete authored questions and `chiSquare`
+  is a continuous statistic, so only one of them may legitimately be
+  fractional; validating them identically hides that distinction. An
+  ordinal claim ("the fifth review") is a factual claim like any other,
+  cross-checked against the surrounding document's own numbering (the QL
+  entry number, the PR body's own round count) before it is written, not
+  copied forward from the previous round's text and incremented by
+  assumption. "Exact" and "valid for any X" are absolute claims that must
+  be scoped precisely the first time and re-verified whenever a
+  downstream correction (here, round 6's own integer-`df` requirement)
+  narrows what was previously true — a claim can go stale even when
+  nothing in the sentence itself was edited.

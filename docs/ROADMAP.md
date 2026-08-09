@@ -463,7 +463,9 @@ review status stable before adding 46 questions.
   independently reproduced counts show the correct answer is index 1/B
   in 139 of 153 questions (90.8%), and is the uniquely longest option in
   114 of 153 (74.5%), longest-or-tied in 133 of 153 (86.9%). This is a
-  bank-level psychometric validity problem, distinct from per-question
+  bank/form-level psychometric validity problem — a single item is not
+  individually invalid merely for being B-keyed or legitimately longer,
+  see `docs/ASSESSMENT_VALIDITY.md` — distinct from per-question
   scientific governance (`QUESTION_GOVERNANCE`, Issue #3) — per-item
   release qualification is necessary but not sufficient for the question
   bank, or any exam form drawn from it, to be release-qualified. Requires
@@ -474,6 +476,32 @@ review status stable before adding 46 questions.
   threshold is decided yet; that is part of this future task's scope,
   not assumed here. Preserve the beta disclosure until this is resolved
   and independently verified.
+  **Foundation delivered (Issue #24, Phase 0 steps 1-3, `docs/QUALITY_LOG.md`
+  QL-036 through QL-042, draft PR open, not yet merged):**
+  `docs/ASSESSMENT_VALIDITY.md` independently reproduces the baseline
+  above, defines the Gate A bank/form-level statistical thresholds (with
+  a directly-inspected, cited primary source; a secondary source is
+  labeled accordingly, not overstated as directly verified), a
+  distribution-wide practical effect-size measure (Cohen's w, adopted as
+  an operational convention and justified with Cohen's own directly-quoted,
+  verified-normalized examples, not an invented or impossible one) that
+  catches material answer-position underrepresentation as well as
+  overrepresentation with a directional, per-position explanation for
+  every aggregate failure, one reusable input-validation path rejecting
+  malformed aggregate/probability input, an answer-key
+  sequence-predictability check separate from aggregate balance and
+  scoped to genuine learner-facing forms only, and a practical-vs-
+  statistical decision policy that never fails a scope on statistical
+  significance alone, and the Gate
+  B item-level review rubric, and selects a deterministic 13-question
+  pilot batch — no question content changed, the bank and every one of
+  its 17 forms still fails Gate A by design (now via a redesign that is
+  actually achievable for a well-authored small form or the pilot itself,
+  unlike the first draft, and independently proven achievable for the
+  COMBINED gate, not position balance alone), and this item stays
+  unchecked. Steps 4-9 (the
+  actual pilot rewrite and scale-up) remain separately scoped, later
+  work.
 
 ### Exit criteria
 
@@ -688,7 +716,10 @@ itself invalid — the bank/form-level statistics must be corrected (a
 separately pass item-level review (a "Gate B" check) and be
 `release-qualified` under `QUESTION_GOVERNANCE` (Issue #3), not merely
 source-checked. All 153 questions currently remain Draft. See
-`docs/LEARNING_PLATFORM_ROADMAP.md` section B for the full corrected model.
+`docs/LEARNING_PLATFORM_ROADMAP.md` section B for the full corrected model,
+and `docs/ASSESSMENT_VALIDITY.md` for the concrete Gate A/Gate B
+definitions, baseline reproduction, and pilot batch (Issue #24, Phase 0
+steps 1-3, draft PR open).
 
 **Phase sequence** (full detail in section N of the linked document):
 
@@ -721,13 +752,15 @@ packaging, selection of any specific adaptive/mastery algorithm, a
 framework migration, or a persistent content-pack system. Each requires its
 own separately scoped, separately reviewed proposal when its phase arrives.
 
-**Recommended next implementation task:** beginning Phase 0 — a controlled,
-batched remediation program correcting the QL-033 assessment-cueing defect
-(the defect itself is already fully reproduced with exact counts above; the
-remediation program's own design steps, and the human/scientific
-item-by-item review it requires, are not yet done — see
-`docs/LEARNING_PLATFORM_ROADMAP.md` Phase 0 for the full batched protocol).
-Not begun by this planning entry.
+**Recommended next implementation task:** Phase 0's remediation program,
+a controlled, batched remediation program correcting the QL-033
+assessment-cueing defect (`docs/LEARNING_PLATFORM_ROADMAP.md` Phase 0 for
+the full nine-step batched protocol). **Steps 1-3 (freeze/reproduce the
+baseline, define the Gate A/Gate B rules, select a deterministic pilot
+batch) are proposed in a draft PR** — see `docs/QUALITY_LOG.md` QL-036
+and `docs/ASSESSMENT_VALIDITY.md` — pending independent review and merge.
+Steps 4-9 (the actual pilot-batch rewrite, review, and scale-up) remain
+unstarted and are the next task after this foundation lands.
 
 ## Quality gates
 

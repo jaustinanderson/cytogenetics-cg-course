@@ -1859,6 +1859,257 @@ place in `docs/LEARNING_PLATFORM_ROADMAP.md`, `docs/ROADMAP.md`,
 `README.md`, and this document; see the PR #25 body for the full
 correction record.
 
+### QL-033 assessment-cue audit foundation — Phase 0 steps 1-3, draft PR opened 2026-08-08
+
+`docs/ASSESSMENT_VALIDITY.md` and `scripts/assessment-cue-audit.mjs`
+deliver the first three steps of `docs/LEARNING_PLATFORM_ROADMAP.md`
+Phase 0's nine-step batched remediation protocol (Issue #24): freezing
+and independently reproducing the QL-033 baseline (position counts
+11/139/3/0, uniquely-longest 114/153, longest-or-tied 133/153 — an exact
+match, confirmed by a dedicated test, not copied from QL-033's text);
+defining Gate A (bank/form-level statistical thresholds and Gate B
+(a 17-point human-reviewer rubric); and selecting a deterministic,
+cherry-pick-resistant 13-question pilot batch (`m1-q1`, `m1-q2`, `m1-q3`,
+`m2-q1`, `m2-q3`, `m4-q1`, `m6-q1`, `m6-q4`, `m7-q2`, `m12-q6`, `m15-q1`,
+`m16-q1`, `final-q33`) covering all 5 domains, all 3 difficulty levels,
+all 3 answer positions actually used, and both form/feedback-structure
+contexts.
+
+**Corrected the earlier planning document's own bank-vs-item conflation
+in the process of independently reproducing it, and found a real bug
+before it shipped:** while designing the canonical, more-robust
+learner-visible length metric this work adds alongside the historical
+one, an early implementation decoded HTML entities before stripping
+tags, which caused an escaped tag typed as literal source text to be
+double-processed and wrongly stripped to zero length — caught by a test
+written against the intended behavior (not the first draft's actual
+behavior) before any code was committed as the baseline. Fixed; no
+current question was affected (zero current options contain markup or
+entities), but a future one could have been silently mismeasured. See
+`docs/QUALITY_LOG.md` QL-036 for the full record.
+
+**A second independent review (same day, before merge) found Gate A's
+design made every real 5-9 item course form and the 13-item pilot
+mathematically unable to ever pass, even perfectly balanced — the check
+was unachievable, not merely occasionally strict.** Corrected to a
+two-regime model (a zero-free-parameter "exact pigeonhole" structural
+rule below a shared `5n`-item threshold; the prior practical-margin/
+chi-square approach above it), so synthetic balanced 5/6/7/8/9/13-item
+forms now pass while imbalanced ones still fail. The canonical length
+metric was also found to strip tags, decode entities, and strip
+punctuation that `index.html`'s actual `esc()`/`textContent` rendering
+displays to learners as literal text — corrected to measure exactly the
+rendered string, verified by a new real-browser rendered-text oracle
+test. The length-cueing check was found to ignore tie structure (a bank
+keying the correct answer to a tied-maximum-length option could evade a
+uniquely-longest-only check) and to go inconclusive for mixed
+option-count scopes — replaced with a tie-aware, per-item, exact
+Poisson-binomial test valid at any sample size. Six further
+reproducibility gaps were also corrected, including that the prior
+pilot-selection-order determinism test used a comparison helper that
+could only ever produce a constant value and could not have caught the
+order-dependence bug it was named for (now fixed with a canonical,
+id-derived selection order and a real equality assertion); that the
+frozen baseline recorded only aggregate counts, not the exact 153
+question ids (a hypothetical id swap preserving every count would have
+gone undetected — now a separate frozen id manifest with a SHA-256
+digest); and that the NBME source citation was mislabeled a "directly
+inspected primary source" when its wording actually came from an
+unverified third-party mirror (the official PDF is gated behind a
+lead-capture form) — now downgraded to explicitly labeled corroborating
+color, with the University of Illinois CITL source (fully, directly
+verified) as the sole basis for every numeric threshold. See
+`docs/QUALITY_LOG.md` QL-037 for the full record.
+
+**A third independent review (same PR, before merge) found that QL-037's
+own tests only ever proved position balance in isolation, not the
+combined Gate A; that aggregate balance alone missed mechanically
+predictable answer-key sequences; that a statistically significant but
+practically trivial deviation could fail Gate A by itself; and that the
+exact two-sided p-value convention was unnamed.** The size-loop tests
+never constructed a full question form and asserted
+`evaluateGateA(...).overall === "pass"`, including the length component —
+now directly proven at every required size via independently constructed
+full forms with position-only and length-only perturbations each
+isolated. A literal `A,B,C,D,A,B,C,D,A` key satisfies exact pigeonhole
+balance perfectly while being an obvious repeating cycle — a new
+deterministic sequence-pattern detector (not a statistical test) now
+catches repeating cycles, palindromes, and excessive runs, reported
+separately from position and length. A large-N scope with a maximum
+observed position share of 25.5% (far inside the 40% practical margin)
+previously still failed because chi-square exceeded its critical value —
+the practical margin is now the sole authoritative fail driver, with
+significance-alone raising an explicit review flag instead. The exact
+two-sided Poisson-binomial p-value switched from an unnamed
+doubled-minimum-tail convention to the precisely-named probability-
+ordering convention, verified against independently hand-computed
+fixtures. Mutation count reconciled from retained evidence across all
+three rounds: 8 + 8 + 4 = **20** (an earlier PR-body draft undercounted
+this as "8 across two rounds"). See `docs/QUALITY_LOG.md` QL-038 for the
+full record.
+
+**A fourth independent review (same PR, before merge) found the large-N
+practical decision examined only the single largest answer position
+(missing material underrepresentation), that position balance never
+reported an actual p-value, that the frozen id-manifest function's own
+comment overclaimed detecting order, and that the NBME URL-role
+description was imprecise.** At N=20 (n=4), distributions `[7,7,6,0]`,
+`[8,6,6,0]`, `[8,8,4,0]` — each leaving one position at zero correct
+answers — all passed under the single-largest-share rule; replaced with
+Cohen's w (Cohen, 1988), the standard scale-free multinomial effect size,
+using Cohen's own published medium-effect threshold (0.3), verified to
+fail all three (w = 0.583, 0.600, 0.663) while a genuinely balanced N=20
+distribution still passes and the N=19/20/21 regime transition behaves
+consistently. Position balance now computes and reports an exact
+chi-square p-value (`chiSquareUpperTailPValue()`, the regularized
+incomplete gamma function, verified against published critical-value
+tables), replacing a Boolean-only critical-value comparison.
+`compareToIdManifest()`'s comment corrected to state plainly it is a
+set-identity check only; a new, genuinely separate, order-sensitive
+per-form manifest (`compareToFormOrderManifest()`) now tracks each form's
+authored encounter order, since the sequence check (QL-038) made that
+order a real contract — and the whole-bank aggregate is no longer treated
+as one learner-facing sequence for gate purposes. The two official NBME
+URLs were re-fetched and directly re-inspected: the institutions page is
+the actual request-form page; the file/pdf-shaped URL serves only an HTML
+page shell with no PDF and no request form of its own. Mutation count
+reconciled across all four rounds: 8 + 8 + 4 + 7 = **27**. Two of round
+4's 7 mutations initially surfaced genuine test-coverage gaps (a
+p-value placeholder that preserved the correct significance
+classification by construction; a `formOrderCheck` stub every existing
+test happened to pass through unchanged), both closed with permanent
+tests before being counted as passing. A complete `npx playwright test`
+run at a deterministic fixed worker count (`--workers=2`) produced a
+fully clean result: 252 passed, 6 skipped, 0 failed. See
+`docs/QUALITY_LOG.md` QL-039 for the full record.
+
+**A fifth independent review (same PR, before merge) found the Cohen's-w
+rationale's own justification cited a mathematically impossible
+distribution, that aggregate failures could be reported with no
+explanation of which position drove them, that the aggregate helpers
+trusted malformed input, that the round-4 "independent" p-value
+verification reused the same recurrence as the implementation under
+test, and that the regime-transition claim was overstated.** The
+threshold's justification claimed `[0.40,0.25,0.25,0.25]` (summing to
+1.15, not 1) was algebraically equivalent to the prior margin rule --
+false. Replaced with Cohen's own directly-quoted, verified-normalized
+m=4 examples (Cohen, 1988, pages 224-227, directly inspected via a
+publicly hosted scan), reframed explicitly as an adopted operational
+threshold, not a uniquely correct or item-validity result. A
+distribution-wide Cohen's-w failure (N=100, `[38,24,19,19]`) could report
+zero explanation when every cell stayed inside the separate per-cell
+diagnostic margin -- every position now reports its full directional and
+chi-square-contribution record, and a new `primaryContributors` field
+names the position(s) responsible for a majority of the aggregate effect.
+The aggregate helpers previously trusted malformed input --
+`exactPigeonholeBalance([2,1,1],4,5)` reported `balanced:true` for a
+wrong-length, wrong-sum array; `poissonBinomialPMF([1.5,0.5])` produced a
+negative probability mass -- now rejected by one reusable validation
+function per input shape, with the prior fractional-count test fixture
+replaced by a valid integer one. The round-4 p-value "independent" oracle
+reused the same incomplete-gamma recurrence as the implementation under
+test -- replaced with two genuinely independent analytic closed forms
+(df=2, df=4) and an NIST/SEMATECH critical-value cross-check extended to
+alpha=0.05 for df 1-7; the Numerical Recipes attribution is removed since
+its bookreader is subscription-gated and only its table of contents, not
+its content, was actually inspected. The N=19/20/21 "no easier to pass"
+claim was verified only for severe zero-position omissions -- a genuine,
+accepted, limited discontinuity is now documented explicitly (N=19
+`[6,5,4,4]` fails; N=20 `[7,5,4,4]`, with a larger raw maximum, passes),
+since the two regimes use deliberately different standards by design.
+Mutation count reconciled across all five rounds: 8+8+4+7+6 = **33**, with
+no coverage gaps in round 5's own 6 mutations. A complete `npx playwright
+test` run at a deterministic fixed worker count (`--workers=2`) produced
+another fully clean result: 252 passed, 6 skipped, 0 failed. See
+`docs/QUALITY_LOG.md` QL-040 for the full record.
+
+**A sixth independent review (same PR, before merge) found Cohen's own
+published vector was mislabeled "genuinely normalized," that
+`primaryContributors` stopped at exactly 50% (not a majority),
+that a p-value boundary test claimed "at" alpha for a fixture that was
+actually below it, that a self-referential p-value provenance claim
+QL-040 itself had identified during mutation testing was never actually
+fixed, and that several impossible inputs still reached public helpers.**
+Cohen's printed "concentrated" example (`.380+.207+.207+.207 = 1.001`)
+is now split into `h1Published` (verbatim, never claimed to sum to
+exactly 1) and a separately, explicitly rescaled `h1` (genuinely sums to
+1, used for computation) -- the normalization test's tolerance tightened
+from a 0.2%-of-1 slack to `1e-9`. `primaryContributors`' accumulation now
+requires a STRICT majority (`> 50%`, not `>=`), with tie-inclusive
+extension so a position tied at the exact cutoff contribution is never
+arbitrarily dropped -- confirmed for `N=20`, `[6,3,3,8]`, where position 3
+alone is exactly 50% and the corrected result is `{3, 1, 2}` at 94.4%. A
+single exported `isStatisticallySignificant(pValue, alpha)` (strict `<`)
+is now the SINGLE production comparison path both `evaluatePositionBalance()`
+and `evaluateLengthAssociation()` call, tested directly with explicit
+p-values straddling and exactly AT alpha -- the one input no
+statistic-derived fixture could ever hit. The retained `chiSquare=120,
+df=3` test is relabeled honestly as an integration/consistency check, not
+an independence claim. A shared `assertFiniteNumber()` guard (plus an
+integer-`df` requirement for `chiSquareUpperTailPValue()`) now rejects
+NaN/Infinity across `chiSquareUpperTailPValue()`, `cohensW()`, and
+`upperRegularizedIncompleteGamma()`; `assertValidObservedIndex()` now
+validates `N`, not only `observed`; `assertValidLengthAssociationItem()`
+now rejects `nullProbabilityCorrectAtMax: 0` and the internally
+impossible `{nullProbabilityCorrectAtMax: 1, correctAtMax: false}`
+combination, while still accepting the valid degenerate all-tied case.
+Mutation count reconciled across all six rounds: 8+8+4+7+6+12 = **45**.
+One of round 6's 12 mutations initially surfaced a genuine coverage gap —
+removing `chiSquareUpperTailPValue()`'s own finiteness check produced no
+test failure at all, because `upperRegularizedIncompleteGamma()`'s
+downstream check still threw for the same input, silently absorbing the
+removed layer — closed with a test asserting the thrown error names the
+caller's own argument, not an internal helper's unrelated parameter name.
+`tests/assessment-cue-audit.mjs` grew from 187 to 201 dependency-free
+checks. A complete `npx playwright test` run at a deterministic fixed
+worker count (`--workers=2`) produced another fully clean result: 252
+passed, 6 skipped, 0 failed. See `docs/QUALITY_LOG.md` QL-041 for the
+full record.
+
+**A seventh independent review (same PR, before merge) found
+`isStatisticallySignificant()` validated only finiteness, not the
+probability domains its own name implies; `cohensW()`'s round-6
+finiteness/positivity check for `N` still accepted a fractional value;
+and a miscounted review ordinal plus an overstated numerical-domain claim
+survived round 6.** `isStatisticallySignificant(-0.1, 0.01)` returned
+`true` and `isStatisticallySignificant(0.01, 2)` returned `true` --
+neither a real p-value nor a real significance level. `pValue` now must
+be finite and within `[0,1]`; `alpha` must be finite and strictly within
+the open interval `(0,1)`; both throw a descriptive error naming the
+caller-facing parameter, with the existing strict `<` rule and
+`pValue === alpha` exact-equality policy unchanged. `cohensW(1, 2.5)`
+silently computed `0.6324555320336759` instead of throwing -- `N` (this
+audit's authored-question count) now must be a positive integer, while
+`chiSquare` itself (a statistic, not a count) continues to accept
+fractional values. The round-6 commit message, `CHANGELOG.md`, and
+`docs/VALIDATION.md` each said "a fifth independent review" for what was
+actually the sixth -- the commit message was amended in place (tree
+byte-identical, verified via `git diff --stat`, re-pushed with an exact
+`--force-with-lease`) and the two docs corrected. The chi-square p-value
+was described as "exact" and "valid at any df" without qualification --
+now reads "numerically evaluated... through the regularized upper
+incomplete gamma function," distinguishing the exact closed-form survival
+function from its finite-precision evaluation, the upstream asymptotic
+goodness-of-fit approximation, and this audit's intentionally supported
+positive-integer `df`. Mutation count reconciled across all seven rounds:
+8+8+4+7+6+12+4 = **49**, with no coverage gaps in round 7's own 4
+mutations. A complete `npx playwright test` run at a deterministic fixed
+worker count (`--workers=2`) produced another fully clean result: 252
+passed, 6 skipped, 0 failed. See `docs/QUALITY_LOG.md` QL-042 for the
+full record.
+
+**Nothing here is a correction to product code or scientific content.**
+`index.html` is unmodified; no question, answer, rationale, distractor
+feedback, domain, topic, difficulty, or stable ID changed; no
+`QUESTION_GOVERNANCE` field was populated; all 153 questions remain
+`draft`; the whole bank and every one of its 17 forms is confirmed,
+by a dedicated test, to still fail Gate A; QL-033 is not marked
+corrected; Phase 0 as a whole remains incomplete (steps 4-9 — the actual
+pilot rewrite, review, and scale-up — are not begun). Selecting the
+pilot batch is not authorization to rewrite it; that is separately
+scoped, later work pending independent review and merge of this
+foundation first.
+
 ### Accessibility
 
 The course has a skip link that now moves keyboard focus into `#main`
