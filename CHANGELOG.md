@@ -175,6 +175,50 @@ All notable repository changes are recorded here.
   bank and every form, still QL-033 not marked corrected. See
   `docs/QUALITY_LOG.md` QL-040 and `docs/ASSESSMENT_VALIDITY.md` for the
   full record.
+  **Corrected (QL-041):** a fifth independent review found Cohen's own
+  printed "concentrated" m=4 example (`.380+.207+.207+.207 = 1.001`) was
+  mislabeled "genuinely normalized" -- now split into `h1Published`
+  (verbatim, never claimed to sum to exactly 1) and a separately,
+  explicitly rescaled `h1` (genuinely sums to 1, used for computation),
+  with the normalization test's tolerance tightened from a 0.2% slack to
+  `1e-9`. `primaryContributors`' accumulation stopped at exactly 50% of
+  the total chi-square, not a majority -- now requires a STRICT majority
+  (`> 50%`), with tie-inclusive extension so a position tied at the exact
+  cutoff is never arbitrarily dropped (`N=20`, `[6,3,3,8]`: corrected
+  result is `{3,1,2}` at 94.4%, not `{3}` alone at exactly 50%). A p-value
+  boundary test's "at the alpha boundary" fixture was actually below
+  alpha, not at it -- replaced with a new test exercising a single shared
+  `isStatisticallySignificant(pValue, alpha)` (strict `<`) directly at
+  explicit p-values straddling and exactly AT alpha, now the SINGLE
+  production comparison path both `evaluatePositionBalance()` and
+  `evaluateLengthAssociation()` call. A self-referential p-value
+  provenance claim QL-040 itself had identified during mutation testing
+  was never actually fixed -- the retained `chiSquare=120, df=3` test is
+  now relabeled honestly as an integration/consistency check, not an
+  independence claim. Several impossible inputs were found to still reach
+  public helpers -- `chiSquareUpperTailPValue(NaN,3)`,
+  `chiSquareUpperTailPValue(Infinity,3)`, and
+  `chiSquareUpperTailPValue(5,2.5)` (non-integer df) each silently
+  returned a number instead of throwing; `cohensW(1,Infinity)` silently
+  returned `0`; `assertValidObservedIndex(1,NaN)` silently returned
+  without throwing; length-association items with
+  `nullProbabilityCorrectAtMax:0` and with
+  `{nullProbabilityCorrectAtMax:1, correctAtMax:false}` were both
+  silently accepted -- all now rejected with descriptive errors via a
+  shared `assertFiniteNumber()` guard and extended
+  `assertValidObservedIndex()`/`assertValidLengthAssociationItem()`
+  checks. Mutation count reconciled across all six rounds:
+  8+8+4+7+6+12 = **45**; one of round 6's 12 mutations initially surfaced
+  a genuine coverage gap (a redundant downstream check silently absorbed
+  a removed validation layer), closed with a test asserting the thrown
+  error names the caller's own argument.
+  `tests/assessment-cue-audit.mjs` grew from 187 to 201 dependency-free
+  checks; `tests/e2e/assessment-cue-audit.spec.mjs` stayed at 7 (14/14
+  across both projects). Still no question content changed, still Gate A
+  correctly fails the bank and
+  every form, still QL-033 not marked corrected. See
+  `docs/QUALITY_LOG.md` QL-041 and `docs/ASSESSMENT_VALIDITY.md` for the
+  full record.
 - Added `docs/LEARNING_PLATFORM_ROADMAP.md`, a durable planning document
   (Issue #24, carried by PR #25): a long-term roadmap toward a
   trustworthy, adaptive, subject-independent learning platform — guiding

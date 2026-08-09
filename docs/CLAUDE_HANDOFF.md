@@ -2023,6 +2023,49 @@ test` run at a deterministic fixed worker count (`--workers=2`) produced
 another fully clean result: 252 passed, 6 skipped, 0 failed. See
 `docs/QUALITY_LOG.md` QL-040 for the full record.
 
+**A sixth independent review (same PR, before merge) found Cohen's own
+published vector was mislabeled "genuinely normalized," that
+`primaryContributors` stopped at exactly 50% (not a majority),
+that a p-value boundary test claimed "at" alpha for a fixture that was
+actually below it, that a self-referential p-value provenance claim
+QL-040 itself had identified during mutation testing was never actually
+fixed, and that several impossible inputs still reached public helpers.**
+Cohen's printed "concentrated" example (`.380+.207+.207+.207 = 1.001`)
+is now split into `h1Published` (verbatim, never claimed to sum to
+exactly 1) and a separately, explicitly rescaled `h1` (genuinely sums to
+1, used for computation) -- the normalization test's tolerance tightened
+from a 0.2%-of-1 slack to `1e-9`. `primaryContributors`' accumulation now
+requires a STRICT majority (`> 50%`, not `>=`), with tie-inclusive
+extension so a position tied at the exact cutoff contribution is never
+arbitrarily dropped -- confirmed for `N=20`, `[6,3,3,8]`, where position 3
+alone is exactly 50% and the corrected result is `{3, 1, 2}` at 94.4%. A
+single exported `isStatisticallySignificant(pValue, alpha)` (strict `<`)
+is now the SINGLE production comparison path both `evaluatePositionBalance()`
+and `evaluateLengthAssociation()` call, tested directly with explicit
+p-values straddling and exactly AT alpha -- the one input no
+statistic-derived fixture could ever hit. The retained `chiSquare=120,
+df=3` test is relabeled honestly as an integration/consistency check, not
+an independence claim. A shared `assertFiniteNumber()` guard (plus an
+integer-`df` requirement for `chiSquareUpperTailPValue()`) now rejects
+NaN/Infinity across `chiSquareUpperTailPValue()`, `cohensW()`, and
+`upperRegularizedIncompleteGamma()`; `assertValidObservedIndex()` now
+validates `N`, not only `observed`; `assertValidLengthAssociationItem()`
+now rejects `nullProbabilityCorrectAtMax: 0` and the internally
+impossible `{nullProbabilityCorrectAtMax: 1, correctAtMax: false}`
+combination, while still accepting the valid degenerate all-tied case.
+Mutation count reconciled across all six rounds: 8+8+4+7+6+12 = **45**.
+One of round 6's 12 mutations initially surfaced a genuine coverage gap —
+removing `chiSquareUpperTailPValue()`'s own finiteness check produced no
+test failure at all, because `upperRegularizedIncompleteGamma()`'s
+downstream check still threw for the same input, silently absorbing the
+removed layer — closed with a test asserting the thrown error names the
+caller's own argument, not an internal helper's unrelated parameter name.
+`tests/assessment-cue-audit.mjs` grew from 187 to 201 dependency-free
+checks. A complete `npx playwright test` run at a deterministic fixed
+worker count (`--workers=2`) produced another fully clean result: 252
+passed, 6 skipped, 0 failed. See `docs/QUALITY_LOG.md` QL-041 for the
+full record.
+
 **Nothing here is a correction to product code or scientific content.**
 `index.html` is unmodified; no question, answer, rationale, distractor
 feedback, domain, topic, difficulty, or stable ID changed; no

@@ -477,7 +477,7 @@ review status stable before adding 46 questions.
   not assumed here. Preserve the beta disclosure until this is resolved
   and independently verified.
   **Foundation delivered (Issue #24, Phase 0 steps 1-3, `docs/QUALITY_LOG.md`
-  QL-036 through QL-040, draft PR open, not yet merged):**
+  QL-036 through QL-041, draft PR open, not yet merged):**
   `docs/ASSESSMENT_VALIDITY.md` independently reproduces the baseline
   above, defines the Gate A bank/form-level statistical thresholds (with
   a directly-inspected, cited primary source; a secondary source is

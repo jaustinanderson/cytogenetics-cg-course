@@ -5144,3 +5144,175 @@ planning. Each entry includes the diagnosis, correction, and prevention measure.
   support — and when a genuine exception is found, the right response is
   usually to document the boundary precisely, not to add machinery whose
   only purpose is making one known example come out differently.
+
+## QL-041 — Cohen's rounded published vector was mislabeled "genuinely normalized"; primaryContributors stopped at exactly 50%, not a majority; a p-value boundary test claimed "at" alpha for a fixture that was below it; a self-referential p-value provenance claim survived from round 5; several impossible numeric/field inputs still reached public helpers (Issue #24, Phase 0 steps 1-3)
+
+- **Status:** Corrected on the same branch
+  (`claude/phase-0-ql033-foundation`), draft PR still open against `main`
+  for independent review, not yet merged. QL-033 itself remains confirmed
+  and unresolved; this entry corrects the QL-036 through QL-040 *tooling*
+  further, not the bank.
+- **Finding — four narrow truthfulness/validation gaps, each reproduced by
+  direct construction before any fix (full detail in
+  `docs/ASSESSMENT_VALIDITY.md`):**
+  1. **Cohen's published, rounded illustrative vector was called
+     "genuinely normalized."** `.380+.207+.207+.207 = 1.001`, not 1 —
+     ordinary 3-decimal publication rounding, not a literal
+     normalization. QL-040's own test only proved the sum was within
+     `0.002` of 1 while its name claimed an exact proof.
+  2. **`primaryContributors` stopped accumulating at exactly 50% of the
+     total chi-square, described in prose as "a majority."** Confirmed
+     directly: `N=20`, `n=4`, `positionCounts=[6,3,3,8]` — position 3
+     alone contributes exactly half the total chi-square; the prior
+     `cumulativeContribution >= chiSquare / 2` stopped there.
+  3. **A p-value boundary test's "at the alpha boundary" fixture
+     (`chiSquare=11.3688`, df=3) was actually below alpha (p≈0.00989), not
+     at it** — no test anywhere exercised `pValue === SIGNIFICANCE_ALPHA`
+     directly.
+  4. **A self-referential p-value provenance claim survived from round
+     5.** The retained `chiSquare=120, df=3` test's comment still
+     described its expected value as "independently hand-computed... via
+     the same verified incomplete-gamma algorithm" — round 5 identified
+     this exact problem during its own mutation testing but never
+     actually corrected the stale comment.
+  5. **Several impossible inputs still reached public numerical helpers
+     or the length-association evaluator.** Confirmed directly:
+     `chiSquareUpperTailPValue(NaN, 3)`, `chiSquareUpperTailPValue(Infinity,
+     3)`, and `chiSquareUpperTailPValue(5, 2.5)` (non-integer df) each
+     silently returned a number instead of throwing; `cohensW(1, Infinity)`
+     silently returned `0`; `assertValidObservedIndex(1, NaN)` silently
+     returned without throwing; a length-association item with
+     `nullProbabilityCorrectAtMax: 0` (impossible — an item's own longest
+     option is always tied with itself) and one with
+     `nullProbabilityCorrectAtMax: 1, correctAtMax: false` (internally
+     impossible) were both silently accepted.
+- **Impact:** None shipped — PR #26 remained draft/unmerged throughout;
+  found and fixed before merge.
+- **Correction (full detail, exact mathematics, and every reproduced
+  counterexample in `docs/ASSESSMENT_VALIDITY.md` sections 4.3b, 4.3d,
+  4.3f, 4.6c):**
+  1. **Cohen's verbatim printed values and the genuinely normalized
+     computational fixture are now distinct.** `COHENS_M4_ILLUSTRATIVE_EXAMPLES`'s
+     "concentrated" entry now carries `h1Published` (Cohen's verbatim
+     `[.380,.207,.207,.207]`, never claimed to sum to exactly 1) and a
+     separate `h1` (rescaled to sum to exactly 1, transformation applied
+     in code, not hand-typed, not presented as Cohen's own values). The
+     normalization test's tolerance tightened from `0.002` to `1e-9`
+     (genuine, not publication-rounding), with a dedicated test proving
+     `h1Published` honestly sums to `1.001`. The other three examples
+     (small w=.10, equally-spaced medium w=.30, large w=.50) were already
+     exact and needed no split. This does not change the "ADOPTED, NOT
+     UNIQUELY CORRECT" framing of the `w=0.30` threshold.
+  2. **`primaryContributors` now requires a STRICT majority (`> 50%`, not
+     `>= 50%`), with tie-inclusive extension at the cutoff.** Once the
+     strict threshold is crossed, every immediately-following position
+     tied at the exact same `chiSquareContribution` as the position that
+     just crossed it is included too, rather than arbitrarily stopping
+     after only one of several tied positions. For the `[6,3,3,8]`
+     counterexample, `primaryContributors` is now `{3, 1, 2}` (cumulative
+     94.4%) rather than `{3}` alone (exactly 50%).
+     `primaryContributorsCumulativeContribution`/`primaryContributorsCumulativeShare`
+     report the exact accumulated total and share explicitly.
+  3. **A single exported `isStatisticallySignificant(pValue, alpha)`**
+     (`pValue < alpha`, strictly — `pValue === alpha` does not reject) is
+     now the SINGLE production comparison path both
+     `evaluatePositionBalance()` and `evaluateLengthAssociation()` call,
+     replacing two separately written inline expressions. Tested directly
+     with explicit p-values `0.009`/`SIGNIFICANCE_ALPHA` itself/`0.011` —
+     the exact-equality case no statistic-derived fixture could hit — and
+     confirmed to be a pure generic comparator independent of any
+     chi-square computation. The misleading "at the boundary" test is
+     retitled and reduced to its two genuinely below/above fixtures.
+  4. **The `chiSquare=120, df=3` test is relabeled honestly as an
+     INTEGRATION/consistency check**, not an independence claim — it
+     confirms `evaluatePositionBalance()` reports the exact output of a
+     direct call to `chiSquareUpperTailPValue()`, not a placeholder. The
+     genuinely independent oracles remain the analytic df=2/df=4 closed
+     forms and the NIST published table (QL-039/QL-040), unaffected.
+  5. **A shared `assertFiniteNumber()` guard** now backs
+     `upperRegularizedIncompleteGamma()`, `chiSquareUpperTailPValue()`
+     (which additionally requires an integer `df`), and `cohensW()` —
+     replacing duplicated sign-only checks that were silently `false` for
+     `NaN` and did not exclude `Infinity`. `assertValidObservedIndex()`
+     now validates `N` (not only `observed`). `assertValidLengthAssociationItem()`
+     now rejects `nullProbabilityCorrectAtMax === 0` and the combination
+     `nullProbabilityCorrectAtMax === 1` with `correctAtMax === false`,
+     while continuing to accept the valid degenerate all-tied case.
+     Verified: a caller passing a malformed `chiSquareStat`/`df` sees an
+     error naming ITS OWN argument, not merely an internal helper's
+     unrelated parameter.
+- **Tests:** `tests/assessment-cue-audit.mjs` grew from 187 to 201
+  dependency-free checks. New coverage: tightened Cohen's-fixture
+  normalization plus a dedicated `h1Published`-vs-`h1` mutation guard; the
+  exact-50%/tie-inclusive `primaryContributors` counterexample and a
+  general cumulative-reporting check; `isStatisticallySignificant()`
+  tested with explicit p-values at, below, and above alpha, plus its
+  independence from `chiSquareUpperTailPValue()`; a corrected below/above
+  (not "at") boundary test; a message-attribution test proving
+  `chiSquareUpperTailPValue()` validates its own arguments rather than
+  only relying on a downstream function's check; NaN/Infinity/non-integer
+  rejection tests for `chiSquareUpperTailPValue()`, `cohensW()`, and
+  `upperRegularizedIncompleteGamma()`; `assertValidObservedIndex()`'s `N`
+  validation; both new `assertValidLengthAssociationItem()` cross-field
+  invariants, including confirming the valid degenerate case is still
+  accepted. `tests/e2e/assessment-cue-audit.spec.mjs` stays at 7 (14/14
+  across both projects; no new browser-specific behavior this round;
+  re-run and reconfirmed passing).
+- **Mutation-tested (this round):** 12 targeted reversions against
+  `scripts/assessment-cue-audit.mjs` (never `index.html`). One initial
+  attempt (removing `chiSquareUpperTailPValue()`'s own finiteness checks)
+  surfaced a genuine coverage gap — `upperRegularizedIncompleteGamma()`'s
+  own downstream check still threw, so no test failed even though the
+  boundary's OWN validation had been removed — closed by adding a test
+  asserting the thrown error names `chiSquareUpperTailPValue`'s own
+  `chiSquareStat`/`df`, not an internal helper's unrelated `a`/`x`; the
+  mutation was then re-applied and correctly caught. All other 11
+  mutations (the false-normalization restore; the `>=` revert; the
+  tie-extension removal; the `isStatisticallySignificant` `<`-to-`<=`
+  flip; the hardcoded-placeholder pValue; `cohensW`'s and
+  `upperRegularizedIncompleteGamma`'s finiteness-check removals; the
+  integer-df check removal; `assertValidObservedIndex`'s `N`-check
+  removal; and both `assertValidLengthAssociationItem` invariant
+  removals) each failed exactly their intended, directly-attributable
+  test(s) and no others on the first attempt. All 12 reverted to
+  byte-identical via `diff` before committing. See `docs/VALIDATION.md`
+  for the full record.
+- **Mutation count, reconciled from retained evidence (not guessed):**
+  round 1 (QL-036): 8. Round 2 (QL-037): 8. Round 3 (QL-038): 4. Round 4
+  (QL-039): 7. Round 5 (QL-040): 6. Round 6 (this entry, QL-041): 12.
+  **Cumulative total across all six rounds: 45.**
+- **Full local validation:** `npm test` (all suites, including the
+  `validate` structural/documentation check, `test:behavior`,
+  `test:governance`, 201 assessment-cue checks, and
+  `test:verify-deployed-revision`, all passing), `npm run
+  audit:assessment-cues -- --json` run twice with byte-identical output
+  confirmed via `diff`, the targeted `tests/e2e/assessment-cue-audit.spec.mjs`
+  Playwright suite (14/14 passing), and the complete Playwright suite run
+  at a deterministic, fixed worker count (`--workers=2`).
+- **Scope:** No question, answer, rationale, distractor feedback, domain,
+  topic, difficulty, or stable ID changed; `index.html` is unmodified. No
+  `QUESTION_GOVERNANCE` field populated; all 153 questions remain `draft`.
+  QL-033 is not marked corrected. Phase 0 stays unchecked in
+  `docs/ROADMAP.md` and Issue #24. Steps 4-9 of the Phase 0 protocol were
+  not begun.
+- **Prevention:** A test whose NAME claims an exact proof must have an
+  assertion that actually proves it — a 0.2%-tolerance check is not
+  evidence for an exact-sum claim, and the gap between the two is exactly
+  where a false claim hides. "Majority" means strictly more than half;
+  `>=` at the 50% mark is a tie, not a majority, and prose describing a
+  result must match the comparison operator that actually produced it,
+  not the operator the author intended. A boundary claim ("at the alpha
+  threshold") requires a fixture that actually sits at that threshold —
+  a fixture merely close to it, on one side, proves something narrower
+  and should be named accordingly. Identifying a problem during mutation
+  testing and recording that it was found is not the same as fixing it —
+  QL-040 named this exact self-referential-comment problem and it
+  survived, unfixed, into this round; a finding is only closed when the
+  artifact it describes has actually changed. Layered validation (a
+  boundary check plus a downstream function's own check) can silently
+  absorb a removed check without any test failing — a mutation that
+  produces zero test failures is not evidence the removed code was
+  unnecessary, it is evidence the test suite cannot currently distinguish
+  which layer is doing the validating, and closing that gap (here, by
+  asserting on which function's name appears in the thrown error) is part
+  of the mutation-testing discipline, not an optional refinement.

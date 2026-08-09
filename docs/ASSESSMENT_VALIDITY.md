@@ -516,12 +516,16 @@ a number CITL itself supplies — justified individually in sections 4.3,
 | Cohen's w as the large-N distribution-wide practical/effect-size measure | Yes | **Yes** — scale-free (unlike chi-square itself), symmetric to over- and under-representation by construction, and uses Cohen's own published "medium effect" convention (0.3), not a number tuned to this bank. See 4.3b |
 | A critical-value-table lookup reported in place of an actual chi-square p-value | Yes | **No — corrected.** A Boolean table comparison is not itself a p-value, and was limited to the table's own df range. See 4.6b |
 | Exact chi-square p-value via the regularized incomplete gamma function | Yes | **Yes** — closed-form, not an approximation beyond the chi-square test's own well-known validity assumption, and valid at any df, not only the previously tabulated range. See 4.6b |
+| Two separately written `pValue < SIGNIFICANCE_ALPHA` comparisons (position balance, length association) | Yes | **No — corrected (round 6).** Identical in effect but two separate expressions that could silently diverge under a future edit to only one. See 4.6c |
+| A single shared `isStatisticallySignificant(pValue, alpha)` comparator, strict `<` | Yes | **Yes** — the SINGLE production comparison path both functions call; `pValue === alpha` does not reject, tested directly with explicit p-values, not only statistic-derived fixtures. See 4.6c |
 | An unnormalized illustrative distribution to justify the w=0.30 threshold | Yes | **No — corrected.** `[0.40,0.25,0.25,0.25]` sums to 1.15, not a valid distribution; the claimed algebraic equivalence to the prior margin rule was false. See 4.3b |
-| Cohen's own directly-quoted m=4 illustrative examples to justify w=0.30 | Yes | **Yes** — genuinely normalized, independently verified to reproduce Cohen's own stated w, and the threshold is framed as an adopted operational convention, not a uniquely correct or item-validity result. See 4.3b |
+| Cohen's own directly-quoted m=4 illustrative examples to justify w=0.30 | Yes | **Yes, with the printed values and the computational fixtures kept distinct (round 6).** Cohen's own printed "concentrated" H1 sums to 1.001, not 1 — retained verbatim as `h1Published`, never called "genuinely normalized"; a separately, explicitly rescaled `h1` (sums to exactly 1) is used for computation. Every `h1` independently verified to reproduce Cohen's own stated w. The threshold remains an adopted operational convention, not a uniquely correct or item-validity result, and Cohen's rounded illustration is not claimed to prove it. See 4.3b |
 | Reporting an aggregate practical-effect decision with no per-position explanation | Yes | **No — corrected.** A Cohen's-w failure with every cell inside the per-cell diagnostic margin left the report unable to say which position(s) drove it. See 4.3d |
 | Full directional/contribution reporting per position, plus majority-contribution "primary contributors" | Yes | **Yes** — explains every aggregate failure by position and direction without inventing an arbitrary "top N," and keeps the per-cell diagnostic flag conceptually separate from the aggregate decision. See 4.3d |
 | Trusting caller-supplied aggregate/probability summaries without validation | Yes | **No — corrected.** A malformed positionCounts array or an out-of-range probability could reach formulas that assume valid input, producing silently wrong results. See 4.3c |
 | One reusable validation function per input shape, rejecting malformed input with a descriptive error | Yes | **Yes** — the same discipline `assertValidQuestionShape()` already applies to question objects, applied consistently to every aggregate/probability entry point. See 4.3c |
+| Sign-only domain checks (`<= 0`/`< 0`) as a complete numeric-input guard | Yes | **No — corrected (round 6).** Silently `false` for `NaN` and does not exclude `Infinity`; `chiSquareUpperTailPValue(NaN, 3)`, `cohensW(1, Infinity)`, and others returned a silently wrong number instead of throwing. See 4.3f |
+| A shared `assertFiniteNumber()` guard plus cross-field consistency checks for length-association items | Yes | **Yes** — every numeric argument to `chiSquareUpperTailPValue()`/`cohensW()`/`upperRegularizedIncompleteGamma()` must be finite (`df` additionally an integer), `assertValidObservedIndex()` validates `N` as well as `observed`, and `assertValidLengthAssociationItem()` rejects the two internally-impossible `nullProbabilityCorrectAtMax` cases. See 4.3f |
 
 ### 4.3 Adopted rules — position balance (corrected: a two-regime model with one shared threshold)
 
@@ -723,17 +727,38 @@ claimed equivalence is false.** Confirmed directly:
 `H0 = .250 .250 .250 .250` (equiprobable) and
 `H1 = .380 .207 .207 .207`, describing it as *"a w = .30 departure from
 equiprobability in which the effect is concentrated in the first
-category, the remainder being equiprobable."* This distribution **is**
-valid: `.380 + .207 + .207 + .207 = 1.001` (Cohen's own printed
-3-decimal values, rounding to 1). Cohen also gives an equally-spaced
-`m = 4` medium-effect `H1` on page 225: `.149 .216 .284 .351`
-(sums to exactly 1.000). Both are directly transcribed as
-`COHENS_M4_ILLUSTRATIVE_EXAMPLES` in `scripts/assessment-cue-audit.mjs`,
-alongside Cohen's own small (`w=.10`) and large (`w=.50`) `m=4`
-illustrations, and a dedicated test independently verifies every one of
-these fixtures both sums to 1 (a check the removed impossible example
-would have failed) and reproduces Cohen's own stated `w` value via this
-file's own formula.
+category, the remainder being equiprobable."* Cohen also gives an
+equally-spaced `m = 4` medium-effect `H1` on page 225: `.149 .216 .284
+.351` (sums to exactly 1.000).
+
+**Counterexample reproduced (round 6 — the "concentrated" example was
+itself mislabeled "genuinely normalized"):** `.380 + .207 + .207 + .207 =
+1.001`, not 1 — an earlier version of this section, the corresponding
+source comment, and a test named to claim an exact proof called this
+distribution "IS valid" and "rounds to 1," and the test's own assertion
+only checked the sum was within `0.002` of 1 while its name claimed an
+exact proof. `1.001` is ordinary 3-decimal publication rounding (Cohen
+prints `w` to 2 decimals and each `Hi` to 3) — a real, honest fact about
+the source, not a defect in the source, but distinct from a literal
+normalization proof, and the two were conflated.
+
+**Correction:** Cohen's printed values are retained **verbatim**, as
+`h1Published` in `COHENS_M4_ILLUSTRATIVE_EXAMPLES` — never claimed to sum
+to exactly 1. A separate, genuinely normalized `h1` (`h1Published`
+rescaled by its own sum, `scripts/assessment-cue-audit.mjs`, transformation
+applied in code, not hand-typed) is used wherever this file needs an exact
+probability distribution for computation or testing. Both are directly
+transcribed/derived as `COHENS_M4_ILLUSTRATIVE_EXAMPLES`, alongside
+Cohen's own small (`w=.10`) and large (`w=.50`) `m=4` illustrations (whose
+printed values already sum to exactly 1.000 and need no split). A
+dedicated test independently verifies every `h1` (the genuinely normalized
+fixture, not `h1Published`) sums to exactly 1 within floating-point
+tolerance (`1e-9`, not the prior `0.002`) and reproduces Cohen's own
+stated `w` value via this file's own formula; a separate test verifies
+`h1Published` honestly sums to `1.001`, not 1, and is never claimed
+otherwise. This does not make Cohen's rounded illustration "prove" this
+project's `w=0.30` threshold uniquely correct — see the ADOPTED, NOT
+UNIQUELY CORRECT paragraph below, unaffected by this correction.
 
 **Threshold: `COHENS_W_MEDIUM_EFFECT = 0.3`, ADOPTED, not uniquely
 correct.** Cohen's own words (page 224) are explicit that his
@@ -859,10 +884,36 @@ does not — it is a nonnegative magnitude.
 aggregate decision). A new `primaryContributors` field identifies the
 position(s) responsible for the aggregate effect regardless of whether
 any individual cell exceeds the diagnostic margin: positions sorted by
-`chiSquareContribution` descending, accumulated until a **majority**
-(> 50%) of the total chi-square is accounted for — a non-arbitrary
-criterion ("the position(s) responsible for most of the effect") that
-adapts to option count rather than an invented fixed "top N."
+`chiSquareContribution` descending, accumulated until a **strict
+majority** (`> 50%`, not `>= 50%`) of the total chi-square is accounted
+for — a non-arbitrary criterion ("the position(s) responsible for most of
+the effect") that adapts to option count rather than an invented fixed
+"top N." `primaryContributorsCumulativeContribution` and
+`primaryContributorsCumulativeShare` report the exact accumulated total
+and its fraction of `chiSquare` explicitly.
+
+**Counterexample reproduced (round 6 — exactly 50% was called "the
+majority"):** an earlier version of this accumulation stopped as soon as
+`cumulativeContribution >= chiSquare / 2` — so a position (or set of
+positions) accounting for **exactly** half the total chi-square, not a
+majority, was reported and described in prose as "the majority of the
+effect." Confirmed directly: `N=20`, `n=4`, `positionCounts=[6,3,3,8]` —
+position 3 alone contributes `chiSquareContribution=1.8`, exactly half of
+`chiSquare=3.6`; the old `>=` stopped there. The same fixture also exposed
+a second, independent gap once the threshold was corrected to strict `>`:
+positions 1 and 2 are exactly tied at `chiSquareContribution=0.8`, and the
+strict threshold is crossed while consuming that tied pair — stopping
+after only one of two tied positions is an arbitrary pick among equals
+(array sort order, not a principled distinction).
+
+**Correction:** the accumulation now requires `cumulativeContribution >
+chiSquare / 2` (strict) to stop, and once that threshold is crossed, every
+immediately-following position still tied at the exact same
+`chiSquareContribution` as the position that just crossed it is included
+too, never silently dropped. For the `[6,3,3,8]` fixture, the final
+`primaryContributors` is positions `{3, 1, 2}` — cumulative `3.4`, `94.4%`
+of the total, a genuine strict majority — rather than position 3 alone at
+exactly `50%`.
 
 **When Cohen's w fails, the human-readable reason names the dominant
 contributor(s) and their direction(s)** even when no individual cell
@@ -938,6 +989,63 @@ shapes.
 **Achievable complete-Gate passes for 5-, 6-, 7-, 8-, 9-, and 13-item
 forms (section 4.3a) are unaffected by this correction** — all fall below
 `REGIME_THRESHOLD(4)=20` and use the small-N structural regime exclusively.
+
+### 4.3f Complete malformed-input rejection (added — a second independent review found several impossible inputs still reached public helpers)
+
+**Counterexamples reproduced:** section 4.3c's validation (`optionCount`,
+`N`, `positionCounts`, probability-array checks) covered aggregate
+INPUT-SHAPE malformation, but several individually impossible numeric
+inputs and one internally-inconsistent field combination could still
+reach public helpers or `evaluateLengthAssociation()` without error.
+Confirmed directly, before this correction:
+
+- `chiSquareUpperTailPValue(NaN, 3)`, `chiSquareUpperTailPValue(Infinity, 3)`,
+  `chiSquareUpperTailPValue(5, NaN)` — each silently returned `NaN`. The
+  prior domain checks (`df <= 0`, `chiSquareStat < 0`) are silently
+  `false` for `NaN` (every comparison against `NaN` is `false`) and do not
+  exclude `Infinity`.
+- `chiSquareUpperTailPValue(5, 2.5)` — a non-integer `df` — silently
+  computed `0.12308857115265875` instead of throwing, even though this
+  audit's `df` is always `optionCount - 1`, an integer; a fractional `df`
+  here can only mean a caller bug.
+- `cohensW(NaN, 100)` silently returned `NaN`; `cohensW(1, Infinity)`
+  silently returned `0` — a misleadingly finite, plausible-looking result
+  for an impossible input (`sqrt(1/Infinity)`).
+- `upperRegularizedIncompleteGamma(1, NaN)` and `upperRegularizedIncompleteGamma(NaN, 1)`
+  each silently returned `NaN`.
+- `assertValidObservedIndex(1, NaN)` silently returned (did not throw):
+  it validated only `observed`, never `N` — `observed > N` is `false`
+  whenever `N` is `NaN`.
+- A length-association item with `nullProbabilityCorrectAtMax: 0` was
+  silently accepted — impossible for any real item, since an item's own
+  longest option is always tied with itself, so the true null probability
+  `tiedAtMax / optionCount` is always `> 0`.
+- A length-association item with `nullProbabilityCorrectAtMax: 1` and
+  `correctAtMax: false` was silently accepted — an internally impossible
+  combination: probability 1 means every option, including the correct
+  one, is tied for max length, so `correctAtMax` must be `true`.
+
+**Correction:** a single shared `assertFiniteNumber(value, description)`
+guard, used by `upperRegularizedIncompleteGamma()`, `chiSquareUpperTailPValue()`,
+and `cohensW()`, replaces the duplicated sign-only checks — every numeric
+argument to these three functions must now be a finite number, or a
+descriptive `RangeError` is thrown naming the actual parameter (verified
+directly: the thrown error names `chiSquareUpperTailPValue`'s own
+`chiSquareStat`/`df`, not merely an internal helper's unrelated `a`/`x`,
+so a caller sees which of their own arguments was invalid).
+`chiSquareUpperTailPValue()` additionally requires `df` to be an integer.
+`assertValidObservedIndex()` now validates `N` is itself a finite
+nonnegative integer before validating `observed` against it.
+`assertValidLengthAssociationItem()` now rejects
+`nullProbabilityCorrectAtMax === 0` and the combination
+`nullProbabilityCorrectAtMax === 1` with `correctAtMax === false`, while
+continuing to accept the valid degenerate all-tied case
+(`nullProbabilityCorrectAtMax: 1`, `correctAtMax: true`).
+
+**Verified:** every valid fixture used elsewhere in this file's own tests
+(including the full live 153-question bank) continues to pass validation
+without throwing — this correction rejects only genuinely impossible
+input, and changes no normal live-bank result.
 
 ### 4.4 Length association (corrected — tie-aware, not a flat 1/n on the uniquely-longest rate alone)
 
@@ -1291,6 +1399,56 @@ display; it drives no decision.
 `cohensW()` are pure functions of their numeric inputs, with no
 randomness or wall-clock dependency — verified directly, `--json` output
 remains byte-identical across repeated runs with every field present.
+
+### 4.6c Exact alpha-boundary decision policy and corrected p-value provenance (corrected — a second independent review found the boundary evidence imprecise and a prior "independence" claim self-referential)
+
+**Counterexample reproduced (imprecise boundary evidence):** a test named
+"position balance reports pValue immediately below, at, and above the
+alpha=0.01 boundary" used three `df=3` chi-square statistics
+(`11.0592`, `11.3688`, `11.8408`) with actual p-values ≈`0.01141`,
+≈`0.00989`, ≈`0.00795` respectively. The middle fixture's p-value is
+**below** alpha, not **at** it — no test anywhere in this file exercised
+`pValue === SIGNIFICANCE_ALPHA` directly, the one input value where the
+decision policy's exact convention (does equality reject, or not) is
+actually determined.
+
+**Counterexample reproduced (self-referential "independence" claim):** a
+retained `chiSquare=120, df=3` test's comment described its expected
+p-value as "independently hand-computed... via the same verified
+incomplete-gamma algorithm" — self-contradictory, since a value produced
+through the same recurrence as the implementation under test cannot also
+be independent of it. Round 5 identified this same problem during its own
+mutation-testing pass, but the stale test name/comment itself was never
+actually corrected — this correction closes that gap.
+
+**Correction:** a single exported `isStatisticallySignificant(pValue,
+alpha)` — `pValue < alpha`, strictly; `pValue === alpha` does **not**
+reject — is now the SINGLE production comparison path both
+`evaluatePositionBalance()` and `evaluateLengthAssociation()` call to
+derive `statisticalResult`, replacing two separately written (if
+identical) inline `pValue < SIGNIFICANCE_ALPHA` expressions. A new test
+exercises `isStatisticallySignificant()` directly with explicit p-values
+`0.009` (rejects), `SIGNIFICANCE_ALPHA` itself (does **not** reject — the
+exact boundary no prior fixture could hit), and `0.011` (does not
+reject) — independent of any chi-square computation. A separate test
+confirms `isStatisticallySignificant()` is a pure generic comparator
+(verified with an arbitrary, non-chi-square p-value/alpha pair), and that
+`chiSquareUpperTailPValue()`'s own correctness (the analytic `df=2`/`df=4`
+and NIST-table tests, section 4.6b) never depends on `SIGNIFICANCE_ALPHA`
+or the decision policy — the numeric p-value function and the
+boundary-decision policy are separate, independently testable concerns.
+
+The `chiSquare=120, df=3` test is relabeled honestly as an
+INTEGRATION/consistency check — it confirms `evaluatePositionBalance()`
+reports the exact output of a direct call to `chiSquareUpperTailPValue(chiSquare,
+df)`, not a placeholder that only preserves the significant/not-significant
+classification — not an independent-oracle proof; the genuinely
+independent oracles remain the analytic `df=2`/`df=4` closed forms and the
+NIST published table (section 4.6b), unaffected by this correction. The
+misleadingly-named "at the boundary" test is retitled and reduced to its
+two genuinely below/above fixtures; the exact-equality case is covered
+only by the new, explicit-p-value test above, which is what an exact
+boundary claim actually requires.
 
 ### 4.7 Current result: the bank fails Gate A
 

@@ -62,6 +62,7 @@ import {
   SIGNIFICANCE_ALPHA,
   upperRegularizedIncompleteGamma,
   chiSquareUpperTailPValue,
+  isStatisticallySignificant,
   COHENS_W_MEDIUM_EFFECT,
   COHENS_M4_ILLUSTRATIVE_EXAMPLES,
   cohensW,
@@ -1228,36 +1229,68 @@ test("chiSquareUpperTailPValue throws on invalid domain (non-positive df, negati
   assert.throws(() => chiSquareUpperTailPValue(-1, 3), RangeError);
 });
 
-test("evaluatePositionBalance reports the ACTUAL numeric chi-square p-value, not merely a value on the correct side of alpha -- coverage-gap fix: a placeholder value that only preserves the significant/not-significant classification must be caught, not just the boolean it implies", () => {
+test("evaluatePositionBalance reports the ACTUAL numeric chi-square p-value, not merely a value on the correct side of alpha -- coverage-gap fix: a placeholder value that only preserves the significant/not-significant classification must be caught, not just the boolean it implies (round 6: relabeled -- this is an INTEGRATION/consistency check against a direct call to the same function, not an independent oracle; genuine independent oracles are the analytic df=2/df=4 and NIST-table tests below)", () => {
   // N=1000, n=4, counts=[400,200,200,200] -> chiSquare=120 exactly.
-  // Independently hand-computed (via the same verified incomplete-gamma
-  // algorithm, cross-checked separately against published critical-value
-  // tables in the tests above) -- NOT read back from a call to
-  // evaluatePositionBalance itself: chiSquareUpperTailPValue(120, 3) =
-  // 7.71679035563416e-26.
+  // The expected value below is a direct call to this file's own
+  // chiSquareUpperTailPValue(120, 3) -- NOT an independent hand
+  // computation (round 6 -- issue 3: an earlier version of this comment
+  // called it "independently hand-computed via the same verified
+  // incomplete-gamma algorithm," which is self-contradictory -- a value
+  // produced through the algorithm under test cannot also be independent
+  // of it). What this test actually proves, honestly: evaluatePositionBalance()
+  // reports the REAL output of chiSquareUpperTailPValue(chiSquare, df),
+  // not a placeholder that only preserves the significant/not-significant
+  // classification -- a narrower, still-useful integration claim.
   const result = evaluatePositionBalance({ optionCount: 4, total: 1000, positionCounts: [400, 200, 200, 200] });
   assert.equal(result.detail.chiSquare, 120);
+  assert.equal(result.detail.pValue, chiSquareUpperTailPValue(120, 3), "evaluatePositionBalance's reported pValue must be the exact output of a direct call to chiSquareUpperTailPValue, not a placeholder");
   assert.ok(Math.abs(result.detail.pValue - 7.71679035563416e-26) < 1e-30, `expected pValue ~= 7.71679e-26, got ${result.detail.pValue}`);
 });
 
-test("counterexample (issue 2, round 4) resolved: position balance reports pValue immediately below, at, and above the alpha=0.01 boundary, using the SAME pValue < SIGNIFICANCE_ALPHA comparison as statisticalResult", () => {
+test("counterexample (issue 3, round 6) resolved: position balance's below/above alpha=0.01 fixtures, correctly named -- the OLD test's 'at the boundary' fixture (chiSquare=11.3688, p~=0.00989) is actually BELOW alpha, not at it, and is removed rather than mislabeled; statisticalResult and pValue are verified to agree via the SAME isStatisticallySignificant() production comparison, not a separately re-implemented one", () => {
   // For n=4 (df=3), the alpha=0.01 critical chi-square value is 11.345.
   // N=10000 gives fine-enough integer-count resolution to straddle it:
-  // hand-verified chiSquare values 11.0592 (below), 11.3688 (just above),
-  // 11.8408 (further above) for these exact counts.
+  // hand-verified chiSquare values 11.0592 (below) and 11.8408 (above)
+  // for these exact counts.
   const n = 4;
   const N = 10000;
   const below = evaluatePositionBalance({ optionCount: n, total: N, positionCounts: [2644, 2452, 2452, 2452] });
-  const at = evaluatePositionBalance({ optionCount: n, total: N, positionCounts: [2646, 2452, 2451, 2451] });
   const above = evaluatePositionBalance({ optionCount: n, total: N, positionCounts: [2649, 2451, 2450, 2450] });
   assert.ok(Math.abs(below.detail.chiSquare - 11.0592) < 0.01);
-  assert.ok(Math.abs(at.detail.chiSquare - 11.3688) < 0.01);
   assert.ok(Math.abs(above.detail.chiSquare - 11.8408) < 0.01);
-  [below, at, above].forEach((r) => {
-    assert.equal(r.detail.statisticalResult === "rejects-uniform", r.detail.pValue < SIGNIFICANCE_ALPHA, `pValue=${r.detail.pValue} and statisticalResult=${r.detail.statisticalResult} must agree via the same alpha comparison`);
+  [below, above].forEach((r) => {
+    assert.equal(r.detail.statisticalResult === "rejects-uniform", isStatisticallySignificant(r.detail.pValue, SIGNIFICANCE_ALPHA), `pValue=${r.detail.pValue} and statisticalResult=${r.detail.statisticalResult} must agree via the same isStatisticallySignificant() comparison`);
   });
   assert.ok(below.detail.pValue > SIGNIFICANCE_ALPHA);
   assert.ok(above.detail.pValue < SIGNIFICANCE_ALPHA);
+});
+
+test("counterexample (issue 3, round 6) resolved: isStatisticallySignificant() is exact at the alpha boundary, tested with EXPLICIT p-value inputs (not derived from any chi-square statistic) -- p immediately below alpha rejects; p EXACTLY EQUAL to alpha does NOT reject (strict < only); p immediately above alpha does not reject. No prior test in this file exercised p === alpha directly.", () => {
+  assert.equal(isStatisticallySignificant(0.009, SIGNIFICANCE_ALPHA), true, "p=0.009 < alpha=0.01 -- rejects");
+  assert.equal(isStatisticallySignificant(SIGNIFICANCE_ALPHA, SIGNIFICANCE_ALPHA), false, "p === alpha must NOT reject -- this exact-equality case is the one the old statistic-based fixtures could never hit or prove");
+  assert.equal(isStatisticallySignificant(0.011, SIGNIFICANCE_ALPHA), false, "p=0.011 > alpha -- does not reject");
+});
+
+test("counterexample (issue 3, round 6) resolved: the numeric p-value function (chiSquareUpperTailPValue) and the boundary-decision policy (isStatisticallySignificant) are separate, independently testable concerns -- isStatisticallySignificant works as a pure generic comparator on p-values/alphas that have nothing to do with chi-square at all, and chiSquareUpperTailPValue's own correctness (analytic/NIST tests above) never depends on any alpha or decision policy", () => {
+  // Arbitrary p-value/alpha pair, unrelated to any chi-square computation:
+  // isStatisticallySignificant does not know or care where pValue came from.
+  assert.equal(isStatisticallySignificant(0.03, 0.05), true);
+  assert.equal(isStatisticallySignificant(0.05, 0.05), false);
+  assert.equal(isStatisticallySignificant(0.2, 0.05), false);
+  // Conversely, a chi-square p-value is fully defined by chiSquareUpperTailPValue
+  // alone, with no reference to SIGNIFICANCE_ALPHA or isStatisticallySignificant.
+  const p = chiSquareUpperTailPValue(11.345, 3);
+  assert.ok(Number.isFinite(p) && p > 0 && p < 1);
+});
+
+test("counterexample (issue 3, round 6) resolved: evaluatePositionBalance() and evaluateLengthAssociation() both derive statisticalResult from the SAME isStatisticallySignificant() call on their own reported pValue -- verified directly against each function's own output, not merely by code inspection", () => {
+  const position = evaluatePositionBalance({ optionCount: 4, total: 1000, positionCounts: [400, 200, 200, 200] });
+  assert.equal(position.detail.statisticalResult === "rejects-uniform", isStatisticallySignificant(position.detail.pValue, SIGNIFICANCE_ALPHA));
+
+  const items = [];
+  for (let i = 0; i < 40; i += 1) { items.push(classifyCue(q("la" + i, ["short", "the correct much longer option"], 1), historicalLength)); }
+  const length = evaluateLengthAssociation(items);
+  assert.equal(length.detail.statisticalResult === "rejects-null", isStatisticallySignificant(length.detail.pValue, SIGNIFICANCE_ALPHA));
 });
 
 test("position balance no longer reports maxProportion as a top-level decision field -- the practical decision is Cohen's w; per-position shares are in positionDeviations", () => {
@@ -1455,16 +1488,31 @@ test("counterexample (issue 1, round 5) resolved: the OLD rationale's [0.40,0.25
   assert.ok(Math.abs(sum - 1) > 1e-9);
 });
 
-test("counterexample (issue 1, round 5) resolved: every COHENS_M4_ILLUSTRATIVE_EXAMPLES fixture is a genuinely normalized probability distribution (h0 and h1 both sum to 1, within Cohen's own printed 3-decimal rounding tolerance) -- this is the reusable, executable proof the impossible claim's replacement lacks", () => {
+test("counterexample (issue 1, round 6) resolved: every COHENS_M4_ILLUSTRATIVE_EXAMPLES fixture's h0 and h1 are GENUINELY normalized -- sum to exactly 1 within floating-point tolerance, not merely within Cohen's 3-decimal publication rounding -- this is the reusable, executable proof the prior 0.002-tolerance test (which claimed an exact proof it did not provide) lacked", () => {
   assert.ok(COHENS_M4_ILLUSTRATIVE_EXAMPLES.length >= 3, "at least small/medium/large examples required");
   COHENS_M4_ILLUSTRATIVE_EXAMPLES.forEach((example) => {
     const h0Sum = example.h0.reduce((a, b) => a + b, 0);
     const h1Sum = example.h1.reduce((a, b) => a + b, 0);
-    assert.ok(Math.abs(h0Sum - 1) < 0.002, `${example.label}: h0 sums to ${h0Sum}, expected ~1`);
-    assert.ok(Math.abs(h1Sum - 1) < 0.002, `${example.label}: h1 sums to ${h1Sum}, expected ~1`);
+    assert.ok(Math.abs(h0Sum - 1) < 1e-9, `${example.label}: h0 sums to ${h0Sum}, expected exactly 1`);
+    assert.ok(Math.abs(h1Sum - 1) < 1e-9, `${example.label}: h1 sums to ${h1Sum}, expected exactly 1`);
     assert.equal(example.h0.length, 4);
     assert.equal(example.h1.length, 4);
   });
+});
+
+test("mutation guard (issue 1, round 6): the 'concentrated in one category' example's h1Published is Cohen's own printed 3-decimal values, honestly NOT claimed to sum to exactly 1 -- it sums to 1.001, and that is publication rounding, not a normalization proof", () => {
+  const concentrated = COHENS_M4_ILLUSTRATIVE_EXAMPLES.find((e) => e.label.includes("concentrated"));
+  assert.ok(concentrated, "the concentrated-effect example must exist");
+  assert.deepEqual(concentrated.h1Published, [0.380, 0.207, 0.207, 0.207], "h1Published must be Cohen's verbatim printed values, unmodified");
+  const publishedSum = concentrated.h1Published.reduce((a, b) => a + b, 0);
+  assert.ok(Math.abs(publishedSum - 1.001) < 1e-9, `h1Published must sum to exactly 1.001 as printed, got ${publishedSum}`);
+  assert.notEqual(publishedSum, 1, "h1Published must NOT be claimed to sum to exactly 1 -- restoring that false claim is the exact counterexample this correction fixes");
+  // The genuinely normalized h1 is a DIFFERENT array (a rescaling of
+  // h1Published, not the same values) -- proving the split is real, not
+  // just a renamed duplicate.
+  assert.notDeepEqual(concentrated.h1, concentrated.h1Published);
+  const h1Sum = concentrated.h1.reduce((a, b) => a + b, 0);
+  assert.ok(Math.abs(h1Sum - 1) < 1e-9, `h1 (the normalized fixture) must sum to exactly 1, got ${h1Sum}`);
 });
 
 test("counterexample (issue 1, round 5) resolved: every COHENS_M4_ILLUSTRATIVE_EXAMPLES fixture reproduces Cohen's own stated w value via this file's own chi-square/cohensW formula (proportions, not counts -- N is irrelevant to w's proportion-space definition)", () => {
@@ -1488,11 +1536,13 @@ test("valid, normalized four-category examples exist on both sides of the COHENS
 test("Cohen's own m=4 medium-effect (w=.30) H1 example, applied as actual COUNTS at a real N, is correctly classified by evaluatePositionBalance() as a practical failure -- connecting the proportion-space illustration to this file's own count-based decision", () => {
   const medium = COHENS_M4_ILLUSTRATIVE_EXAMPLES.find((e) => e.label.includes("concentrated"));
   const N = 1000; // large enough that h1 * N rounds to exact integers cleanly
-  // Cohen's own printed h1 values (3 decimals) sum to 1.001, not exactly 1
-  // -- round every entry but the last, then set the last to whatever
-  // makes the total exactly N, so this remains a VALID integer fixture
-  // (a real authored-question tally must sum exactly to N) while staying
-  // as close as possible to Cohen's own printed proportions.
+  // Uses the genuinely normalized `h1` (round 6 -- issue 1), NOT Cohen's
+  // verbatim `h1Published` (which sums to 1.001, not 1): a real authored
+  // question tally must sum EXACTLY to N, so rounding from an already
+  // genuinely-normalized distribution -- round every entry but the last,
+  // then set the last to whatever makes the total exactly N -- produces a
+  // valid integer fixture without needing to silently paper over
+  // h1Published's own publication-rounding slack.
   const counts = medium.h1.slice(0, -1).map((p) => Math.round(p * N));
   counts.push(N - counts.reduce((a, b) => a + b, 0));
   assert.equal(counts.reduce((a, b) => a + b, 0), N, "must sum exactly to N for a valid test fixture");
@@ -1527,6 +1577,43 @@ test("a perfectly uniform distribution reports every position as direction 'equa
   assert.equal(result.status, "pass");
   assert.ok(result.detail.positionDeviations.every((d) => d.direction === "equal" && d.chiSquareContribution === 0));
   assert.deepEqual(result.detail.primaryContributors, []);
+});
+
+// ---------------------------------------------------------------------------
+// 15a. Strict majority (> 50%, not >=) for primaryContributors, with
+//      tie-inclusive extension at the cutoff (issue 2, round 6).
+// ---------------------------------------------------------------------------
+
+test("counterexample (issue 2, round 6) resolved: N=20, n=4, [6,3,3,8] -- position 3 alone accounts for EXACTLY 50% of the total chi-square, which is NOT a majority; the old >= cutoff stopped there and mislabeled one position as 'the majority'", () => {
+  const result = evaluatePositionBalance({ optionCount: 4, total: 20, positionCounts: [6, 3, 3, 8] });
+  assert.ok(Math.abs(result.detail.chiSquare - 3.6) < 1e-9);
+  // Position 3's own contribution is exactly half of the total -- confirmed directly.
+  const pos3 = result.detail.positionDeviations[3];
+  assert.ok(Math.abs(pos3.chiSquareContribution - 1.8) < 1e-9);
+  assert.ok(Math.abs(pos3.chiSquareContribution - result.detail.chiSquare / 2) < 1e-9, "position 3 alone is exactly 50%, the exact boundary this correction fixes");
+  assert.notDeepEqual(result.detail.primaryContributors, [pos3], "a single position accounting for exactly 50% must NOT be reported alone as 'the majority'");
+});
+
+test("counterexample (issue 2, round 6) resolved: same [6,3,3,8] fixture -- positions 1 and 2 are exactly tied at chiSquareContribution=0.8, and the strict->50% cutoff is crossed WHILE consuming that tied pair; both are included together, not just whichever happens to sort first", () => {
+  const result = evaluatePositionBalance({ optionCount: 4, total: 20, positionCounts: [6, 3, 3, 8] });
+  const positions = result.detail.primaryContributors.map((d) => d.position).sort();
+  assert.deepEqual(positions, [1, 2, 3], "positions 1 and 2 (tied at 0.8) must BOTH be included alongside position 3, once the tied pair crosses the strict 50% threshold");
+  result.detail.primaryContributors.forEach((d) => {
+    if (d.position === 1 || d.position === 2) { assert.ok(Math.abs(d.chiSquareContribution - 0.8) < 1e-9); }
+  });
+  // The final cumulative total genuinely exceeds 50% -- proving the loop
+  // did not stop at the exact-50% boundary and did not arbitrarily drop
+  // one member of the tied pair.
+  assert.ok(result.detail.primaryContributorsCumulativeContribution > result.detail.chiSquare / 2);
+  assert.ok(Math.abs(result.detail.primaryContributorsCumulativeContribution - 3.4) < 1e-9);
+  assert.ok(Math.abs(result.detail.primaryContributorsCumulativeShare - 3.4 / 3.6) < 1e-9);
+});
+
+test("primaryContributorsCumulativeContribution/Share are reported explicitly and consistently for a simple single-dominant-position fixture too", () => {
+  const result = evaluatePositionBalance({ optionCount: 4, total: 100, positionCounts: [38, 24, 19, 19] });
+  const summed = result.detail.primaryContributors.reduce((s, d) => s + d.chiSquareContribution, 0);
+  assert.ok(Math.abs(summed - result.detail.primaryContributorsCumulativeContribution) < 1e-9);
+  assert.ok(result.detail.primaryContributorsCumulativeShare > 0.5, "this fixture's dominant position alone is a genuine strict majority, unlike the exact-50% counterexample above");
 });
 
 test("a distribution with BOTH an aggregate Cohen's-w violation and an individual per-cell diagnostic-margin violation reports both, kept conceptually separate", () => {
@@ -1709,6 +1796,67 @@ test("upperRegularizedIncompleteGamma rejects invalid domain (a<=0, x<0) rather 
   assert.throws(() => upperRegularizedIncompleteGamma(0, 1), RangeError);
   assert.throws(() => upperRegularizedIncompleteGamma(-1, 1), RangeError);
   assert.throws(() => upperRegularizedIncompleteGamma(1, -1), RangeError);
+});
+
+// ---------------------------------------------------------------------------
+// 19. Complete malformed-input rejection (issue 4, round 6). Several
+//     impossible inputs previously silently reached public numerical
+//     helpers or the length-association evaluator instead of throwing.
+// ---------------------------------------------------------------------------
+
+test("counterexample (issue 4, round 6) resolved: upperRegularizedIncompleteGamma rejects NaN/Infinity for a or x instead of silently returning NaN", () => {
+  assert.throws(() => upperRegularizedIncompleteGamma(NaN, 1), RangeError, "confirmed before this fix: silently returned NaN");
+  assert.throws(() => upperRegularizedIncompleteGamma(1, NaN), RangeError, "confirmed before this fix: silently returned NaN");
+  assert.throws(() => upperRegularizedIncompleteGamma(Infinity, 1), RangeError);
+  assert.throws(() => upperRegularizedIncompleteGamma(1, Infinity), RangeError);
+});
+
+test("counterexample (issue 4, round 6) resolved: chiSquareUpperTailPValue rejects NaN/Infinity chiSquareStat, NaN/Infinity/non-integer df, instead of silently returning NaN or an unintended number", () => {
+  assert.throws(() => chiSquareUpperTailPValue(NaN, 3), RangeError, "confirmed before this fix: silently returned NaN");
+  assert.throws(() => chiSquareUpperTailPValue(Infinity, 3), RangeError, "confirmed before this fix: silently returned NaN");
+  assert.throws(() => chiSquareUpperTailPValue(5, NaN), RangeError, "confirmed before this fix: silently returned NaN");
+  assert.throws(() => chiSquareUpperTailPValue(5, Infinity), RangeError);
+  assert.throws(() => chiSquareUpperTailPValue(5, 2.5), RangeError, "confirmed before this fix: silently computed 0.12308857115265875 for a non-integer df instead of throwing -- this audit's df is always optionCount - 1, an integer");
+});
+
+test("chiSquareUpperTailPValue validates its OWN arguments at its own boundary, not merely by accidentally relying on upperRegularizedIncompleteGamma's downstream check -- the thrown error correctly names chiSquareStat/df, the parameter the CALLER actually passed, not an internal helper's unrelated a/x parameter name", () => {
+  assert.throws(() => chiSquareUpperTailPValue(NaN, 3), /chiSquareUpperTailPValue.*chiSquareStat/, "a caller passing a NaN chiSquareStat should see an error naming chiSquareStat, not an internal detail about upperRegularizedIncompleteGamma's x");
+  assert.throws(() => chiSquareUpperTailPValue(Infinity, 3), /chiSquareUpperTailPValue.*chiSquareStat/);
+  assert.throws(() => chiSquareUpperTailPValue(5, NaN), /chiSquareUpperTailPValue.*df/);
+});
+
+test("counterexample (issue 4, round 6) resolved: cohensW rejects NaN/Infinity chiSquare or N instead of silently returning NaN or a misleadingly finite 0", () => {
+  assert.throws(() => cohensW(NaN, 100), RangeError, "confirmed before this fix: silently returned NaN");
+  assert.throws(() => cohensW(1, Infinity), RangeError, "confirmed before this fix: silently returned 0 -- sqrt(1/Infinity), a misleadingly finite, plausible-looking result for an impossible input");
+  assert.throws(() => cohensW(Infinity, 100), RangeError);
+});
+
+test("counterexample (issue 4, round 6) resolved: assertValidObservedIndex rejects a NaN/non-finite/non-integer N, not just a malformed observed -- confirmed before this fix: assertValidObservedIndex(1, NaN) silently returned instead of throwing, since every comparison against NaN is false", () => {
+  assert.throws(() => assertValidObservedIndex(1, NaN), TypeError);
+  assert.throws(() => assertValidObservedIndex(1, Infinity), TypeError);
+  assert.throws(() => assertValidObservedIndex(1, 2.5), TypeError);
+  assert.throws(() => assertValidObservedIndex(1, -1), TypeError);
+});
+
+test("counterexample (issue 4, round 6) resolved: assertValidLengthAssociationItem/evaluateLengthAssociation reject nullProbabilityCorrectAtMax=0 (impossible -- an item's own longest option is always tied with itself) instead of silently accepting it", () => {
+  assert.throws(() => assertValidLengthAssociationItem({ correctAtMax: false, nullProbabilityCorrectAtMax: 0 }, 0), TypeError);
+  const validItems = [];
+  for (let i = 0; i < 5; i += 1) { validItems.push(classifyCue(q("z" + i, ["short", "the correct longer option"], 1), historicalLength)); }
+  const zeroProbability = [...validItems, { ...validItems[0], id: "bad-zero", nullProbabilityCorrectAtMax: 0 }];
+  assert.throws(() => evaluateLengthAssociation(zeroProbability), TypeError);
+});
+
+test("counterexample (issue 4, round 6) resolved: assertValidLengthAssociationItem/evaluateLengthAssociation reject the internally impossible combination nullProbabilityCorrectAtMax=1 with correctAtMax=false (probability 1 means every option is tied for max length, so the correct option must be among them) -- while continuing to ACCEPT the valid degenerate all-tied case (probability 1, correctAtMax=true)", () => {
+  assert.throws(() => assertValidLengthAssociationItem({ correctAtMax: false, nullProbabilityCorrectAtMax: 1 }, 0), TypeError);
+  const validItems = [];
+  for (let i = 0; i < 5; i += 1) { validItems.push(classifyCue(q("y" + i, ["short", "the correct longer option"], 1), historicalLength)); }
+  const impossibleCombo = [...validItems, { ...validItems[0], id: "bad-combo", nullProbabilityCorrectAtMax: 1, correctAtMax: false }];
+  assert.throws(() => evaluateLengthAssociation(impossibleCombo), TypeError);
+
+  // The valid degenerate case must still be accepted, not collaterally rejected.
+  assert.doesNotThrow(() => assertValidLengthAssociationItem({ correctAtMax: true, nullProbabilityCorrectAtMax: 1 }, 0));
+  const validAllTied = [...validItems, { ...validItems[0], id: "ok-all-tied", nullProbabilityCorrectAtMax: 1, correctAtMax: true }];
+  assert.doesNotThrow(() => evaluateLengthAssociation(validAllTied));
 });
 
 // ---------------------------------------------------------------------------

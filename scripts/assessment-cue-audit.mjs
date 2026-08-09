@@ -585,8 +585,28 @@ function upperRegularizedIncompleteGammaContinuedFraction(a, x) {
   return Math.exp(-x + a * Math.log(x) - logGamma(a)) * h;
 }
 
+/**
+ * Shared numeric-domain guard (round 6 -- docs/ASSESSMENT_VALIDITY.md
+ * section 4.3f). CORRECTED: chiSquareUpperTailPValue, cohensW, and
+ * upperRegularizedIncompleteGamma each validated only sign (`<= 0`/`< 0`),
+ * which is silently false for NaN and does not exclude Infinity -- so
+ * chiSquareUpperTailPValue(NaN, 3), chiSquareUpperTailPValue(Infinity, 3),
+ * cohensW(NaN, 100), cohensW(1, Infinity), and
+ * upperRegularizedIncompleteGamma(a, NaN)/(NaN, x) all silently returned
+ * NaN (or, for cohensW(1, Infinity), a misleadingly finite 0) instead of
+ * throwing. ONE reusable finiteness check, used by every numeric helper
+ * below, replaces the duplicated ad hoc sign-only checks.
+ */
+function assertFiniteNumber(value, description) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new RangeError(`${description} must be a finite number (got ${value})`);
+  }
+}
+
 /** Upper regularized incomplete gamma Q(a,x) = 1 - P(a,x), for a > 0, x >= 0. */
 export function upperRegularizedIncompleteGamma(a, x) {
+  assertFiniteNumber(a, "upperRegularizedIncompleteGamma: a");
+  assertFiniteNumber(x, "upperRegularizedIncompleteGamma: x");
   if (a <= 0) { throw new RangeError("upperRegularizedIncompleteGamma: a must be positive"); }
   if (x < 0) { throw new RangeError("upperRegularizedIncompleteGamma: x must be non-negative"); }
   if (x === 0) return 1;
@@ -624,9 +644,37 @@ export function upperRegularizedIncompleteGamma(a, x) {
  *      responsible for only calling it where that approximation is valid.
  */
 export function chiSquareUpperTailPValue(chiSquareStat, df) {
+  assertFiniteNumber(chiSquareStat, "chiSquareUpperTailPValue: chiSquareStat");
+  assertFiniteNumber(df, "chiSquareUpperTailPValue: df");
   if (df <= 0) { throw new RangeError("chiSquareUpperTailPValue: df must be positive"); }
+  // This audit only ever calls with df = optionCount - 1, always a
+  // positive integer (round 6 -- docs/ASSESSMENT_VALIDITY.md section
+  // 4.3f): a fractional df here can only mean a caller bug (e.g. passing
+  // optionCount instead of optionCount - 1), not a legitimate use of this
+  // function's real-valued generality. Confirmed before this fix:
+  // chiSquareUpperTailPValue(5, 2.5) silently computed 0.12308857115265875
+  // instead of throwing.
+  if (!Number.isInteger(df)) { throw new RangeError(`chiSquareUpperTailPValue: df must be an integer (got ${df}) -- this audit's df is always optionCount - 1`); }
   if (chiSquareStat < 0) { throw new RangeError("chiSquareUpperTailPValue: chiSquareStat must be non-negative"); }
   return upperRegularizedIncompleteGamma(df / 2, chiSquareStat / 2);
+}
+
+/**
+ * Single shared statistical-significance decision (round 6 -- issue 3):
+ * strictly `pValue < alpha` -- `pValue === alpha` does NOT reject. Both
+ * evaluatePositionBalance() and evaluateLengthAssociation() previously
+ * each wrote their own inline `pValue < SIGNIFICANCE_ALPHA` comparison;
+ * identical in effect, but two separate expressions that could silently
+ * diverge under a future edit to only one of them. This is now the SINGLE
+ * production comparison path both call, so the exact-equality boundary
+ * policy is defined in exactly one place and tested there directly (see
+ * "isStatisticallySignificant is exact at the alpha boundary" in
+ * tests/assessment-cue-audit.mjs, which mutation-tests `<` vs `<=` here).
+ */
+export function isStatisticallySignificant(pValue, alpha) {
+  assertFiniteNumber(pValue, "isStatisticallySignificant: pValue");
+  assertFiniteNumber(alpha, "isStatisticallySignificant: alpha");
+  return pValue < alpha;
 }
 
 // ----------------------------------------------------------------------------
@@ -664,12 +712,27 @@ export function chiSquareUpperTailPValue(chiSquareStat, df) {
 // quoted verbatim from page 226: H0 = .250 .250 .250 .250 (equiprobable);
 // H1 = .380 .207 .207 .207 ("a w = .30 departure from equiprobability in
 // which the effect is concentrated in the first category, the remainder
-// being equiprobable"). This distribution IS valid: .380+.207+.207+.207 =
-// 1.001 (rounds to 1 -- Cohen's own printed 3-decimal values). Cohen also
-// gives an equally-spaced m=4 medium-effect H1 on page 225:
-// .149 .216 .284 .351 (sums to 1.000). Both independently verified here
-// to produce w ≈ 0.30 via this file's own cohensW()/chiSquare formula
+// being equiprobable"). CORRECTED (round 6 -- issue 1): an earlier version
+// of this comment and the corresponding test called this distribution
+// "genuinely normalized" and claimed it "sums to 1" -- it does not.
+// .380+.207+.207+.207 = 1.001 exactly, not 1. That is ordinary 3-decimal
+// publication rounding (Cohen prints w to 2 decimals and each Hi to 3),
+// not a literal normalization, and the prior test only proved the sum was
+// within 0.002 of 1 while its own name claimed an exact proof. Cohen's
+// printed values are retained VERBATIM as `h1Published` below (not
+// claimed to sum to exactly 1); a separate, genuinely normalized `h1`
+// (h1Published rescaled to sum to exactly 1, transformation applied
+// explicitly in code below, not silently substituted for Cohen's own
+// values) is used wherever this file needs an exact probability
+// distribution for computation or testing. Cohen also gives an
+// equally-spaced m=4 medium-effect H1 on page 225: .149 .216 .284 .351
+// (sums to exactly 1.000, needs no such split). Every `h1` below
+// (including the rescaled one) independently verified to produce w ≈ 0.30
+// via this file's own cohensW()/chiSquare formula
 // (tests/assessment-cue-audit.mjs), consistent with Cohen's stated value.
+// This does not make Cohen's rounded illustration "prove" this project's
+// w=0.30 threshold uniquely correct -- see the ADOPTED, NOT UNIQUELY
+// CORRECT paragraph below, unchanged by this correction.
 //
 // Unlike the raw chi-square statistic itself (which grows with N and is
 // therefore a SIGNIFICANCE measure, not a practical-effect measure), w is
@@ -708,22 +771,50 @@ export function chiSquareUpperTailPValue(chiSquareStat, df) {
 
 export const COHENS_W_MEDIUM_EFFECT = 0.3;
 
+// Cohen's own printed page-226 H1 for the "concentrated in one category"
+// m=4 medium example, transcribed VERBATIM (round 6 -- issue 1): summed
+// as printed, these are 1.001, not 1 (see the comment above). Kept as a
+// separate, explicitly-named constant so `h1Published` below is always
+// exactly what Cohen printed, never a value that has been silently
+// adjusted to make a sum come out even.
+const COHEN_CONCENTRATED_H1_PUBLISHED = Object.freeze([0.380, 0.207, 0.207, 0.207]);
+const cohenConcentratedH1PublishedSum = COHEN_CONCENTRATED_H1_PUBLISHED.reduce((a, b) => a + b, 0);
+
 // Cohen's own printed m=4 (four-category) illustrative H0/H1 pairs
 // (page references above), transcribed verbatim for direct, executable
 // verification (tests/assessment-cue-audit.mjs) that every fixture used
 // in this file's own rationale is a genuinely normalized probability
-// distribution (sums to 1) and reproduces Cohen's own stated w value --
-// this is the reusable, checkable record the prior impossible
-// [0.40,0.25,0.25,0.25] claim never was.
+// distribution (`h1` sums to exactly 1, within floating-point tolerance)
+// and reproduces Cohen's own stated w value -- this is the reusable,
+// checkable record the prior impossible [0.40,0.25,0.25,0.25] claim never
+// was. For the one example whose printed values do not themselves sum to
+// exactly 1 (publication rounding, not a normalization defect), the
+// verbatim printed values are ALSO retained as `h1Published`, kept
+// separate from the genuinely normalized `h1` used for computation --
+// see the comment above.
 export const COHENS_M4_ILLUSTRATIVE_EXAMPLES = Object.freeze([
   Object.freeze({ label: "small (w=.10), page 224", w: 0.10, h0: Object.freeze([0.250, 0.250, 0.250, 0.250]), h1: Object.freeze([0.216, 0.239, 0.261, 0.284]) }),
   Object.freeze({ label: "medium (w=.30), equally-spaced, page 225", w: 0.30, h0: Object.freeze([0.250, 0.250, 0.250, 0.250]), h1: Object.freeze([0.149, 0.216, 0.284, 0.351]) }),
-  Object.freeze({ label: "medium (w=.30), concentrated in one category, page 226", w: 0.30, h0: Object.freeze([0.250, 0.250, 0.250, 0.250]), h1: Object.freeze([0.380, 0.207, 0.207, 0.207]) }),
+  Object.freeze({
+    label: "medium (w=.30), concentrated in one category, page 226",
+    w: 0.30,
+    h0: Object.freeze([0.250, 0.250, 0.250, 0.250]),
+    // Cohen's own printed 3-decimal values (sum 1.001) -- NOT claimed to
+    // be a normalized probability distribution.
+    h1Published: COHEN_CONCENTRATED_H1_PUBLISHED,
+    // h1Published rescaled to sum to exactly 1 (transformation: divide by
+    // the printed values' own sum) -- genuinely normalized, used for
+    // computation/tests requiring an exact distribution. NOT presented as
+    // Cohen's verbatim printed values.
+    h1: Object.freeze(COHEN_CONCENTRATED_H1_PUBLISHED.map((v) => v / cohenConcentratedH1PublishedSum)),
+  }),
   Object.freeze({ label: "large (w=.50), page 225", w: 0.50, h0: Object.freeze([0.250, 0.250, 0.250, 0.250]), h1: Object.freeze([0.082, 0.194, 0.306, 0.418]) }),
 ]);
 
 /** Cohen's w multinomial effect size: sqrt(chiSquare / N). Scale-free (does not grow with N), unlike chiSquare itself. */
 export function cohensW(chiSquare, N) {
+  assertFiniteNumber(chiSquare, "cohensW: chiSquare");
+  assertFiniteNumber(N, "cohensW: N");
   if (N <= 0) { throw new RangeError("cohensW: N must be positive"); }
   if (chiSquare < 0) { throw new RangeError("cohensW: chiSquare must be non-negative"); }
   return Math.sqrt(chiSquare / N);
@@ -797,8 +888,19 @@ export function assertValidProbabilities(probabilities) {
   });
 }
 
-/** Validates an observed-success count against the trial count N: an integer in [0, N]. */
+/**
+ * Validates an observed-success count against the trial count N: N itself
+ * must be a finite nonnegative integer, and observed an integer in [0, N].
+ * CORRECTED (round 6 -- issue 4): previously validated only `observed`,
+ * never `N` -- `observed > N` is `false` whenever `N` is `NaN` (every
+ * comparison against NaN is false), so assertValidObservedIndex(1, NaN)
+ * silently returned instead of throwing. Confirmed directly before this
+ * fix.
+ */
 export function assertValidObservedIndex(observed, N) {
+  if (!Number.isInteger(N) || N < 0) {
+    throw new TypeError(`assertValidObservedIndex: N must be a finite nonnegative integer (got ${N})`);
+  }
   if (!Number.isInteger(observed) || observed < 0 || observed > N) {
     throw new TypeError(`assertValidObservedIndex: observed must be an integer in [0, ${N}] (got ${observed})`);
   }
@@ -811,6 +913,21 @@ export function assertValidObservedIndex(observed, N) {
  * two fields that function actually reads, so a manually constructed
  * (not classifyCue()-derived) test item with a missing or malformed
  * field cannot silently produce a misleading pass/fail.
+ *
+ * CORRECTED (round 6 -- issue 4): the per-field checks above did not
+ * cross-validate the two fields against each other, so two internally
+ * impossible combinations could still reach evaluateLengthAssociation()
+ * without error:
+ *   - nullProbabilityCorrectAtMax === 0: impossible for any real item,
+ *     since an item's own tied-at-max-length set always contains AT LEAST
+ *     one option (the longest option is trivially tied with itself), so
+ *     the true null probability tiedAtMax/optionCount is always > 0.
+ *   - nullProbabilityCorrectAtMax === 1 with correctAtMax === false:
+ *     probability 1 means EVERY option (including the correct one) is
+ *     tied for max length, which makes correctAtMax === false
+ *     self-contradictory. (The reverse, probability 1 with
+ *     correctAtMax === true, is the valid all-way-tied degenerate case
+ *     and remains accepted.)
  */
 export function assertValidLengthAssociationItem(item, index) {
   const where = Number.isInteger(index) ? ` (item index ${index})` : "";
@@ -820,6 +937,12 @@ export function assertValidLengthAssociationItem(item, index) {
   }
   if (typeof item.nullProbabilityCorrectAtMax !== "number" || !Number.isFinite(item.nullProbabilityCorrectAtMax) || item.nullProbabilityCorrectAtMax < 0 || item.nullProbabilityCorrectAtMax > 1) {
     throw new TypeError(`assertValidLengthAssociationItem: nullProbabilityCorrectAtMax must be a finite number in [0,1]${where} (got ${item.nullProbabilityCorrectAtMax})`);
+  }
+  if (item.nullProbabilityCorrectAtMax === 0) {
+    throw new TypeError(`assertValidLengthAssociationItem: nullProbabilityCorrectAtMax must be > 0${where} -- an item's own longest option is always tied with itself, so the true null probability can never be exactly 0 (got 0)`);
+  }
+  if (item.nullProbabilityCorrectAtMax === 1 && item.correctAtMax === false) {
+    throw new TypeError(`assertValidLengthAssociationItem: nullProbabilityCorrectAtMax=1 means every option is tied for max length, which makes correctAtMax=false internally impossible${where}`);
   }
 }
 
@@ -887,8 +1010,8 @@ export function evaluatePositionBalance(group) {
   const chiSquare = positionCounts.reduce((sum, observed) => sum + (observed - expectedCount) ** 2 / expectedCount, 0);
   const df = n - 1;
   const pValue = chiSquareUpperTailPValue(chiSquare, df);
-  const statisticalResult = pValue < SIGNIFICANCE_ALPHA ? "rejects-uniform" : "fails-to-reject-uniform";
-  const statisticallySignificant = statisticalResult === "rejects-uniform";
+  const statisticallySignificant = isStatisticallySignificant(pValue, SIGNIFICANCE_ALPHA);
+  const statisticalResult = statisticallySignificant ? "rejects-uniform" : "fails-to-reject-uniform";
   const referenceCriticalValue = CHI_SQUARE_CRITICAL_ALPHA_01_REFERENCE[df] ?? null;
 
   // PRACTICAL/EFFECT-SIZE DECISION (corrected -- docs/ASSESSMENT_VALIDITY.md
@@ -944,28 +1067,61 @@ export function evaluatePositionBalance(group) {
   const materialDeviations = positionDeviations.filter((d) => d.exceedsDiagnosticMargin);
 
   // Primary contributors to the aggregate effect: sorted by
-  // chiSquareContribution descending, accumulated until a MAJORITY
-  // (> 50%) of the total chi-square is accounted for -- a non-arbitrary
-  // criterion ("the position(s) responsible for most of the effect") that
-  // adapts to option count, rather than an invented fixed "top N."
-  // Always computed (used to explain a Cohen's-w failure even when no
-  // individual cell exceeds the separate diagnostic margin).
+  // chiSquareContribution descending, accumulated until a STRICT MAJORITY
+  // (> 50%, not >=) of the total chi-square is accounted for -- a
+  // non-arbitrary criterion ("the position(s) responsible for most of the
+  // effect") that adapts to option count, rather than an invented fixed
+  // "top N." Always computed (used to explain a Cohen's-w failure even
+  // when no individual cell exceeds the separate diagnostic margin).
+  //
+  // CORRECTED (round 6 -- issue 2): the loop previously stopped at
+  // `cumulativeContribution >= chiSquare / 2`, so a position (or set of
+  // positions) accounting for EXACTLY 50% -- not a majority -- was
+  // reported and described in prose as "a majority of the effect."
+  // Confirmed directly: N=20, n=4, positionCounts=[6,3,3,8] -- position 3
+  // alone contributes chiSquareContribution=1.8, exactly half of the
+  // total chiSquare=3.6 -- the old `>=` stopped there, calling one
+  // position "the majority" of an effect it accounted for only half of.
+  // The strict `>` below requires cumulativeContribution to exceed 50%
+  // before stopping. This also surfaces a second, independent gap: once
+  // strict `>` causes the loop to stop partway through a group of
+  // POSITIONS TIED at the same chiSquareContribution, stopping after only
+  // one of them is an arbitrary pick among equals (array sort order, not
+  // a principled distinction) -- so once the strict threshold is crossed,
+  // every immediately-following position still tied with the one that
+  // just crossed it is included too, never silently dropped. In the same
+  // fixture, positions 1 and 2 are tied at chiSquareContribution=0.8;
+  // crossing happens while consuming that tied pair, and both are
+  // included together (tests/assessment-cue-audit.mjs).
   const sortedByContribution = [...positionDeviations].sort((a, b) => b.chiSquareContribution - a.chiSquareContribution);
   const primaryContributors = [];
   let cumulativeContribution = 0;
-  for (const d of sortedByContribution) {
+  for (let i = 0; i < sortedByContribution.length; i += 1) {
+    const d = sortedByContribution[i];
     if (d.chiSquareContribution <= 0) break;
     primaryContributors.push(d);
     cumulativeContribution += d.chiSquareContribution;
-    if (chiSquare > 0 && cumulativeContribution >= chiSquare / 2) break;
+    if (chiSquare > 0 && cumulativeContribution > chiSquare / 2) {
+      while (
+        i + 1 < sortedByContribution.length &&
+        sortedByContribution[i + 1].chiSquareContribution === d.chiSquareContribution
+      ) {
+        i += 1;
+        primaryContributors.push(sortedByContribution[i]);
+        cumulativeContribution += sortedByContribution[i].chiSquareContribution;
+      }
+      break;
+    }
   }
+  const primaryContributorsCumulativeContribution = cumulativeContribution;
+  const primaryContributorsCumulativeShare = chiSquare > 0 ? cumulativeContribution / chiSquare : 0;
 
   const reasons = [];
   if (practicalFail) {
     const contributorSummary = primaryContributors
       .map((d) => `position ${d.position} (observed ${(d.observedProportion * 100).toFixed(1)}% vs expected ${(d.expectedProportion * 100).toFixed(1)}%, ${d.direction} expectation, ${chiSquare > 0 ? ((d.chiSquareContribution / chiSquare) * 100).toFixed(1) : "0.0"}% of the total chi-square)`)
       .join("; ");
-    reasons.push(`Cohen's w = ${w.toFixed(3)} meets or exceeds the medium-effect threshold (${COHENS_W_MEDIUM_EFFECT}) for the complete position distribution ${JSON.stringify(positionCounts)} against the expected uniform distribution (${expectedCount.toFixed(2)} per position) -- a practically material DISTRIBUTION-WIDE deviation. Cohen's w is a nonnegative magnitude with no direction of its own; the position(s) accounting for a majority of this effect are: ${contributorSummary}`);
+    reasons.push(`Cohen's w = ${w.toFixed(3)} meets or exceeds the medium-effect threshold (${COHENS_W_MEDIUM_EFFECT}) for the complete position distribution ${JSON.stringify(positionCounts)} against the expected uniform distribution (${expectedCount.toFixed(2)} per position) -- a practically material DISTRIBUTION-WIDE deviation. Cohen's w is a nonnegative magnitude with no direction of its own; the position(s) accounting for a strict majority (${(primaryContributorsCumulativeShare * 100).toFixed(1)}% > 50%) of this effect are: ${contributorSummary}`);
   }
   materialDeviations.forEach((d) => {
     reasons.push(`position ${d.position} individually exceeds the separate per-cell DIAGNOSTIC margin (${d.direction} expectation, informational only, not the decision rule): ${(d.observedProportion * 100).toFixed(1)}% of ${N} items (expected ${(d.expectedProportion * 100).toFixed(1)}%, diagnostic margin [${(minAllowedShare * 100).toFixed(1)}%, ${(maxAllowedShare * 100).toFixed(1)}%])`);
@@ -996,6 +1152,7 @@ export function evaluatePositionBalance(group) {
     detail: {
       n, N, positionCounts, expectedCount, expectedProportion,
       positionDeviations, materialDeviations, primaryContributors,
+      primaryContributorsCumulativeContribution, primaryContributorsCumulativeShare,
       practicalEffect: { method: "cohens-w", w, threshold: COHENS_W_MEDIUM_EFFECT, practicalFail },
       // Retained for backward-readability/comparison only -- no longer the fail driver.
       maxAllowedShare, minAllowedShare,
@@ -1160,8 +1317,8 @@ export function evaluateLengthAssociation(items) {
   }
 
   const pValue = poissonBinomialTwoSidedPValue(probabilities, observed);
-  const statisticalResult = pValue < SIGNIFICANCE_ALPHA ? "rejects-null" : "fails-to-reject-null";
-  const statisticallySignificant = statisticalResult === "rejects-null";
+  const statisticallySignificant = isStatisticallySignificant(pValue, SIGNIFICANCE_ALPHA);
+  const statisticalResult = statisticallySignificant ? "rejects-null" : "fails-to-reject-null";
 
   // Same decision policy as evaluatePositionBalance's large-N regime:
   // practical margin is authoritative; significance alone (without

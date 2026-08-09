@@ -3259,6 +3259,98 @@ No `QUESTION_GOVERNANCE` field populated; all 153 questions remain
 whole bank and every one of its 17 forms. See `docs/QUALITY_LOG.md`
 QL-040 and `docs/ASSESSMENT_VALIDITY.md` for the full record.
 
+### Correction — Cohen's published vector was mislabeled "genuinely normalized"; `primaryContributors` stopped at exactly 50%, not a majority; a p-value boundary test claimed "at" alpha for a fixture that was below it; a self-referential p-value provenance claim survived unfixed from round 5; several impossible inputs still reached public helpers, added 2026-08-08
+
+A fifth independent review, before merge, found four narrow
+truthfulness/validation gaps. **(1)** Cohen's own printed "concentrated"
+m=4 example (`.380+.207+.207+.207 = 1.001`, not 1 — ordinary 3-decimal
+publication rounding) was called "genuinely normalized." Split into
+`h1Published` (Cohen's verbatim values, never claimed to sum to exactly
+1) and a separately, explicitly rescaled `h1` (genuinely sums to 1, used
+for computation) — the normalization test's tolerance tightened from a
+0.2%-of-1 slack to `1e-9`. **(2)** `primaryContributors`' accumulation
+stopped at `cumulativeContribution >= chiSquare / 2` — a position (or
+set) accounting for exactly 50%, not a majority, was described in prose
+as "the majority." Confirmed directly: `N=20`, `[6,3,3,8]` — position 3
+alone is exactly half the total chi-square. Corrected to a strict `>`,
+with tie-inclusive extension so a position tied at the exact cutoff
+contribution is never arbitrarily dropped; the same fixture's positions 1
+and 2 (tied at `0.8`) are both included once the strict threshold is
+crossed while consuming that pair — final result `{3,1,2}` at 94.4%, not
+`{3}` alone at exactly 50%. **(3)** A boundary test named "immediately
+below, at, and above the alpha=0.01 boundary" used a `chiSquare=11.3688`
+fixture whose actual p-value (≈0.00989) is below alpha, not at it — no
+test anywhere exercised `pValue === SIGNIFICANCE_ALPHA` directly. A new
+exported `isStatisticallySignificant(pValue, alpha)` (strict `<`) is now
+the single production comparison path both `evaluatePositionBalance()`
+and `evaluateLengthAssociation()` call, tested directly at explicit
+p-values `0.009`/`SIGNIFICANCE_ALPHA` itself/`0.011`. **(4)** The retained
+`chiSquare=120, df=3` test's comment still described its expected value
+as "independently hand-computed... via the same verified incomplete-gamma
+algorithm" — round 5 (QL-040) identified this exact self-referential
+problem during its own mutation testing but never actually corrected the
+stale comment; relabeled honestly as an integration/consistency check.
+**(5)** Several impossible inputs still reached public helpers:
+`chiSquareUpperTailPValue(NaN,3)`, `chiSquareUpperTailPValue(Infinity,3)`,
+and `chiSquareUpperTailPValue(5,2.5)` (non-integer df) each silently
+returned a number; `cohensW(1,Infinity)` silently returned `0`;
+`assertValidObservedIndex(1,NaN)` silently returned without throwing; a
+length-association item with `nullProbabilityCorrectAtMax:0` (impossible)
+and one with `{nullProbabilityCorrectAtMax:1, correctAtMax:false}`
+(internally impossible) were both silently accepted. A shared
+`assertFiniteNumber()` guard (plus an integer-`df` requirement for
+`chiSquareUpperTailPValue()`) now backs all three numeric helpers;
+`assertValidObservedIndex()` now validates `N`; `assertValidLengthAssociationItem()`
+now rejects both impossible cases while still accepting the valid
+degenerate all-tied case.
+
+**Tests:** `tests/assessment-cue-audit.mjs` grew from 187 to 201
+dependency-free checks. `tests/e2e/assessment-cue-audit.spec.mjs` stays at
+7 (14/14 across both projects; no new browser-specific behavior this
+round).
+
+**Mutation-tested (round 6):** 12 targeted, temporary, fully reverted
+reversions against `scripts/assessment-cue-audit.mjs` (never
+`index.html`), covering the rounded-source/normalized-fixture split; the
+strict contributor threshold and its cutoff-tie extension; the
+`isStatisticallySignificant()` boundary (`<` vs `<=`); the p-value
+provenance/placeholder check; and every newly enforced malformed-input
+invariant (finiteness for `chiSquareUpperTailPValue()`/`cohensW()`/
+`upperRegularizedIncompleteGamma()`, integer `df`, `assertValidObservedIndex()`'s
+`N` check, and both `assertValidLengthAssociationItem()` cross-field
+checks). One initial attempt — removing `chiSquareUpperTailPValue()`'s
+own finiteness checks — produced ZERO test failures: `upperRegularizedIncompleteGamma()`'s
+own downstream check still threw for the same input, silently absorbing
+the removed layer, so no existing test could distinguish which function
+was actually doing the validating. Closed with a new test asserting the
+thrown error names `chiSquareUpperTailPValue`'s own `chiSquareStat`/`df`,
+not an internal helper's unrelated `a`/`x` — the mutation was then
+re-applied and correctly caught by exactly that test. All other 11
+mutations failed exactly their intended, directly-attributable test(s) on
+the first attempt. All 12 reverted to byte-identical via `diff` before
+committing.
+
+**Mutation count, reconciled from retained evidence:** round 1 (QL-036):
+8. Round 2 (QL-037): 8. Round 3 (QL-038): 4. Round 4 (QL-039): 7. Round 5
+(QL-040): 6. Round 6 (QL-041, this entry): 12. **Cumulative total: 45.**
+
+**Full local validation:** `npm test` (172 dependency-free DOM-behavior
+checks + 70 governance checks + **201 assessment-cue checks** + 5
+deployed-revision checks, all passing, including the `validate`
+structural/documentation check), `npm run audit:assessment-cues -- --json`
+run twice in immediate succession (byte-identical via `diff`), the
+targeted `tests/e2e/assessment-cue-audit.spec.mjs` suite (14/14 passing),
+and the complete `npx playwright test` suite run at a deterministic,
+fixed worker count (`--workers=2`) — **252 passed, 6 skipped, 0 failed**,
+a fully clean complete-suite result, matching round 5's.
+
+No question, answer, rationale, distractor feedback, domain, topic,
+difficulty, or stable ID changed. `index.html` is byte-for-byte unchanged.
+No `QUESTION_GOVERNANCE` field populated; all 153 questions remain
+`draft`. QL-033 is not marked corrected. Gate A still correctly fails the
+whole bank and every one of its 17 forms. See `docs/QUALITY_LOG.md`
+QL-041 and `docs/ASSESSMENT_VALIDITY.md` for the full record.
+
 ## Gates still open
 
 ### Browser behavior
