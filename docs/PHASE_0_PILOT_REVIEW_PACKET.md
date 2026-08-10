@@ -29,9 +29,10 @@ batch defined in `docs/ASSESSMENT_VALIDITY.md` section 6.
   rubric, and no item has been reviewed against it by a human as of this
   document.
 - **This is not** release qualification of any kind.
-- **Agreement between AI systems, or between this document and any single
-  web source, is not scientific validation.** Every conclusion below is
-  explicitly labeled preliminary and requires Austin's independent
+- **Agreement between AI systems, or between successive AI-assisted passes
+  over this same document, is not scientific validation and is not the
+  project's governance-defined independent review.** Every conclusion below
+  is explicitly labeled preliminary and requires Austin's own SME
   evaluation before it means anything for the live course.
 
 `QUESTION_GOVERNANCE` is unmodified by this document. All 153 questions,
@@ -156,32 +157,34 @@ uncertainty about intended objective.
 | Edition/date | Revised September 25, 2025 |
 | Locator | Domain weighting table (four content areas) |
 | URL | `https://www.ascp.org/boc/docs/default-source/explore-credentials/content-guidelines/ascp_ascpi_cg_content_guideline.pdf` |
-| Retrieved | Existence, title, and September 25, 2025 revision date confirmed via web search 2026-08-10. Three separate direct-fetch attempts against three different URL forms of the primary PDF, made during this correction round (2026-08-10, session 2), each returned **HTTP 403 Forbidden**; a web-archive fallback attempt was refused by this session's own tooling. **This document's own tooling still could not directly inspect the primary PDF, in either research round.** |
-| Source status (taxonomy, § Finding 3) | **`source unresolved`** — this document's own tooling never directly inspected the primary PDF. See "Unresolved problem" for the distinct, narrower reason the item's *content* is nonetheless resolved (Austin-supplied citation, not this document's inspection). |
-| Directly inspected? | **No, not by this document, in either round.** Austin has supplied, as directly stated ground truth for this correction round, the primary guideline's exact title ("Technologist in Cytogenetics - CG(ASCP) and CG(ASCPi) Examination Content Guideline"), publisher (ASCP Board of Certification), revision date (September 25, 2025), and locator (page 1, Examination Content Areas table): Specimen 20–25%, **Molecular 15–25%**, Analysis/Imaging 45–50%, Operations 10–15%. This is an authority claim attributed explicitly to Austin's own direct instruction in this correction round, not to any fetch performed by this document. This repository's own `README.md` and `docs/SCIENTIFIC_REVIEW.md` independently cite the same Molecular 15–25% figure. |
-| Narrow claim supported | That an ASCP BOC content guideline exists, is dated September 25, 2025, and defines four weighted content domains for this exam, with Molecular at 15–25% — now resolved in favor of this figure per Austin's directly supplied primary-source citation (see immediately above), which matches this repository's pre-existing citation exactly. |
+| Retrieved | Existence, title, and September 25, 2025 revision date confirmed via web search 2026-08-10. Across three correction rounds, six separate direct-fetch attempts against multiple URL forms of the primary PDF each returned **HTTP 403 Forbidden**; a web-archive fallback attempt was refused by this session's own tooling. **This document's own tooling has never directly inspected the primary PDF, in any round.** |
+| Source status (taxonomy, § Finding 3) | **`source unresolved`** — this document's own tooling has never directly inspected the primary PDF. This status is preserved unchanged this round; see "Unresolved problem" below. |
+| Directly inspected? | **No, not by this document, in any round.** A prior correction round's task instructions supplied, as input to that correction task, the primary guideline's stated title ("Technologist in Cytogenetics - CG(ASCP) and CG(ASCPi) Examination Content Guideline"), publisher (ASCP Board of Certification), revision date (September 25, 2025), and locator (page 1, Examination Content Areas table): Specimen 20–25%, **Molecular 15–25%**, Analysis/Imaging 45–50%, Operations 10–15%. **Correction (this round, per Finding 4): this is task-supplied input, not a fact Austin has personally inspected, verified, or accepted through the SME process** — the prior round's wording ("Austin has supplied," "Austin's own direct instruction," "ground truth") wrongly implied personal Austin review and is corrected here. This repository's own `README.md` and `docs/SCIENTIFIC_REVIEW.md` independently cite the same Molecular 15–25% figure, which is a separate, genuine repository fact, distinct from the task-supplied figure. |
+| Narrow claim supported | That an ASCP BOC content guideline exists, is dated September 25, 2025, and defines four weighted content domains for this exam. The item's content is consistent with the Molecular 15–25% figure as supplied by task input and as independently cited in this repository's own pre-existing documentation — but this document has not itself directly inspected the primary PDF to confirm this, in any round. |
 | Edition/jurisdiction sensitivity | High — ASCP revises this guideline periodically; the rationale's percentages are only accurate for the currently cited revision. |
-| Unresolved problem | **Resolved this correction round, with one honest caveat.** The prior round found a discrepancy between this repository's existing citation (Molecular 15–25%) and a secondary, non-ASCP study-aid site (`cytogenetics.mlsascp.com/ascp-boc.html`, an independently authored exam-prep resource, states Molecular 15–20%). Austin has directly supplied the primary guideline's own stated figure (Molecular 15–25%, page 1, Examination Content Areas table), which resolves the discrepancy in favor of this repository's existing citation and against the secondary site's figure. **Caveat:** this document's own fetch tooling still cannot independently re-verify the primary PDF (403 Forbidden, three attempts this round); the resolution above rests on Austin's direct supplied citation, not on this session's own source inspection, and that distinction is recorded here rather than blurred. |
+| Unresolved problem | **Not resolved by this document; content-consistent, not source-verified.** A discrepancy was found in an earlier round between this repository's existing citation (Molecular 15–25%) and a secondary, non-ASCP study-aid site (`cytogenetics.mlsascp.com/ascp-boc.html`, states Molecular 15–20%). Task-supplied input in a later round stated the primary guideline's own figure as Molecular 15–25%, matching this repository's existing citation. **This document does not treat that task input as equivalent to independently verifying the primary PDF**, and does not describe the discrepancy as "resolved" by any person. The primary PDF remains directly uninspected by this document's own tooling (403 Forbidden, six attempts across three rounds); direct primary-document verification remains required before this item's source can be entered into `QUESTION_GOVERNANCE` or formally source-checked. |
 
 ## 1.4 Scientific-analysis proposal
 
 The keyed answer (Chromosome analysis and imaging) is defensible under
-*both* conflicting sources above — the disputed figure is Molecular's lower
-bound, not which domain is largest, and Analysis/Imaging is the clear
-plurality under every version found. Exactly one best answer is supportable.
-The rationale's own stated range for the correct answer ("about 45–50%") is
-not the disputed figure. No distractor is defensible as equally correct. No
-absolute wording, outdated framing, or overgeneralization. Not
-ISCN/lab-policy/jurisdiction sensitive in the way clinical items are — it is
-sensitive to *which exam-guideline revision* is current, a narrower and more
-tractable dependency. **Confidence: moderate-high** for the keyed answer
-itself (converges across all sources found); **low** for full source-dossier
-completeness, specifically because the primary document was not directly
-reopened this session. **Austin must independently evaluate this
-conclusion** — in particular, Austin (or a future session with working PDF
-access) should open the primary guideline directly and confirm the exact
-current Molecular range before this item's source is entered into
-`QUESTION_GOVERNANCE`.
+*both* conflicting figures found across rounds (15–25% and 15–20% for
+Molecular) — the disputed figure is Molecular's lower bound, not which
+domain is largest, and Analysis/Imaging is the clear plurality under every
+version found. Exactly one best answer is supportable. The rationale's own
+stated range for the correct answer ("about 45–50%") is not the disputed
+figure. No distractor is defensible as equally correct. No absolute
+wording, outdated framing, or overgeneralization. Not ISCN/lab-policy/
+jurisdiction sensitive in the way clinical items are — it is sensitive to
+*which exam-guideline revision* is current, a narrower and more tractable
+dependency. **Confidence: moderate-high** for the keyed answer itself
+(the largest-domain conclusion is stable across every figure found, so it
+does not turn on which Molecular figure is correct); **low** for full
+source-dossier completeness, specifically because the primary document has
+never been directly inspected by this document's own tooling. **This is
+not an Austin SME determination.** Before this item's source is entered
+into `QUESTION_GOVERNANCE`, someone with working access should open the
+primary guideline PDF directly and confirm the exact current Molecular
+range against the item's own text.
 
 ## 1.5 Gate B preliminary worksheet
 
@@ -207,22 +210,29 @@ current Molecular range before this item's source is entered into
 
 ## 1.6 Recommended disposition
 
-**Leave unchanged — resolved, not pending.** The prior round of this
-document wrongly stated that "this item's own text does not spell out the
-disputed figure." That claim was factually wrong: the item's own
+**Leave unchanged — corrected this round, per Finding 4.** An earlier
+round wrongly stated that "this item's own text does not spell out the
+disputed figure"; that claim was factually wrong, since the item's own
 distractor-2 feedback already states, verbatim, "Molecular is ~15–25% —
 important but second to analysis/imaging" (line 135 of this document,
-section 1.1) — exactly the figure now confirmed correct per section 1.3.
-With Austin's directly supplied primary-source figure matching both this
-repository's existing citation and the item's own already-written feedback
-text, the Molecular-range discrepancy identified in the prior round is
-resolved in favor of 15–25%, and this item requires no content change.
+section 1.1). A later round then wrongly described the Molecular-range
+discrepancy as "resolved" via an attribution to Austin personally; that
+framing is retracted here. **This preliminary disposition remains "Leave
+unchanged" only because the keyed answer — Chromosome Analysis and Imaging
+is the largest domain — is consistently supported across every figure
+found, and does not depend on which Molecular figure is correct.** The
+item's own text is content-consistent with the task-supplied official
+figures and this repository's independent pre-existing citation. Direct
+primary-document verification by this document's own tooling remains
+unresolved (§ 1.3) and is still required before formal source-checking —
+this disposition does not assert that gap is closed.
 
 ## 1.7 Proposed revision
 
-None proposed. The prior open question (which published percentage table is
-current) is now resolved per section 1.3 above; the item's own text already
-states the correct, now-confirmed figure, so there is nothing to edit.
+None proposed. The keyed answer does not depend on the disputed figure, so
+no content edit is warranted regardless of how the Molecular-percentage
+sourcing question is eventually resolved; that sourcing question itself
+remains open (§ 1.3), not resolved by this document.
 
 ## 1.8 Austin SME decision fields (pending)
 
@@ -322,7 +332,7 @@ changes (it has not).
 | 1 | Exactly one defensible best answer | appears satisfied | |
 | 2 | Scientific correctness is separate | not applicable | Software fact, not a clinical claim |
 | 3 | Distractor plausibility | appears satisfied | Each is a plausible misconception (server, cookie, unsaved) |
-| 4 | Parallel construction | possible concern | Options mix a location noun phrase, two location phrases, and a negation ("It is not saved") — the fourth option is structurally different in kind, not just content. Worth Austin's eye, not clearly wrong |
+| 4 | Parallel construction | appears satisfied *(reasoned this round, per Finding 5)* | Options mix a location noun phrase, two location phrases, and a negation ("It is not saved"). This document judges the difference non-disqualifying rather than leaving it as an open flag: the stem ("stored where?") admits two categorically different kinds of wrong answer — wrong location (options 0, 2) and no storage at all (option 3) — and option 3's negation is the only grammatically natural way to express "nowhere," not an inconsistent authoring choice. A forced location-phrase rewrite (e.g., "Nowhere — not saved") would not test a materially different misconception and risks reading less naturally than the current text. No revision proposed |
 | 5 | Mutual distinguishability | appears satisfied | |
 | 6 | Grammar/stem-completion clues | appears satisfied | |
 | 7 | Repeated stem wording | appears satisfied | "stored"/"saved" vary naturally, not a planted duplicate |
@@ -339,10 +349,14 @@ changes (it has not).
 
 ## 2.6 Recommended disposition
 
-**Leave unchanged.** The one real signal (item 8, unique-longest) is a
-length observation, not a scientific defect — and the task is explicit that
-disposition should not be driven by rebalancing answer length. Flagged for
-Austin's Gate B judgment call, not proposed as an edit here.
+**Leave unchanged.** Both flagged Gate B observations are now resolved to
+an explicit explanation rather than left open (Finding 5): item 8
+(unique-longest) is a length observation, not a scientific defect, and the
+task is explicit that disposition should not be driven by rebalancing
+answer length; item 4 (parallel construction) is reasoned above as a
+natural consequence of the stem admitting two different kinds of wrong
+answer, not an authoring inconsistency. Both remain flagged for Austin's
+own Gate B confirmation, not proposed as edits here.
 
 ## 2.7 Proposed revision
 
@@ -448,18 +462,28 @@ cytogenetics laboratory practice (the specialist site's "typically"/
 document is not asserting the item is wrong. But this document also cannot
 certify the claim against one adequate, directly-inspected, named source,
 and says so plainly rather than treating a search-effort shortfall as
-resolved. **Confidence: lowered this round, from high to moderate** on the
-narrow distractor-3 rationale specifically; confidence in the keyed answer
-itself (option 1) remains reasonable on general domain-plausibility
-grounds, distinct from the distractor-3 sourcing question.
+resolved. **Correction (this round, per Finding 2 of the governance/
+item-logic review):** the item's own currently *live* feedback text
+contains unsupported factual absolutes that this document's own sourcing
+work does not back up — distractor-0 feedback states "There is no single
+universal number; values are validated per lab," and distractor-3 feedback
+states "They are not fixed by regulation; they are validated locally."
+Both are stated as flat facts, not as "the course's operating assumption"
+or similar, and neither is currently supported by an adequate
+directly-inspected source (§ 3.3). Withdrawing a poorly sourced *proposed*
+revision (§ 3.7) does not establish that this *existing* wording is safe to
+leave as-is — that would be a different, additional judgment this document
+is not in a position to make on the evidence currently in hand. **Confidence:
+low** on the specific factual absolutes in the live feedback; the general
+underlying concept remains plausible but unverified.
 
 ## 3.5 Gate B preliminary worksheet
 
 | # | Criterion | Verdict | Note |
 | ---: | --- | --- | --- |
-| 1 | Exactly one defensible best answer | appears satisfied | With the nuance in 3.4 noted; the sourcing gap affects distractor-3's rationale, not whether option 1 is the single best answer |
+| 1 | Exactly one defensible best answer | **requires Austin judgment — corrected this round, per Finding 2** | An earlier round marked this "appears satisfied," reasoning that the sourcing gap only affects distractor 3's rationale. On reflection this understated the concern: whether option 1 is genuinely the single best answer depends on whether "SOP/lab-dependent" is itself an accurate characterization, and this document cannot certify that against an adequate source (§ 3.3) — so the item-1 criterion itself is not preliminarily "satisfied," it is unresolved pending Austin's own domain judgment |
 | 2 | Scientific correctness is separate | not applicable | |
-| 3 | Distractor plausibility | **possible concern — restored this round** | Distractor 3's subtlety (3.4) is genuinely unresolved: no directly-inspected source adequately confirms that colcemid time/KCl molarity/cell-count specifically are regulation-independent parameters, as opposed to the general "labs must validate their own performance" principle. The prior round's "resolved... appears satisfied" verdict is retracted; this round marks it `source unresolved` (§ 3.3) rather than papering over the gap with a citation that does not actually say what it was cited for |
+| 3 | Distractor plausibility | **possible concern — retained, source-related** | Distractor 3's subtlety (3.4) is genuinely unresolved: no directly-inspected source adequately confirms that colcemid time/KCl molarity/cell-count specifically are regulation-independent parameters, as opposed to the general "labs must validate their own performance" principle. Marked `source unresolved` (§ 3.3) rather than papered over with a citation that does not actually say what it was cited for |
 | 4 | Parallel construction | appears satisfied | All four are noun-phrase characterizations |
 | 5 | Mutual distinguishability | appears satisfied | |
 | 6 | Grammar/stem-completion clues | appears satisfied | |
@@ -469,44 +493,48 @@ grounds, distinct from the distractor-3 sourcing question.
 | 10 | Paired/opposite-option patterns | appears satisfied *(resolved this round, no revision)* | Options 0 and 3 both gesture at "fixed/universal," options 1 and 2 both gesture at "not fixed" — reviewed under Finding 5 and judged a natural, non-disqualifying consequence of testing one true/false axis with four options (two ways to be wrong-as-fixed, one way to be wrong-as-irrelevant, one correct way to be not-fixed), not an unintended structural telegraph; no revision proposed |
 | 11 | "All/none," negative stems | not applicable | |
 | 12 | Implausible padding | appears satisfied | |
-| 13 | Rationale/feedback alignment | appears satisfied | |
+| 13 | Rationale/feedback alignment | **possible concern — added this round, per Finding 2** | The *live* distractor feedback makes unqualified factual absolutes not adequately supported by any source this document has directly inspected: distractor 0 — "There is no single universal number; values are validated per lab"; distractor 3 — "They are not fixed by regulation; they are validated locally." Both assert, as flat fact, exactly the narrow proposition § 3.3 found no adequate source for. This is a genuine alignment concern (the feedback claims more certainty than the evidence supports), not resolved by withdrawing the previously proposed revision |
 | 14 | Preserves assessed intent | requires Austin judgment | |
 | 15 | Edit-in-place vs. supersede | requires Austin judgment | |
-| 16 | Quarantine when unsupportable | not applicable | Content itself not deemed unsupportable; the keyed answer is not in question — only distractor 3's specific regulatory rationale lacks an adequate source, which is a narrower, feedback-level gap |
+| 16 | Quarantine when unsupportable | **not applicable, but disposition is `Insufficient evidence to recommend`, not `Leave unchanged` — corrected this round, per Finding 2** | Quarantine is not recommended: nothing found this round suggests the item's core concept is *false* or that its assessed intent is unsupportable outright, so a full quarantine (which the packet reserves for items whose sourcing gap blocks even a preliminary directional judgment, as with `m7-q2`) would overstate the concern. But "Leave unchanged" is also not warranted: that is an affirmative preliminary claim that the current wording is safe, and this document cannot make that claim given the unsupported absolutes now flagged at item 13. `Insufficient evidence to recommend` is the accurate middle disposition — the item is neither cleared nor quarantined, and remains available for Austin's own SME evaluation without this document's preliminary endorsement either way |
 | 17 | Evidence before release-qualification | fails preliminary review | Expected at Draft |
 
 ## 3.6 Recommended disposition
 
-**Leave unchanged — corrected this round, per Finding 2.** The prior
-round's "Edit in place (feedback text only)" is withdrawn: that proposed
-feedback revision cited 42 CFR § 493.1276(b) and § 493.1253 as directly
-establishing that CLIA "does not itself fix what the number must be" —
-an attribution these sections do not support (§ 3.3/3.4). Proposing a
-sourced-sounding feedback edit grounded in a citation that does not
-actually say what it was cited for would be a worse outcome than leaving
-the existing, more modestly worded feedback ("They are not fixed by
-regulation; they are validated locally.") in place. That existing text
-does not itself misattribute a specific claim to CLIA, so it is not
-disqualifying on its own — but it is not resourced or strengthened this
-round either. The stem, all four option texts, the rationale, and the
-keyed answer remain unchanged; distractor 3's feedback is also left as
-originally authored, pending either Austin's own domain confirmation or a
-future session's access to an adequate specialist source (§ 3.3).
+**Insufficient evidence to recommend — corrected this round, per Finding
+2.** An earlier round's "Edit in place (feedback text only)" was withdrawn
+because its proposed feedback revision cited 42 CFR § 493.1276(b) and §
+493.1253 as directly establishing a claim those sections do not support
+(§ 3.3/3.4) — that withdrawal was correct. But the round that withdrew the
+revision then defaulted to "Leave unchanged," which is itself an
+affirmative preliminary judgment that the item's *existing* wording is
+safe. **That does not follow.** The live distractor feedback (§ 3.1, § 3.5
+item 13) makes unqualified factual absolutes this document cannot verify
+against an adequate source. This document is not recommending a rewrite
+without evidence (§ 3.7 proposes none), and is not recommending quarantine
+(§ 3.5 item 16 — nothing suggests the concept is false). It is recording,
+accurately, that it does not have enough evidence to recommend either
+"this is fine as written" or "this needs a specific rewrite" — that
+determination is left open for Austin's own SME evaluation, which may
+draw on domain knowledge this document does not have access to. The stem,
+all four option texts, the rationale, and the keyed answer remain
+unchanged by this document; no content edit is proposed.
 
 ## 3.7 Proposed revision
 
-**None proposed this round — withdrawn.** The prior round's proposed
-distractor-3 feedback revision is retracted because it attributed a claim
-to 42 CFR §§ 493.1276/493.1253 that those sections do not make (§ 3.3/3.4).
-Per Finding 2 item 9, an edit-in-place recommendation may remain only if
-its wording does not overstate what the cited sources establish; since no
-adequate replacement source was found this round (§ 3.3), no revision is
-proposed. Austin's options, once he reviews this item: (a) confirm from his
-own domain expertise that colcemid time/KCl molarity/cell-count targets are
-indeed laboratory/SOP-validated and approve a revision on that basis rather
-than a specific CFR citation; (b) accept the existing feedback as adequate
-without a regulatory citation; or (c) direct further sourcing (e.g., the
-*AGT Cytogenetics Laboratory Manual*) before any wording changes.
+**None proposed.** Per Finding 2, this document does not draft new wording
+without adequate supporting evidence. The prior round's CLIA-grounded
+distractor-3 feedback revision remains withdrawn, for the reason given in
+§ 3.6. Austin's options, once he reviews this item: (a) confirm from his
+own domain expertise that colcemid time/KCl molarity/cell-count targets
+are indeed laboratory/SOP-validated, and either approve the existing
+feedback on that basis or direct a specific rewrite; (b) direct further
+sourcing (e.g., the *AGT Cytogenetics Laboratory Manual*) before any
+wording decision; or (c) determine that the existing feedback's level of
+certainty is acceptable for a Draft-stage orientation item regardless of a
+formal citation. This document takes no position on which of those Austin
+should choose — only that "no change needed" is not yet supportable as
+this document's own preliminary conclusion.
 
 ## 3.8 Austin SME decision fields (pending)
 
@@ -1489,11 +1517,11 @@ inspection of an authoritative, on-topic, peer-reviewed guidance source.
 | 1 | Exactly one defensible best answer | **fails preliminary review — corrected this round** | The former option 2, "Detects balanced translocations directly," is a second defensible answer under a targeted-probe reading (§ 11.4); this round's revision (§ 11.7) replaces it to restore a single defensible best answer |
 | 2 | Scientific correctness is separate | not applicable | |
 | 3 | Distractor plausibility | **fails preliminary review — corrected this round** | The former option 2 was not a clean distractor — its literal claim was true under Wolff et al. (§ 11.3/11.4); the prior round's feedback rejected a claim the option never made ("broadly screen"). Replaced this round with a distractor that is unambiguously false under the same source (§ 11.7) |
-| 4 | Parallel construction | appears satisfied | All four (three after revision, see § 11.7) complete "...because it:" as a verb-phrase claim |
+| 4 | Parallel construction | appears satisfied | **Corrected this round, per Finding 5: all four options remain, before and after the proposed revision.** The revision replaces option 2's *text*, not the option itself — there are still four options both before and after; the prior round's "three after revision" was a documentation error, not a description of an actual option-count change. All four complete "...because it:" as a verb-phrase claim, including the proposed replacement option 2 |
 | 5 | Mutual distinguishability | appears satisfied | |
 | 6 | Grammar/stem-completion clues | appears satisfied | |
 | 7 | Repeated stem wording | appears satisfied | |
-| 8 | Conspicuously longer/more-qualified correct answer | appears satisfied *(reviewed under Finding 5, no further revision)* | Original: `uniquely-longest` (53 vs. 32/40/24 chars). The § 11.7 revision's replacement option 2 is itself long (grounded in the same source's actual limitation, not padding), which incidentally reduces or removes the key's unique-longest status; exact post-revision lengths are Austin's to confirm at edit time, not re-measured by this document |
+| 8 | Conspicuously longer/more-qualified correct answer | appears satisfied | **Corrected this round, per Finding 5: exact lengths calculated, not deferred.** Live item: `uniquely-longest`, option 0 (key) = 53 chars vs. options 1/2/3 = 32/40/24. Post-revision (§ 11.7): option 0 (key) = 53, option 1 = 32, proposed option 2 = **71**, option 3 = 24 — the revision removes the key's unique-longest status (the replacement option 2, at 71 characters, becomes the longest option, not the key), a mechanically determinable fact recorded here rather than deferred to Austin. This is not automatically disqualifying — option 2's length reflects the source's own actual stated limitation (§ 11.3, quote 2), not padding — but the length pattern itself (the *replacement distractor* is now the longest option) is a fact Austin's Gate B review should weigh explicitly, since it is a different pattern from a merely-non-unique-longest key |
 | 9 | Absolute words | appears satisfied | "all" appears in a wrong option (3), correctly signaling implausibility |
 | 10 | Paired/opposite-option patterns | appears satisfied | |
 | 11 | "All/none," negative stems | not applicable | Option 3 uses "all" but is not an "all of the above"-style option |
@@ -1543,6 +1571,16 @@ literal wording did. The revised feedback explains the correct boundary
 of rejecting a claim the option never made. The stem, rationale, keyed
 answer, and options 1/3 are unchanged, preserving the item's stable ID and
 assessed intent exactly.
+
+**Exact option lengths, recorded this round rather than deferred (per
+Finding 5):** option 0 (keyed) = 53 characters; option 1 = 32; proposed
+option 2 = 71; option 3 = 24. All four options remain present — the
+revision changes option 2's text, not the option count. The key is no
+longer the uniquely-longest option after this revision; the replacement
+distractor (71 chars) is longest instead. This is recorded as a fact for
+Austin's Gate B review, not treated as automatically disqualifying, since
+the length reflects the source's actual stated limitation rather than
+padding (§ 11.4).
 
 ## 11.8 Austin SME decision fields (pending)
 
@@ -1599,8 +1637,6 @@ technologist handles it. Cognitive level: recall. Domain/topic
 
 ## 12.3 Source dossier
 
-| Field | Value |
-| --- | --- |
 | Field | Value (methanol) | Value (glacial acetic acid) |
 | --- | --- | --- |
 | Product name | Methanol | Acetic acid, glacial |
@@ -1630,53 +1666,77 @@ URL actually fetched and read, and (b) the correct canonical
 `sigmaaldrich.com` locator for the *same* product number, not a different
 product.
 
-**Currency: this round's independent review observed newer official
-revisions exist** — ARK2183 version 7.1, revised March 5, 2026, at
-`sigmaaldrich.com/US/en/sds/sial/ark2183`. That observation is attributed
-to Austin's own supplied finding, not to this session's own verification:
-this round made **eight separate direct-fetch attempts** against
-`sigmaaldrich.com` (both the M3641/A6283 URLs the prior round wrongly cited
-and the corrected 34860/ARK2183/sigald-A6283 URLs), spaced across the
-session, and every attempt timed out or failed to connect — the host was
-not reachable by this session's tooling this round, despite genuine,
-repeated effort. **This document does not call the 2015/2019 documents
-"current."** They are recorded as exactly what they are: the specific,
-reproducible documents directly inspected, dated as shown, with no
-confirmation this round of whether their classification content has since
-changed in the newer revision Austin observed. |
-| Source status (taxonomy, § Finding 3) | **`directly-inspected-but-secondary-or-incomplete`** — downgraded this round from `directly-inspected-and-adequate`. The documents genuinely inspected are real, primary manufacturer SDS content (not a search snippet, not a non-official specialist site) and their metadata now reproducibly matches the exact records actually read — but they are third-party-mirrored, dated (2015/2019) copies, not confirmed against the current manufacturer page this round despite eight direct-fetch attempts, and a newer official ARK2183 revision is known (per Austin's observation) to exist. That currency gap is real and unresolved, not merely a formatting nicety, so `directly-inspected-and-adequate` is not retained. |
+**Currency, corrected this round per Finding 4: a newer official revision
+was named in this correction round's task input** — ARK2183 version 7.1,
+revised March 5, 2026, at `sigmaaldrich.com/US/en/sds/sial/ark2183`. **This
+document treats that as task-supplied input, not as Austin's own personal
+inspection, acceptance, or SME determination, and not as this session's own
+verification.** An earlier round's wording ("Austin's own supplied
+finding," "Austin observed") wrongly implied personal Austin review; that
+attribution is corrected here. This round made ten separate direct-fetch
+attempts across three rounds against `sigmaaldrich.com` (the originally
+mis-cited M3641/A6283 URLs, and the corrected 34860/sigald-34860/
+sial-ark2183 URLs), spaced across sessions, and every attempt timed out or
+failed to connect — the host has not been reachable by this session's
+tooling in any round, despite genuine, repeated effort. **This document
+does not call the 2015/2019 documents "current," does not claim direct
+inspection of the current revision, and does not infer the current
+revision's classification content.** The 2015/2019 documents are recorded
+as exactly what they are: the specific, reproducible documents directly
+inspected, dated as shown, with no confirmation in any round of whether
+their classification content has since changed in the newer revision named
+by task input. Current-source verification remains a pending requirement
+before any `QUESTION_GOVERNANCE` population. |
+| Source status (taxonomy, § Finding 3) | **`directly-inspected-but-secondary-or-incomplete`** — unchanged this round. The documents genuinely inspected are real, primary manufacturer SDS content (not a search snippet, not a non-official specialist site) and their metadata reproducibly matches the exact records actually read — but they are third-party-mirrored, dated (2015/2019) copies, not confirmed against the current manufacturer page in any round despite ten direct-fetch attempts, and a newer official ARK2183 revision is named in task input (not independently confirmed by this document) to exist. That currency gap is real and unresolved, not merely a formatting nicety, so `directly-inspected-and-adequate` is not used. |
 | Narrow claim supported | Per the exact documents inspected: methanol is classified flammable **and** acutely toxic (Category 2 flammable liquid; Category 3 acute toxicity by three routes: oral, dermal, inhalation) — matching the item's "flammable/toxic" descriptor. Glacial acetic acid is classified corrosive (Category 1A skin corrosion, Category 1 serious eye damage) — matching the item's "corrosive" descriptor. **Explicitly acknowledged, and material to § 12.7's revised feedback below: glacial acetic acid is *also* independently classified flammable (Category 3, H226).** "Flammable/toxic" and "corrosive" are not being treated as mutually exclusive, exhaustive categories — methanol and glacial acetic acid share the flammable classification; what distinguishes them, per the exact SDS text quoted above, is that methanol carries a GHS **acute-toxicity** classification (Acute Tox. 3, three routes) that glacial acetic acid's SDS does **not** carry, while glacial acetic acid carries a GHS **corrosion/eye-damage** classification that methanol's SDS does **not** carry. |
 | Edition/jurisdiction sensitivity | GHS classification under 29 CFR 1910 (OSHA HCS). The underlying hazard classes for these two long-studied chemicals are stable and not expected to have changed in substance between the 2015/2019 documents inspected and the current revision, but this document does not assert that as confirmed — it is a plausibility judgment, not a verified fact, given the currency gap above. |
-| Unresolved problem | **Restored, per Finding 1: a genuine, honestly unresolved currency gap.** This document could not confirm this round whether the current official Sigma-Aldrich SDS revisions for products 34860 and ARK2183 (the latter observed by Austin to now be version 7.1, revised 2026-03-05) carry identical Section 2 classification data to the 2015/2019 documents actually inspected. Recommended next step: re-fetch `sigmaaldrich.com/US/en/sds/sigald/34860` and `sigmaaldrich.com/US/en/sds/sial/ark2183` directly when tooling/network access allows, and confirm the classification data is unchanged (or update it if it has changed) before this dossier is used to populate `QUESTION_GOVERNANCE`. |
+| Unresolved problem | **A genuine, honestly unresolved currency gap, persisting across rounds.** This document could not confirm in any round whether the current official Sigma-Aldrich SDS revisions for products 34860 and ARK2183 (the latter named in task input as version 7.1, revised 2026-03-05 — not independently confirmed by this document) carry identical Section 2 classification data to the 2015/2019 documents actually inspected. Recommended next step: re-fetch `sigmaaldrich.com/US/en/sds/sigald/34860` and `sigmaaldrich.com/US/en/sds/sial/ark2183` directly when tooling/network access allows, and confirm the classification data is unchanged (or update it if it has changed) before this dossier is used to populate `QUESTION_GOVERNANCE`. |
 
 ## 12.4 Scientific-analysis proposal
 
 Keyed answer is correct against the exact directly-inspected manufacturer
 SDS documents (§ 12.3), not general converging secondary knowledge, though
-this round found and corrected a provenance defect in how those documents
-were cited (§ 12.3) and could not confirm their currency despite genuine
+an earlier round found and corrected a provenance defect in how those
+documents were cited and could not confirm their currency despite genuine
 effort. Distractors as originally authored (inert; strong oxidizers;
-radioactive) are all clearly, unambiguously wrong. § 12.7 proposes a
-complete distractor revision using real, plausible hazard-*pairing* errors
-grounded specifically in the toxic-vs-corrosive distinction the two SDS
-documents actually support (methanol: acute-toxicity classified, not
-corrosion classified; glacial acetic acid: corrosion classified, not
-acute-toxicity classified — both independently flammable), which
-simultaneously improves distractor plausibility and substantially closes
-the item's length gap as a natural consequence of using real, matched-length
-hazard phrases, not padding. **Confidence: moderate-high** — the underlying
-GHS classification is well-supported by genuine primary SDS content and
-internally consistent, but this round's provenance correction (§ 12.3)
-means confidence is not "high" pending re-confirmation against the current
-manufacturer revision.
+radioactive) are all clearly, unambiguously wrong.
+
+**Correction (this round, per Finding 3): the previously proposed revision
+itself had a wording defect.** That revision's option 2 read "Methanol
+(flammable/toxic) and glacial acetic acid (flammable/toxic)," and the
+accompanying analysis called it "unambiguously false" because the
+inspected glacial-acetic-acid SDS carries no formal GHS acute-toxicity
+classification. That reasoning silently substituted the technical phrase
+"GHS acute-toxicity classified" for the option's plain word "toxic." The
+item's stem asked only about "hazards," not specifically about Section 2
+GHS classifications, so a learner reading "toxic" in its ordinary sense
+(glacial acetic acid causes severe tissue damage on contact — arguably
+"toxic" to skin in colloquial usage) could reasonably contest that the
+option was unambiguously false. **This is a real Gate B defect in the
+previously proposed revision, not a defect in the live, currently-deployed
+item**, since the live item was never edited — only the *proposed* option 2
+text and its analysis are corrected here.
+
+§ 12.7 now proposes a revised structure that resolves this by scoping the
+stem itself to formal GHS classifications, so every option's descriptor is
+unambiguously a claim about a specific, named classification category
+(acute toxicity vs. skin corrosion/serious eye damage), not an
+ordinary-language word whose scope is left for the reader to infer. Both
+chemicals' independent flammability classification is stated explicitly in
+every option, so it can never function as a distinguishing (or misleading)
+cue. **Confidence: moderate-high** on the underlying GHS classification
+content itself (well-supported by genuine primary SDS content and
+internally consistent), but not "high" pending re-confirmation against the
+current manufacturer revision (§ 12.3) and pending Austin's review of the
+wording-precision revision proposed below.
 
 ## 12.5 Gate B preliminary worksheet
 
 | # | Criterion | Verdict | Note |
 | ---: | --- | --- | --- |
-| 1 | Exactly one defensible best answer | appears satisfied | |
+| 1 | Exactly one defensible best answer | **On the live item: appears satisfied. On the previously proposed revision: fails preliminary review — corrected this round, per Finding 3** | For the live item (inert/oxidizers/radioactive distractors) exactly one answer is defensible. For the *previously proposed* revision, option 2's "toxic" wording was ambiguous under plain-language reading (§ 12.4), risking a second contestable reading. § 12.7's re-revision resolves this by scoping the stem to formal GHS classifications |
 | 2 | Scientific correctness is separate | not applicable | |
-| 3 | Distractor plausibility | **fails preliminary review — corrected this round** | The three distractors (inert / oxidizers / radioactive) were all too implausible relative to the correct, specific, real hazard description — eliminable by absurdity alone. § 12.7 replaces them with plausible mispaired-hazard distractors built from the same real SDS-derived terms, resolving this per Finding 5 rather than deferring it |
+| 3 | Distractor plausibility | **fails preliminary review on the live item — corrected this round on the proposed revision** | The three live distractors (inert / oxidizers / radioactive) were all too implausible relative to the correct, specific, real hazard description — eliminable by absurdity alone. § 12.7's re-revision replaces them with plausible mispaired-classification distractors, now built on unambiguous, explicitly-scoped GHS category names rather than an ordinary-language word |
 | 4 | Parallel construction | appears satisfied | |
 | 5 | Mutual distinguishability | appears satisfied | |
 | 6 | Grammar/stem-completion clues | appears satisfied | |
@@ -1686,92 +1746,118 @@ manufacturer revision.
 | 10 | Paired/opposite-option patterns | appears satisfied | |
 | 11 | "All/none," negative stems | not applicable | |
 | 12 | Implausible padding | appears satisfied | |
-| 13 | Rationale/feedback alignment | appears satisfied | |
-| 14 | Preserves assessed intent | requires Austin judgment | |
-| 15 | Edit-in-place vs. supersede | requires Austin judgment | |
-| 16 | Quarantine when unsupportable | not applicable | |
+| 13 | Rationale/feedback alignment | **On the live item: appears satisfied. On the previously proposed revision: possible concern — corrected this round, per Finding 3** | The previously proposed feedback for option 2 evaluated the narrower technical claim ("no formal acute-toxicity classification") against the option's broader ordinary-language wording ("toxic") without saying so explicitly — a feedback/option-wording mismatch. § 12.7's re-revision aligns the option wording itself to the classification vocabulary the feedback uses, closing the gap |
+| 14 | Preserves assessed intent | **appears satisfied, with an explicit judgment call for Austin — assessed this round** | § 12.7's re-revision changes the *wording* of all four options (including the keyed option's display text, from "toxic" to the more precise "acute toxicity") to explicitly name GHS classification categories, and adds a GHS-scoping clause to the stem. The underlying real-world facts tested (which chemical carries which hazard classification) are unchanged, and this document judges the assessed intent preserved — a terminology-precision fix, not a new objective — but flags this explicitly for Austin because it is a larger wording change than this packet's other proposed revisions, including the keyed option's own text |
+| 15 | Edit-in-place vs. supersede | **Edit in place recommended, not supersede — reasoned this round** | This document judges the change to be wording precision, not a new assessed intent (item 14), so edit-in-place is recommended over supersession. Austin may reasonably disagree given the keyed-text change; if he judges the assessed intent has materially shifted, supersession (a new stable ID) rather than silent retention is the documented fallback |
+| 16 | Quarantine when unsupportable | not applicable | The live item's content is not unsupportable; the *previously proposed revision's* wording defect is corrected rather than the item being quarantined |
 | 17 | Evidence before release-qualification | fails preliminary review | Expected at Draft; additionally, the SDS currency gap (§ 12.3) must be closed before any source-check |
 
 ## 12.6 Recommended disposition
 
-**Edit in place.** The distractor/feedback revision itself (§ 12.7) is
-retained this round, re-verified against the corrected source dossier
-(§ 12.3) and re-checked line by line for the specific concerns raised in
-Finding 1 (mutual-exclusivity implication, distractor falsity, single
-defensible answer, feedback-to-option alignment, exact lengths). The
-stem, rationale, and keyed answer (option 1) are unchanged. The
-disposition itself does not depend on resolving the SDS currency gap
-(§ 12.3) — the classification facts used are internally consistent and
-grounded in genuine primary SDS content — but Austin's final sign-off
-should note that gap before formal `QUESTION_GOVERNANCE` entry.
+**Edit in place.** The distractor/feedback revision is retained this round
+in substance, but its specific *wording* is corrected (§ 12.7) to resolve
+the ambiguity identified in Finding 3 — the previously proposed option 2
+used the ordinary word "toxic" while its feedback evaluated the narrower
+formal GHS acute-toxicity classification, an unstated substitution. The
+re-revision scopes the stem explicitly to GHS classifications and revises
+all four options' wording (including the keyed option's display text) to
+name specific classification categories, so no option's falsity depends on
+an unstated technical reading of an ordinary word. The live stem, options,
+rationale, and keyed answer are **unchanged** — this section proposes a
+replacement for all of them, still pending Austin's acceptance; nothing in
+`index.html` has been edited by this document. The disposition itself does
+not depend on resolving the SDS currency gap (§ 12.3) — the classification
+facts used are internally consistent and grounded in genuine primary SDS
+content — but Austin's final sign-off should note that gap before formal
+`QUESTION_GOVERNANCE` entry.
 
 ## 12.7 Proposed revision
 
 **Proposed (packet-only; not applied to `index.html` or
 `QUESTION_GOVERNANCE` by this document — Austin's edit, if approved).
-Re-verified this round against Finding 1's specific requirements:**
+Re-revised this round per Finding 3, replacing the previous round's
+ambiguous "toxic" wording:**
 
-| Option | Current | Proposed | Length (chars) |
+Stem, current: *"The cytogenetic fixative components and their hazards
+are:"*
+
+Stem, proposed: *"The cytogenetic fixative components and their GHS
+(Globally Harmonized System) hazard classifications are:"* — this scoping
+clause is what makes every option's descriptor an unambiguous claim about
+a specific, named classification category, rather than an ordinary-language
+word a learner could read more broadly.
+
+| Option | Current (live) | Proposed | Length (chars) |
 | --- | --- | --- | ---: |
-| 0 | Both inert (10) | Methanol (corrosive) and glacial acetic acid (flammable/toxic) | 62 |
-| 1 (keyed) | Methanol (flammable/toxic) and glacial acetic acid (corrosive) (62) | *(unchanged)* | 62 |
-| 2 | Both strong oxidizers (21) | Methanol (flammable/toxic) and glacial acetic acid (flammable/toxic) | 68 |
-| 3 | Both radioactive (16) | Methanol (corrosive) and glacial acetic acid (corrosive) | 56 |
+| 0 | Both inert (10) | Methanol (flammable, skin corrosion/eye damage) and glacial acetic acid (flammable, acute toxicity) | 99 |
+| 1 (keyed) | Methanol (flammable/toxic) and glacial acetic acid (corrosive) (62) | Methanol (flammable, acute toxicity) and glacial acetic acid (flammable, skin corrosion/eye damage) | 99 |
+| 2 | Both strong oxidizers (21) | Methanol (flammable, acute toxicity) and glacial acetic acid (flammable, acute toxicity) | 88 |
+| 3 | Both radioactive (16) | Methanol (flammable, skin corrosion/eye damage) and glacial acetic acid (flammable, skin corrosion/eye damage) | 110 |
 
-Lengths recalculated by direct character count this round: 62/62/68/56 —
-the key (62) is tied with option 0 for longest, not uniquely longest,
-replacing the original 62/10/21/16 spread (largest gap in the pilot batch).
+Lengths recalculated by direct character count this round: 99/99/88/110 —
+the key (99) is tied with option 0 for longest, not uniquely longest.
+**"Flammable" now appears in every option** (both chemicals are
+independently flammable, per § 12.3), so its presence can never function
+as a distinguishing cue; only the acute-toxicity-vs-corrosion assignment
+varies across options.
 
-Proposed distractor feedback — revised this round to rebut the literal
-proposed option text precisely, and to avoid implying "flammable/toxic"
-and "corrosive" are mutually exclusive (both chemicals are independently
-flammable; what distinguishes them is acute toxicity vs. corrosion/eye
-damage, not flammability):
+Proposed rationale: *"3:1 methanol:glacial acetic acid — both components
+are independently classified flammable; methanol additionally carries an
+acute-toxicity classification, and glacial acetic acid additionally
+carries a skin-corrosion/serious-eye-damage classification — handle in a
+fume hood, store flammable."*
 
-- 0 — "This reverses which specific hazard each chemical carries. Methanol
-  is not classified corrosive (no skin/eye-damage category on its SDS);
-  glacial acetic acid is (Skin Corr. 1A, H314) — though, like methanol, it
-  is also independently classified flammable (Flam. Liq. 3, H226)."
-- 2 — "Glacial acetic acid carries no acute-toxicity classification. Its
-  distinguishing hazard beyond flammability (which it shares with
-  methanol) is corrosivity (Skin Corr. 1A, H314), not toxicity."
-- 3 — "Methanol carries no corrosion classification. Its distinguishing
-  hazard beyond flammability (which it shares with glacial acetic acid) is
-  acute toxicity (Acute Tox. 3, H301/H311/H331), not corrosivity."
+Proposed distractor feedback — revised this round to name the specific
+classification category each option's claim gets wrong, without relying on
+an unstated narrowing of an ordinary word:
 
-**Falsity, single-answer, and alignment check (per Finding 1's explicit
-requirements):**
+- 0 — "This swaps which chemical carries which classification. Methanol's
+  SDS carries no skin-corrosion/eye-damage classification; glacial acetic
+  acid's does (Skin Corr. 1A, H314). Glacial acetic acid's SDS carries no
+  acute-toxicity classification; methanol's does (Acute Tox. 3,
+  H301/H311/H331). Both are independently classified flammable."
+- 2 — "Glacial acetic acid's SDS carries no acute-toxicity classification.
+  Its distinguishing classification, beyond the flammability it shares
+  with methanol, is skin corrosion/serious eye damage (Skin Corr. 1A,
+  H314)."
+- 3 — "Methanol's SDS carries no skin-corrosion/eye-damage classification.
+  Its distinguishing classification, beyond the flammability it shares
+  with glacial acetic acid, is acute toxicity (Acute Tox. 3,
+  H301/H311/H331)."
+
+**Falsity, single-answer, and alignment check, re-verified this round
+against Finding 3's explicit requirements:**
+- *The proposed option wording is no longer ambiguous.* With the stem
+  scoped to "GHS hazard classifications," every option's parenthetical
+  names a specific classification category, not an ordinary-language word
+  whose formal scope is left implicit.
 - *Every distractor remains scientifically false as a complete pairing
-  claim, not merely less complete than the key.* Option 0 and option 3
-  each assert methanol is "corrosive" — false outright; methanol's SDS
-  carries no corrosion/eye-damage classification at any concentration
-  tested. Option 2 asserts glacial acetic acid is "toxic" — false as a GHS
-  classification claim; its SDS carries no acute-toxicity category. Each
-  distractor's falsity does not depend on treating "flammable" as
-  exclusive to one chemical (both share it) — it depends on a
-  classification category (corrosion for methanol; acute toxicity for
-  glacial acetic acid) that the inspected SDS documents affirmatively do
-  not assign.
+  claim, evaluated against the exact same classification vocabulary its
+  wording now uses.* Options 0 and 3 assign methanol a skin-corrosion/
+  eye-damage classification it does not carry; options 0 and 2 assign
+  glacial acetic acid an acute-toxicity classification it does not carry.
+  No option's falsity depends on treating "flammable" as exclusive to one
+  chemical — it is stated, correctly, for both in every option.
 - *Exactly one defensible best answer remains.* Option 1 is the only
-  option where both assigned descriptors are fully supported by the
-  inspected SDS documents (methanol: Flam. Liq. 2 + Acute Tox. 3;
-  glacial acetic acid: Skin Corr. 1A). No other option has both
-  descriptors correct.
-- *Each feedback statement rebuts the literal option, not a generic
-  restatement of the key.* Each of the three revised feedback strings
-  names the specific classification category the option's claim lacks,
-  addressed to that option's specific wrong assignment.
+  option where both assigned classifications are fully supported by the
+  inspected SDS documents.
+- *Each feedback statement rebuts the literal option wording*, using the
+  same classification vocabulary the option itself now uses, not a
+  narrower technical substitution introduced only in the feedback.
 
-Rationale for the revision: replacing the absurd inert/oxidizer/radioactive
-distractors with plausible *mispaired* hazard descriptions (built from the
-same two real, SDS-confirmed hazard categories, swapped or duplicated
-across the two chemicals) requires the learner to know the actual
-category-to-chemical pairing, not just recognize which claims are absurd —
-directly addressing Gate B item 3. Because all four options now reuse the
-same two hazard-phrase tokens, the length spread narrows and the key is no
-longer uniquely longest, addressing Gate B item 8 as a byproduct of
-accuracy, not padding. The rationale, stem, and keyed answer are unchanged,
-preserving the item's stable ID and assessed intent.
+Rationale for the revision, updated this round: the earlier proposed
+revision correctly replaced the absurd inert/oxidizer/radioactive
+distractors with plausible mispaired-classification errors, addressing
+Gate B item 3, and correctly narrowed the length spread, addressing Gate B
+item 8 — both of those corrections are retained. This round's additional
+fix closes a wording-ambiguity gap in that revision (Gate B items 1/3/13)
+by scoping the stem and revising every option (including the keyed
+option's display text) to name explicit GHS classification categories.
+This document judges the underlying assessed intent preserved (Gate B item
+14) — the same two chemicals, the same real hazard facts, only more
+precise vocabulary — and recommends edit-in-place over supersession (Gate
+B item 15), while flagging this explicitly for Austin's own judgment given
+the keyed-text change.
 
 ## 12.8 Austin SME decision fields (pending)
 
@@ -1920,14 +2006,32 @@ declaration: **PENDING** · Findings: **PENDING** · Approval/rejection:
 
 # Packet-wide summaries
 
-## Independent-review correction round (2026-08-10, session 2)
+## AI-assisted adversarial correction pass (2026-08-10, session 2)
+
+**Terminology note (added in session 4; applies retroactively to every
+heading and description below):** every correction pass described in this
+"Packet-wide summaries" section — sessions 2, 3, and 4 — was an
+**AI-assisted adversarial correction pass over this document's own prior
+output**, not the project's governance-defined independent human
+second-person review. Earlier session headings and prose in this section
+used phrases like "independent-review correction round" and "a third,
+independent... review" to describe these passes; that wording is corrected
+throughout this section (Finding 1, session 4) because it could be
+confused with the governance lifecycle's `Independent-review fields` and
+the approved-independent-reviewer registry, which remain entirely separate
+and still empty. Agreement between successive AI-assisted passes — or
+between different AI systems — is not scientific validation and is not
+governance-recognized independent review; it is one document's own,
+repeated, adversarial self-audit, which is useful but categorically
+different from a human second-person review.
 
 This section, and every "corrected this round" / "revised this round" note
-throughout sections 1–13 above, was added in a second, independent-review
-correction pass over the original packet (session 1, 2026-08-10). That
-first pass is preserved as history everywhere it was still accurate; where
-it was wrong or incomplete, this pass says so explicitly rather than
-silently overwriting it. Seven specific findings drove this pass:
+throughout sections 1–13 above, was added in a second AI-assisted
+adversarial correction pass over the original packet (session 1,
+2026-08-10). That first pass is preserved as history everywhere it was
+still accurate; where it was wrong or incomplete, this pass says so
+explicitly rather than silently overwriting it. Seven specific findings
+drove this pass:
 `m15-q1` had a defensible second answer (Gate B item 1 defect, now fixed);
 `m1-q1`'s Molecular-percentage discrepancy needed resolving against the
 primary ASCP guideline; the original "5 of 13 unresolved" source count did
@@ -1941,11 +2045,11 @@ packet-wide summaries below reflect the **current, corrected state** —
 mechanically recomputed from the 13 per-item sections above, not carried
 forward from session 1.
 
-## Final source-provenance correction round (2026-08-10, session 3)
+## Final source-provenance AI-assisted verification pass (2026-08-10, session 3)
 
-A third, independent, narrowly scoped review found two provenance defects
-introduced or left unresolved by the second round (immediately above),
-corrected in this pass:
+A third, separate, narrowly scoped AI-assisted verification pass found two
+provenance defects introduced or left unresolved by the second pass
+(immediately above), corrected in this pass:
 
 - **`m16-q1`'s SDS source dossier mixed two different pairs of records**
   (Finding 1 of this round): its prose and quoted classification data
@@ -1959,8 +2063,9 @@ corrected in this pass:
   that same product. The prior round's SDS documents (2015/2019) are no
   longer called "current" — this round made eight direct-fetch attempts
   against `sigmaaldrich.com` (all timed out) and could not independently
-  confirm whether the current official revision (Austin observed ARK2183
-  is now v7.1, revised 2026-03-05) carries identical classification data.
+  confirm whether the current official revision (named in task input as
+  ARK2183 v7.1, revised 2026-03-05 — not independently confirmed by this
+  document) carries identical classification data.
   Source status downgraded from `directly-inspected-and-adequate` to
   `directly-inspected-but-secondary-or-incomplete`. The proposed
   distractor revision (§ 12.7) is retained, re-verified line by line
@@ -2020,7 +2125,7 @@ only a genuine fetch-and-read of the actual source text counts.
 
 | ID | Source status | Notes |
 | --- | --- | --- |
-| `m1-q1` | `source unresolved` | Content resolved via Austin-supplied primary-source citation (§ 1.3), not by this document's own inspection — see that section for the distinction |
+| `m1-q1` | `source unresolved` | Content is consistent with a task-supplied primary-source citation (§ 1.3), not independently verified by this document's own inspection — see that section for the distinction; not an Austin SME determination |
 | `m1-q2` | `repository-source-appropriate` | This repository's own `README.md`/`docs/ARCHITECTURE.md` and implementation |
 | `m1-q3` | **`source unresolved`** *(corrected this round, was `directly-inspected-and-adequate`)* | 42 CFR §§ 493.1276/493.1253, and two further searched sources, were directly inspected but none adequately establishes the item's specific narrow claim (§ 3.3, Finding 2) |
 | `m2-q1` | `directly-inspected-but-secondary-or-incomplete` | Meadville Medical Center's own specimen-requirement page, directly fetched, but one hospital's local policy, not a national standard |
@@ -2041,21 +2146,22 @@ only a genuine fetch-and-read of the actual source text counts.
 `repository-source-appropriate` (`m1-q2`); 3 of 13 `source unresolved`
 (`m1-q1`, `m1-q3`, `m7-q2`).** 3+6+1+3 = 13, matching
 `FROZEN_PILOT_MANIFEST` exactly, counted by distinct stable ID. **This is a
-second correction to these totals** (Finding 2 of this round moved `m1-q3`
-from `directly-inspected-and-adequate` to `source unresolved` after
-independent review found the prior round's CLIA citation did not establish
-what it was cited for; Finding 1 of this round moved `m16-q1` from
-`directly-inspected-and-adequate` to `directly-inspected-but-secondary-or-
-incomplete` after independent review found an unresolved SDS-currency gap).
-The prior round's totals (5/5/1/2) are superseded by the totals above.
+second correction to these totals** (Finding 2 of this AI-assisted
+verification pass moved `m1-q3` from `directly-inspected-and-adequate` to
+`source unresolved` after this pass found the prior pass's CLIA citation
+did not establish what it was cited for; Finding 1 of this pass moved
+`m16-q1` from `directly-inspected-and-adequate` to
+`directly-inspected-but-secondary-or-incomplete` after this pass found an
+unresolved SDS-currency gap). The prior round's totals (5/5/1/2) are
+superseded by the totals above.
 
 ## Disposition table (13 rows, recomputed this round)
 
 | ID | Disposition | Primary open item |
 | --- | --- | --- |
-| `m1-q1` | Leave unchanged | Resolved this round via Austin-supplied primary-source figures (§ 1.3/1.6); this document's own PDF fetch still fails (403) |
+| `m1-q1` | Leave unchanged | Keyed answer consistently supported across every figure found; item content-consistent with task-supplied official figures (§ 1.3/1.6) — this document's own PDF fetch still fails (403), and that gap is not described as resolved by any person |
 | `m1-q2` | Leave unchanged | None material |
-| `m1-q3` | **Leave unchanged** *(reverted this round, was Edit in place)* | Source unresolved (§ 3.3); the prior round's proposed feedback revision is withdrawn because it overstated what its cited CLIA sections establish (Finding 2) |
+| `m1-q3` | **Insufficient evidence to recommend** *(corrected this session, per Finding 2 of the governance/item-logic review — was "Leave unchanged")* | Source unresolved (§ 3.3); the live feedback makes unsupported factual absolutes (§ 3.5 item 13) that this document cannot verify. Withdrawing the prior round's poorly-sourced proposed revision does not establish the existing wording is safe — "Leave unchanged" was an unwarranted affirmative preliminary claim (§ 3.6) |
 | `m2-q1` | Leave unchanged | None material |
 | `m2-q3` | Leave unchanged | None material |
 | `m4-q1` | Leave unchanged | None material |
@@ -2063,29 +2169,37 @@ The prior round's totals (5/5/1/2) are superseded by the totals above.
 | `m6-q4` | Leave unchanged | No public official (e.g. CAP) citation located; specialist site remains the closest match found |
 | `m7-q2` | **Quarantine pending evidence** | No source confirms the exact three-term nested hierarchy |
 | `m12-q6` | **Edit in place (structural only)** | Stray empty-feedback-key removal proposed (§ 10.7); zero learner-visible content change |
-| `m15-q1` | **Edit in place** | Option 2 and its feedback revised (§ 11.7) — former option had a second defensible answer (Finding 1, prior round) |
-| `m16-q1` | **Edit in place** *(retained this round, source dossier corrected)* | Distractors 0/2/3 and feedback revised and re-verified (§ 12.7), grounded in directly-inspected but currency-unconfirmed SDS data (§ 12.3) |
+| `m15-q1` | **Edit in place** | Option 2 and its feedback revised (§ 11.7) — former option had a second defensible answer (Finding 1, session 2); exact post-revision option lengths now recorded (53/32/71/24, § 11.5/11.7) |
+| `m16-q1` | **Edit in place** *(re-revised this session, per Finding 3)* | Proposed option 2's "toxic" wording was ambiguous under plain-language reading; re-revised to scope the stem to formal GHS classifications and name explicit classification categories in every option (§ 12.7) |
 | `final-q33` | Leave unchanged | ISCN primary text itself not directly inspected (paywalled); secondary source adequate for now |
 
-**Recomputed totals: 9 of 13 items Leave unchanged (`m1-q1`, `m1-q2`,
-`m1-q3`, `m2-q1`, `m2-q3`, `m4-q1`, `m6-q1`, `m6-q4`, `final-q33`). 3 of 13
-items Edit in place (`m12-q6`, `m15-q1`, `m16-q1`), each with a complete
-proposed revision in its own § *N*.7. 1 of 13 items Quarantine pending
-evidence (`m7-q2`).** 9+3+1 = 13. **This is a second correction to these
-totals** — `m1-q3` moves back from "Edit in place" to "Leave unchanged"
-this round (Finding 2); `m16-q1` stays "Edit in place" with its source
-dossier corrected rather than its disposition changed (Finding 1). No item
-is recommended for "Supersede with a new stable ID" or "Insufficient
-evidence to recommend" — every proposed revision preserves its item's
-stable ID, stem, rationale, and keyed answer, changing only a distractor,
-its feedback, or (for `m12-q6`) a non-displayed data key.
+**Recomputed totals: 8 of 13 items Leave unchanged (`m1-q1`, `m1-q2`,
+`m2-q1`, `m2-q3`, `m4-q1`, `m6-q1`, `m6-q4`, `final-q33`). 3 of 13 items
+Edit in place (`m12-q6`, `m15-q1`, `m16-q1`), each with a complete proposed
+revision in its own § *N*.7. 1 of 13 items Quarantine pending evidence
+(`m7-q2`). 1 of 13 items Insufficient evidence to recommend (`m1-q3`).**
+8+3+1+1 = 13. **This is a third correction to these totals** — `m1-q3`
+moves from "Leave unchanged" to `Insufficient evidence to recommend` this
+session (Finding 2): "Leave unchanged" is an affirmative preliminary claim
+that current wording is safe, and this document cannot make that claim
+given the unsupported factual absolutes in `m1-q3`'s live feedback (§ 3.5
+item 13); `m16-q1`'s disposition stays "Edit in place," with its proposed
+wording corrected rather than its disposition changed (Finding 3). No item
+is recommended for "Supersede with a new stable ID" — every proposed
+revision preserves its item's stable ID, stem, rationale, and keyed answer
+(`m16-q1`'s revision changes the keyed option's *display wording* for
+precision, not its correctness or index — see § 12.5 item 14/15), changing
+only a distractor, its feedback, or (for `m12-q6`) a non-displayed data
+key.
 
 ## Sources used, grouped by authority level (recomputed this round)
 
 **1. Current primary standards / official examination guidance:**
 - ASCP BOC *CG(ASCP) and CG(ASCPi) Examination Content Guideline*, rev.
-  2025-09-25 (`m1-q1` — Austin-supplied figure relied upon this round;
-  this document's own fetch still returns 403, three attempts)
+  2025-09-25 (`m1-q1` — figure supplied as task input in an earlier
+  correction round, not independently verified by this document; this
+  document's own fetch still returns 403, six attempts across three
+  rounds)
 - The Joint Commission, *National Patient Safety Goals — Effective January
   2026 for the Laboratory Program*, NPSG.01.01.01 (`m2-q3` — primary PDF
   directly fetched and quoted this round)
@@ -2104,10 +2218,10 @@ documents with an unresolved currency gap (`m16-q1`):**
   Version 6.4, Revision Date 03/13/2015; Acetic acid glacial, Product
   ARK2183, Version 6.1, Revision Date 10/17/2019 (`m16-q1` — genuine
   primary content, directly read via third-party archival mirrors this
-  session; the current manufacturer revision — observed by Austin to now
-  be ARK2183 v7.1, revised 2026-03-05 — was not independently confirmed
-  this round despite eight direct-fetch attempts against
-  `sigmaaldrich.com`; see § 12.3)
+  session; a newer manufacturer revision — named in task input as ARK2183
+  v7.1, revised 2026-03-05, not independently confirmed by this document —
+  was not independently confirmed this round despite ten direct-fetch
+  attempts against `sigmaaldrich.com` across three rounds; see § 12.3)
 
 **3. Peer-reviewed primary literature, directly inspected:**
 - Kang ZJ, et al., "The Philadelphia chromosome in leukemogenesis,"
@@ -2156,11 +2270,11 @@ immediately preceding round's "2 of 13" figure is itself now corrected to
    "countable > analyzable > karyotypable" three-term nested hierarchy.
    Quarantined pending evidence.
 2. **`m1-q1`** — this document's own tooling cannot directly fetch the
-   primary ASCP PDF (403 Forbidden, three attempts across two rounds); the
-   item's content is treated as resolved only via Austin's directly
-   supplied primary-source figures (§ 1.3), a distinct and narrower
-   resolution than this document independently verifying the source
-   itself.
+   primary ASCP PDF (403 Forbidden, six attempts across three rounds); the
+   item's keyed answer is content-consistent with task-supplied
+   primary-source figures (§ 1.3), but this document has not independently
+   verified the primary source itself, and does not describe the
+   discrepancy found in an earlier round as "resolved" by any person.
 3. **`m1-q3`** *(newly added this round, per Finding 2)* — 42 CFR §§
    493.1276 and 493.1253 were directly inspected in full but establish
    only general validation/documentation duties, not the specific claim
@@ -2190,12 +2304,17 @@ session 1's:
 1. **`m7-q2`** — still the quarantined item; needs Austin's direct domain
    knowledge to confirm or correct the terminology itself, likely faster
    than further literature search.
-2. **`m1-q3`** *(re-added this round)* — genuinely needs Austin's own
-   domain expertise: is "colcemid time/KCl molarity/cell-count targets are
-   laboratory/SOP-validated" a fact he recognizes as standard cytogenetics
-   practice (in which case he can approve a revision grounded in his own
-   confirmation rather than a citation), or does he want further sourcing
-   first (§ 3.3, § 3.7)?
+2. **`m1-q3`** *(disposition corrected this session to `Insufficient
+   evidence to recommend` — see the disposition table)* — genuinely needs
+   Austin's own domain expertise, and prominently so: this item's *live*
+   feedback asserts, as flat fact, that colcemid time/KCl molarity/
+   cell-count targets are not fixed by regulation and are validated
+   locally, and this document cannot verify that against an adequate
+   source (§ 3.3). Austin's own domain knowledge may resolve this directly
+   (in which case he can confirm the existing wording, direct a specific
+   rewrite, or accept the current level of certainty as adequate for a
+   Draft-stage orientation item), or he may want further sourcing first
+   (§ 3.6, § 3.7). This document deliberately does not pre-judge which.
 3. **`m12-q6`, `m15-q1`, `m16-q1`** — each now carries a complete proposed
    revision (§ *N*.7); Austin's judgment is accept / reject / revise on
    specific proposed text. For `m16-q1` specifically, also confirm whether
@@ -2207,12 +2326,17 @@ session 1's:
 
 ## Questions likely safe to leave unchanged (recomputed this round)
 
-`m1-q1`, `m1-q2`, `m1-q3`, `m2-q1`, `m2-q3`, `m4-q1`, `m6-q1`, `m6-q4`,
-`final-q33` — matching the disposition table's "Leave unchanged" rows
-exactly (`m1-q3` re-added this round). Each has at least one
-directly-inspected or multiply-corroborated source *or*, for `m1-q1` and
-`m1-q3` specifically, an explicitly documented sourcing limitation rather
-than a false claim of adequacy; each has a single clearly defensible
+`m1-q1`, `m1-q2`, `m2-q1`, `m2-q3`, `m4-q1`, `m6-q1`, `m6-q4`, `final-q33`
+— matching the disposition table's "Leave unchanged" rows exactly.
+**`m1-q3` is removed from this list this session, per Finding 2 of the
+governance/item-logic review**, and is not "likely safe to leave
+unchanged" — its `source unresolved` status and its live feedback's
+unsupported factual absolutes place it under `Insufficient evidence to
+recommend` instead (see the disposition table and "Questions needing the
+most Austin judgment" above). Each item remaining on this list has at
+least one directly-inspected or multiply-corroborated source *or*, for
+`m1-q1` specifically, an explicitly documented sourcing limitation that
+does not affect the keyed answer; each has a single clearly defensible
 keyed answer, and no open Gate B concern left unresolved to a concrete
 explanation. `m4-q1` remains the strongest positive example (perfectly
 length-balanced, zero possible length cue, clean sourcing).
@@ -2220,19 +2344,33 @@ length-balanced, zero possible length cue, clean sourcing).
 ## Questions likely requiring revision (recomputed this round)
 
 **`m12-q6`, `m15-q1`, `m16-q1`** — matching the disposition table's "Edit
-in place" rows exactly (`m1-q3` removed this round — its prior-round
-proposed revision is withdrawn per Finding 2, see the "Unresolved source
-questions" section above). This still replaces session 1's original "None,
-on this document's preliminary analysis" claim, which the first correction
+in place" rows exactly. This still replaces session 1's original "None, on
+this document's preliminary analysis" claim, which an earlier correction
 round found too permissive (Finding 5). Each item's own § *N*.7 contains
 the complete proposed revision for Austin's accept/reject/revise decision;
 none of the three proposed revisions changes a stem, rationale, keyed
-answer, or stable ID.
+answer, or stable ID (`m16-q1`'s revision changes the keyed option's
+display wording for precision only, per § 12.5 item 14).
+
+## Questions with insufficient evidence to recommend (new this session, per Finding 2)
+
+**`m1-q3`** — matching the disposition table's `Insufficient evidence to
+recommend` row exactly. This is a distinct category from both "Leave
+unchanged" (an affirmative claim that current wording is safe) and "Edit
+in place" (a specific proposed rewrite): this document has neither
+evidence to certify the item's live feedback as safe, nor an adequate
+source to ground a specific rewrite (§ 3.3, § 3.6, § 3.7). No other item
+in this pilot batch carries this disposition.
 
 ## Questions potentially requiring supersession or quarantine
 
 - **`m7-q2`** — recommended **Quarantine pending evidence** (source gap,
   not a suspected content error). Unchanged this round.
+- **`m1-q3`** is deliberately **not** recommended for quarantine (§ 3.5
+  item 16) — nothing found suggests its underlying concept is false, only
+  that this document lacks adequate evidence either to clear or to rewrite
+  it. `Insufficient evidence to recommend` (see immediately above) is kept
+  distinct from quarantine for exactly this reason.
 - No item is recommended for supersession (a new stable ID) — every
   proposed revision this round preserves its item's assessed intent
   exactly.
@@ -2278,11 +2416,11 @@ needs a decision instead:**
 | `m2-q3` | 10–15 min | Primary NPSG document now directly inspected; clean single-answer safety standard |
 | `m4-q1` | 10–15 min | Clean, well-sourced, no flags |
 | `m6-q1` | 10–15 min | Length/pairing concerns resolved this round with explanations, no revision to review |
-| `m1-q1` | 10–15 min | Resolved this round via Austin-supplied figure; confirm the § 1.3 caveat reads clearly |
+| `m1-q1` | 10–15 min | Keyed answer content-consistent across every figure found; confirm the § 1.3 caveat (task-supplied figure, not independently verified) reads clearly |
 | `m12-q6` | 10–15 min | Peer-reviewed locator now in hand; review is a one-line structural-cleanup accept/reject |
 | `final-q33` | 15–20 min | ISCN primary-text check still recommended |
-| `m1-q3` | 15–20 min | No revision to review; confirm whether Austin's own domain knowledge can resolve the source-unresolved gap (§ 3.3/3.7) faster than further search |
-| `m16-q1` | 15–20 min | Review the proposed distractor/feedback revision (§ 12.7) against the SDS data; separately confirm whether the current (2026) manufacturer SDS revision changes anything (§ 12.3) |
+| `m1-q3` | 20–25 min | `Insufficient evidence to recommend`, not a simple sign-off: confirm/reject the live feedback's unsupported absolutes (§ 3.5 item 13) from Austin's own domain knowledge, then decide accept-as-is / rewrite / further-source before any wording change |
+| `m16-q1` | 15–20 min | Review the re-revised proposed wording (§ 12.7), including the keyed option's display-text change, against the GHS classification data; separately confirm whether the current (2026) manufacturer SDS revision changes anything (§ 12.3) |
 | `m15-q1` | 20–25 min | Review the proposed option-2/feedback revision (§ 11.7) against Wolff et al.; this is the item with the corrected scientific error (Finding 1) |
 | `m6-q4` | 20–25 min | Richest item; difficulty-tag question; CAP citation search |
 | `m7-q2` | 40+ min | Source resolution likely requires Austin's own expertise or new research, not just review |
@@ -2292,42 +2430,81 @@ excluding any time spent actually populating `QUESTION_GOVERNANCE` records
 or applying accepted revisions once Austin's conclusions are final
 (separate, later steps).
 
-## Stop/go recommendation (recomputed this round)
+## Stop/go recommendation (recomputed this session)
 
-**Recommendation: proceed to Austin's question-by-question review of this
-corrected packet, focusing first on the one still-quarantined item
-(`m7-q2`), the three items now carrying a concrete proposed revision
-(`m12-q6`, `m15-q1`, `m16-q1`), and `m1-q3`'s newly restored unresolved
-sourcing question. Do not proceed to actual content editing,
-`QUESTION_GOVERNANCE` population, or any lifecycle promotion until that
-review is complete for all 13 items** — including the nine "Leave
-unchanged" items, which still need Austin's explicit sign-off per the
-pending fields in each item's sections 8–9, not just this document's
-preliminary analysis.
+**Recommendation, corrected this session per Finding 1 of the governance/
+item-logic review — the sequence below replaces every earlier version's
+framing, which wrongly suggested the still-unavailable human independent
+reviewer was the next step ahead of Austin's own SME review:**
 
-This document has now been through two independent-review correction
-rounds. The first found one genuine scientific/item-validity error
-(`m15-q1`, Finding 1), one important primary-source resolution (`m1-q1`,
+1. **Final read-only verification of this corrected packet** — the pass
+   this document itself represents: confirming structure, mechanical count
+   reconciliation, and validation (see "Required validation" in this
+   session's own completion report), with no further content edits.
+2. **Austin decides whether PR #28 is ready to leave draft status and be
+   merged** — a repository/workflow decision distinct from SME content
+   review; the packet's own analysis (this document) is preparatory input
+   to that decision, not a substitute for it.
+3. **Austin performs the question-by-question SME review** described
+   throughout this packet: `m7-q2` (quarantined), `m1-q3` (insufficient
+   evidence to recommend — see below), `m12-q6`/`m15-q1`/`m16-q1` (each
+   with a concrete proposed revision to accept/reject/revise), and the
+   eight "Leave unchanged" items, all of which still need Austin's
+   explicit sign-off per the pending fields in each item's sections 8–9,
+   not just this document's preliminary analysis.
+4. **A genuinely approved, human, independent second-person reviewer is
+   still required later, before release qualification** — this remains
+   true and unchanged, but it is a later step in the sequence, not a
+   substitute for step 3, and not something this document recommends
+   pursuing ahead of Austin's own SME review.
+
+Do not proceed to actual content editing, `QUESTION_GOVERNANCE`
+population, or any lifecycle promotion until Austin's SME review (step 3)
+is complete for all 13 items.
+
+This document has now been through three AI-assisted adversarial
+correction passes (sessions 2, 3, and this session). **Terminology
+correction (Finding 1, this session): earlier sessions' headings and prose
+in this "Packet-wide summaries" section described these passes as
+"independent-review correction rounds" and "independent... review." That
+was a mislabel, corrected throughout this section and every affected
+per-item note above. These passes are AI-assisted document audits
+performed by this same document against its own prior output — they are
+not Austin's SME review, and they are not the project's governance-defined
+independent human second-person review. Agreement across successive
+AI-assisted passes is not scientific validation.**
+
+Session 2 found one genuine scientific/item-validity error (`m15-q1`,
+Finding 1), one important primary-source figure resolution (`m1-q1`,
 Finding 2), a source-accounting error in the original packet's own counts
 (Finding 3), four incomplete source dossiers apparently closed with
 directly-inspected sources (Finding 4), several deferred judgment calls
 made concrete (Finding 5), one review-order factual error (Finding 6), and
-one committed whitespace/diff-check defect (Finding 7). **This second
-round found that two of the first round's own "closed" source dossiers
-were themselves flawed**: `m16-q1`'s SDS citation mixed the URLs of one
-pair of products with the metadata of a different pair (Finding 1 of this
-round — corrected, with the underlying scientific content retained but its
-source status downgraded and a currency gap honestly flagged), and
-`m1-q3`'s CLIA citation was invoked for a specific claim its cited sections
-do not actually make (Finding 2 of this round — corrected by withdrawing
-the over-attributed proposed revision and restoring `source unresolved`).
-**This pattern is itself worth Austin's attention: an AI-assisted
-correction round can introduce its own new provenance errors while fixing
-prior ones, which is exactly why an independent, human, second-person
-review — not a further AI-assisted pass — is the appropriate next step,
-not a third self-correction cycle.** **None of this constitutes SME
-review, independent review, or `QUESTION_GOVERNANCE` population — the
-approved-independent-reviewer registry remains empty, all 153 questions
-remain `draft`, and no item in this pack, however clean its analysis, can
-reach `release-qualified` until that separate, real second-person review
-exists.**
+one committed whitespace/diff-check defect (Finding 7). Session 3 found
+that two of session 2's own "closed" source dossiers were themselves
+flawed: `m16-q1`'s SDS citation mixed the URLs of one pair of products
+with the metadata of a different pair, and `m1-q3`'s CLIA citation was
+invoked for a specific claim its cited sections do not actually make. This
+session (the fourth pass) found: the "independent review" mislabeling
+corrected above; that `m1-q3`'s disposition ("Leave unchanged") was itself
+an unwarranted affirmative claim given its live feedback's unsupported
+factual absolutes — corrected to `Insufficient evidence to recommend`;
+that `m16-q1`'s proposed revision still had a wording-ambiguity defect
+("toxic" read as ordinary language vs. a specific GHS classification) —
+corrected by scoping the stem to GHS classifications explicitly; that
+several "Austin supplied" / "Austin observed" / "ground truth" attributions
+wrongly implied personal Austin review of task-supplied input — corrected
+throughout; and two smaller documentation defects in `m1-q2` and `m15-q1`.
+
+**This repeated pattern — each AI-assisted pass finding defects in the
+previous pass's own "corrected" output — is itself worth noting for
+whoever performs the next review, whether that is Austin's SME review or,
+later, the human independent reviewer: an AI-assisted pass can introduce
+its own new errors while fixing prior ones, so its output should be
+verified, not assumed correct because it is the most recent version.**
+**None of this constitutes SME review, human independent review, or
+`QUESTION_GOVERNANCE` population — the approved-independent-reviewer
+registry remains empty, all 153 questions remain `draft`, and no item in
+this pack, however clean its analysis, can reach `release-qualified` until
+Austin's SME review and, later, a separate, real, human second-person
+review both exist.**
