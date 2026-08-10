@@ -156,11 +156,12 @@ uncertainty about intended objective.
 | Edition/date | Revised September 25, 2025 |
 | Locator | Domain weighting table (four content areas) |
 | URL | `https://www.ascp.org/boc/docs/default-source/explore-credentials/content-guidelines/ascp_ascpi_cg_content_guideline.pdf` |
-| Retrieved | Existence, title, and September 25, 2025 revision date confirmed via web search 2026-08-10. A direct fetch of the PDF itself, attempted 2026-08-10, returned **HTTP 403 Forbidden** — the PDF's exact percentage table was **not directly re-inspected by this document**. |
-| Directly inspected? | **No, not by this document.** This repository's own `README.md` and `docs/SCIENTIFIC_REVIEW.md` already cite this exact guideline, dated and linked, as the basis for the "Course coverage" percentage table — that is an existing, separate repository citation, not established fresh here. |
-| Narrow claim supported | That an ASCP BOC content guideline exists, is dated September 25, 2025, and defines four weighted content domains for this exam — confirmed. The *exact* percentage figures were not independently re-verified against the primary PDF by this document (see limitation below). |
+| Retrieved | Existence, title, and September 25, 2025 revision date confirmed via web search 2026-08-10. Three separate direct-fetch attempts against three different URL forms of the primary PDF, made during this correction round (2026-08-10, session 2), each returned **HTTP 403 Forbidden**; a web-archive fallback attempt was refused by this session's own tooling. **This document's own tooling still could not directly inspect the primary PDF, in either research round.** |
+| Source status (taxonomy, § Finding 3) | **`source unresolved`** — this document's own tooling never directly inspected the primary PDF. See "Unresolved problem" for the distinct, narrower reason the item's *content* is nonetheless resolved (Austin-supplied citation, not this document's inspection). |
+| Directly inspected? | **No, not by this document, in either round.** Austin has supplied, as directly stated ground truth for this correction round, the primary guideline's exact title ("Technologist in Cytogenetics - CG(ASCP) and CG(ASCPi) Examination Content Guideline"), publisher (ASCP Board of Certification), revision date (September 25, 2025), and locator (page 1, Examination Content Areas table): Specimen 20–25%, **Molecular 15–25%**, Analysis/Imaging 45–50%, Operations 10–15%. This is an authority claim attributed explicitly to Austin's own direct instruction in this correction round, not to any fetch performed by this document. This repository's own `README.md` and `docs/SCIENTIFIC_REVIEW.md` independently cite the same Molecular 15–25% figure. |
+| Narrow claim supported | That an ASCP BOC content guideline exists, is dated September 25, 2025, and defines four weighted content domains for this exam, with Molecular at 15–25% — now resolved in favor of this figure per Austin's directly supplied primary-source citation (see immediately above), which matches this repository's pre-existing citation exactly. |
 | Edition/jurisdiction sensitivity | High — ASCP revises this guideline periodically; the rationale's percentages are only accurate for the currently cited revision. |
-| Unresolved problem | **A source discrepancy was found and is NOT resolved.** A secondary, non-ASCP study-aid site (`cytogenetics.mlsascp.com/ascp-boc.html`, an independently authored exam-prep resource explicitly positioned as a *supplement* to, not a republication of, the official ASCP BOC reading list) states the domain ranges as Specimen 20–25%, **Molecular 15–20%**, Analysis/Imaging 45–50%, Operations 10–15%. This repository's existing citation (`README.md`) states Molecular as **15–25%**. The Analysis/Imaging, Specimen, and Operations figures agree across both; only the Molecular range differs by its lower bound (20% vs. 25%). This document could not resolve which is current because the primary PDF was not directly fetchable this session. **This is exactly the kind of discrepancy Austin should resolve by opening the primary PDF directly**, not by this document guessing. |
+| Unresolved problem | **Resolved this correction round, with one honest caveat.** The prior round found a discrepancy between this repository's existing citation (Molecular 15–25%) and a secondary, non-ASCP study-aid site (`cytogenetics.mlsascp.com/ascp-boc.html`, an independently authored exam-prep resource, states Molecular 15–20%). Austin has directly supplied the primary guideline's own stated figure (Molecular 15–25%, page 1, Examination Content Areas table), which resolves the discrepancy in favor of this repository's existing citation and against the secondary site's figure. **Caveat:** this document's own fetch tooling still cannot independently re-verify the primary PDF (403 Forbidden, three attempts this round); the resolution above rests on Austin's direct supplied citation, not on this session's own source inspection, and that distinction is recorded here rather than blurred. |
 
 ## 1.4 Scientific-analysis proposal
 
@@ -206,16 +207,22 @@ current Molecular range before this item's source is entered into
 
 ## 1.6 Recommended disposition
 
-**Leave unchanged**, pending Austin's direct confirmation of the current
-Molecular-domain percentage range against the primary ASCP guideline (a
-source-verification task, not a content-rewrite task — this item's own text
-does not spell out the disputed figure).
+**Leave unchanged — resolved, not pending.** The prior round of this
+document wrongly stated that "this item's own text does not spell out the
+disputed figure." That claim was factually wrong: the item's own
+distractor-2 feedback already states, verbatim, "Molecular is ~15–25% —
+important but second to analysis/imaging" (line 135 of this document,
+section 1.1) — exactly the figure now confirmed correct per section 1.3.
+With Austin's directly supplied primary-source figure matching both this
+repository's existing citation and the item's own already-written feedback
+text, the Molecular-range discrepancy identified in the prior round is
+resolved in favor of 15–25%, and this item requires no content change.
 
 ## 1.7 Proposed revision
 
-None proposed. The item's content is not the source of the open question;
-the open question is which published percentage table is current, and that
-is resolved by inspecting a document, not by editing this item.
+None proposed. The prior open question (which published percentage table is
+current) is now resolved per section 1.3 above; the item's own text already
+states the correct, now-confirmed figure, so there is nothing to edit.
 
 ## 1.8 Austin SME decision fields (pending)
 
@@ -292,6 +299,7 @@ orientation module. No uncertainty about intended objective.
 | Locator | `README.md` § "How progress works"; the live `index.html` implementation itself (`localStorage.setItem`/`getItem` calls, no `fetch`/network call for progress) |
 | URL | Not applicable (local repository files) |
 | Retrieved | Directly inspected 2026-08-10, same session |
+| Source status (taxonomy, § Finding 3) | **`repository-source-appropriate`** — the claim is about this application's own behavior; this repository's own docs/implementation are the correct and sufficient source type, not a placeholder for an external citation. |
 | Directly inspected? | **Yes** |
 | Narrow claim supported | The application stores progress only in browser `localStorage`, has no server/account, and does not transmit progress to ASCP or anyone else. |
 | Edition/jurisdiction sensitivity | None — this is a fact about this specific application's own implementation, not an external clinical standard. |
@@ -405,35 +413,36 @@ higher difficulty tag.
 
 | Field | Value |
 | --- | --- |
-| Title | CLIA regulatory framework for laboratory-developed test validation (general principle, not a single named document) |
+| Title | 42 CFR § 493.1276, "Standard: Clinical cytogenetics" (CLIA), plus 42 CFR § 493.1253 (general CLIA analytical-validation requirement) |
 | Publisher | Centers for Medicare & Medicaid Services (CMS), administering 42 CFR Part 493 (CLIA) |
-| Edition/date | Current CLIA regulatory framework; specific secondary summary consulted 2026-08-10 |
-| Locator | CMS CLIA LDT validation FAQ; general summary of 42 CFR § 493.1253 analytical-validation requirements |
-| URL | `https://www.cms.gov/regulations-and-guidance/legislation/clia/downloads/ldt-and-clia_faqs.pdf` (CMS FAQ, general summary consulted, not the full regulation text) |
-| Retrieved | 2026-08-10 |
-| Directly inspected? | A CMS FAQ summary was directly reviewed via search result; the full regulation text (42 CFR § 493.1253) itself was **not** separately opened this session. |
-| Narrow claim supported | CLIA analytical validation is performed and is only meaningful *within* the specific laboratory, staff, equipment, and patient population that validated it — supporting the general principle that a numeric procedural parameter is locally validated, not a universal constant. |
-| Edition/jurisdiction sensitivity | Applies to U.S. CLIA-certified laboratories; a learner practicing outside U.S. CLIA jurisdiction would need the locally equivalent framework (e.g., a different national accreditation body) — not addressed by this source. |
-| Unresolved problem | **This is a general CLIA validation principle, not a cytogenetics-specific citation.** The ideal source for this exact claim would be a cytogenetics-specific specialist reference (e.g., the *AGT Cytogenetics Laboratory Manual*, current edition, Wiley/Association of Genetic Technologists) confirming that colcemid exposure time, hypotonic molarity, and cell-count targets are conventionally treated as SOP-validated ranges in practice, not fixed values. That reference's existence was confirmed via search, but its text is **subscription-gated (Wiley Online Library)** and was **not directly inspected** this session. Marked as a genuine, named gap, not filled by inference. |
+| Edition/date | Current CLIA regulatory framework; § 493.1276 directly re-fetched (Cornell Legal Information Institute mirror) this correction round, 2026-08-10 |
+| Locator | 42 CFR § 493.1276(b)(1)–(2): the laboratory must document "the quality of the banding" and ensure "the resolution is appropriate for the type of tissue or specimen and the type of study required based on the clinical information provided to the laboratory" |
+| URL | `https://www.law.cornell.edu/cfr/text/42/493.1276` (full regulatory text, directly fetched this round) |
+| Retrieved | 2026-08-10 (this correction round) |
+| Source status (taxonomy, § Finding 3) | **`directly-inspected-and-adequate`** — upgraded this round from the prior round's generic, non-cytogenetics-specific CLIA citation. § 493.1276 is CLIA's own dedicated clinical-cytogenetics standard, fetched and quoted in full this round. |
+| Directly inspected? | **Yes, this round.** The complete text of 42 CFR § 493.1276 was fetched and quoted verbatim (all five lettered subsections, (a) through (e)). This is a genuinely cytogenetics-specific CLIA regulation — the prior round's "general CLIA framework, not cytogenetics-specific" gap is closed. |
+| Narrow claim supported | § 493.1276(b)(1)–(2) requires the laboratory to document banding quality and to ensure resolution is *appropriate for the specimen and clinical question* — i.e., CLIA imposes a **duty to validate and document a locally appropriate parameter**, not a single universal numeric value. Combined with § 493.1253's general requirement that each laboratory establish and document its own analytical validation, this directly and specifically supports the item's claim that a stated colcemid time/KCl molarity/cell-count is a **laboratory/SOP-validated parameter**, not a value CLIA itself fixes by regulation. |
+| Edition/jurisdiction sensitivity | Applies to U.S. CLIA-certified laboratories; a learner practicing outside U.S. CLIA jurisdiction would need the locally equivalent framework — not addressed by this source, and not material to the item's own U.S.-context framing. |
+| Unresolved problem | **None material, after this round's re-sourcing.** The ideal *specialist-manual* citation (e.g., the *AGT Cytogenetics Laboratory Manual*) remains subscription-gated and was not directly inspected, but § 493.1276 is itself a directly-inspected, cytogenetics-specific, primary regulatory source adequate to support this item's claim — the specialist manual would strengthen, not replace, an already-adequate citation. |
 
 ## 3.4 Scientific-analysis proposal
 
-The keyed answer is directionally well-supported by the general regulatory
-principle found, and is consistent with how this repository's own
-`docs/ROADMAP.md`/`docs/CONTENT_GOVERNANCE.md` already talk about
-edition-/SOP-sensitive content throughout. One nuance worth Austin's
-attention: distractor 3 ("A regulatory requirement") is *almost* defensible
-in a different sense — CLIA **does** regulate that a laboratory *must*
-validate and document such parameters, so a learner could argue "it IS
-regulated." The distractor is correct as **currently scoped** (the exact
-numeric *value* is not fixed by regulation; only the *duty to validate* is)
-but this is a genuinely subtle distinction that a strong learner might
-contest. Not a defect, but worth Austin's explicit confirmation that the
-distinction reads clearly rather than as a trick. No unsupported absolute
-wording. **Confidence: moderate** — content direction is well-supported;
-the cytogenetics-specific citation gap (above) is the main open item.
-**Austin must independently evaluate this conclusion**, including the
-subtle-distractor point.
+The keyed answer is now well-supported by a directly-inspected,
+cytogenetics-specific primary regulatory source (§ 3.3): CLIA (42 CFR §
+493.1276, § 493.1253) requires a laboratory to validate and document that
+its own resolution/parameters are appropriate for the specimen and clinical
+question, but does not itself fix a universal numeric value for colcemid
+time, KCl molarity, or cell count. This resolves the nuance the prior round
+flagged: distractor 3 ("A regulatory requirement") is false **specifically
+because** it conflates "CLIA regulates that a lab must validate and
+document its parameters" (true) with "CLIA regulates what the numeric
+parameter itself must be" (false) — a distinction now grounded in an exact
+regulatory locator rather than asserted generally. Per Finding 5, this
+round revises distractor 3's *feedback* (not its wording — see § 3.7) to
+state that distinction explicitly and unambiguously rather than leaving it
+implicit. No unsupported absolute wording. **Confidence: high** — content
+direction is well-supported by a directly-inspected, cytogenetics-specific
+source; no material sourcing gap remains (§ 3.3).
 
 ## 3.5 Gate B preliminary worksheet
 
@@ -441,14 +450,14 @@ subtle-distractor point.
 | ---: | --- | --- | --- |
 | 1 | Exactly one defensible best answer | appears satisfied | With the nuance in 3.4 noted |
 | 2 | Scientific correctness is separate | not applicable | |
-| 3 | Distractor plausibility | possible concern | Distractor 3's subtlety (3.4) — plausible in a way that could confuse rather than only test understanding; Austin judgment requested |
+| 3 | Distractor plausibility | appears satisfied *(revised this round)* | Distractor 3's subtlety (3.4) is now resolved with an exact regulatory locator (§ 3.3); this round's proposed feedback revision (§ 3.7) makes the true distinction explicit, closing the prior "possible concern" |
 | 4 | Parallel construction | appears satisfied | All four are noun-phrase characterizations |
 | 5 | Mutual distinguishability | appears satisfied | |
 | 6 | Grammar/stem-completion clues | appears satisfied | |
 | 7 | Repeated stem wording | appears satisfied | |
 | 8 | Conspicuously longer/more-qualified correct answer | appears satisfied | Key is tied-longest with option 0, not uniquely longest |
 | 9 | Absolute words | appears satisfied | "universal," "exactly" appear in a *wrong* option, correctly used to signal implausibility, not in the key |
-| 10 | Paired/opposite-option patterns | possible concern | Options 0 and 3 both gesture at "fixed/universal," options 1 and 2 both gesture at "not fixed" — a possible two-pair structure worth a second look, though not an obvious "pick one of these two" telegraph |
+| 10 | Paired/opposite-option patterns | appears satisfied *(resolved this round, no revision)* | Options 0 and 3 both gesture at "fixed/universal," options 1 and 2 both gesture at "not fixed" — reviewed under Finding 5 and judged a natural, non-disqualifying consequence of testing one true/false axis with four options (two ways to be wrong-as-fixed, one way to be wrong-as-irrelevant, one correct way to be not-fixed), not an unintended structural telegraph; no revision proposed |
 | 11 | "All/none," negative stems | not applicable | |
 | 12 | Implausible padding | appears satisfied | |
 | 13 | Rationale/feedback alignment | appears satisfied | |
@@ -459,17 +468,42 @@ subtle-distractor point.
 
 ## 3.6 Recommended disposition
 
-**Leave unchanged**, with the specialist-source gap (3.3) flagged as the
-open item for whoever performs formal source-checking, and items 3/10 above
-flagged for Austin's Gate B attention. None of this indicates a scientific
-error — only an incomplete citation and two judgment calls a human reviewer
-should make deliberately.
+**Edit in place (feedback text only)** — revised this round per Finding 5.
+The prior round's "leave unchanged, Austin judgment requested" left
+distractor 3's genuine subtlety (§ 3.4) unresolved rather than deciding it.
+With a directly-inspected, cytogenetics-specific regulatory locator now in
+hand (§ 3.3), this round proposes a narrow, low-risk feedback-only edit
+(§ 3.7) that makes the true/false distinction explicit and sourced, rather
+than leaving the ambiguity for Austin to adjudicate from scratch. The
+stem, all four option texts, the rationale, and the keyed answer are
+**unchanged** — only distractor 3's feedback string is revised. This
+preserves the item's stable ID and assessed intent exactly (Gate B item
+14/15 are `not applicable`/satisfied as a result — this is a feedback
+clarification, not a supersession). Item 10's pairing observation is
+resolved above with an evidence-backed explanation, not a revision.
 
 ## 3.7 Proposed revision
 
-None proposed. If Austin's review concludes distractor 3 needs
-disambiguation, that would be a targeted wording change to option 3 and/or
-its feedback only — not attempted here without that judgment call.
+**Proposed (packet-only; not applied to `index.html` or `QUESTION_GOVERNANCE`
+by this document — Austin's edit, if approved):**
+
+Distractor-3 feedback, current text: *"They are not fixed by regulation;
+they are validated locally."*
+
+Distractor-3 feedback, proposed replacement: *"CLIA requires a laboratory
+to validate and document that its own parameters are appropriate (42 CFR §
+493.1276(b), § 493.1253) — but CLIA does not itself fix what the number
+must be; that determination is made and validated locally, not imposed as
+a regulatory value."*
+
+Rationale for the revision: the original feedback correctly states the
+conclusion ("not fixed by regulation... validated locally") but does not
+explain *why* a learner's "but CLIA requires it" instinct is wrong. The
+revised text draws the same distinction this document's Finding-5 analysis
+required — universal regulated value (false) vs. locally-validated SOP
+parameter (true) — and grounds it in the exact regulatory locator found
+this round, so a learner who contests the distractor sees the reasoning,
+not just the verdict.
 
 ## 3.8 Austin SME decision fields (pending)
 
@@ -539,6 +573,7 @@ module 2.
 | Locator | "Specimen Requirements" section, chromosome analysis test entry |
 | URL | `https://www.mmchs.org/professional-laboratory-resources/test-menu-index/chromosome-analysis-blood/` |
 | Retrieved | 2026-08-10 |
+| Source status (taxonomy, § Finding 3) | **`directly-inspected-but-secondary-or-incomplete`** — the source itself was fully and directly fetched, but it is one hospital's own local specimen-requirement page, not a national standard-setting body's document; adequate for the item's narrow claim, corroborated by two further public test-menu pages, but not a primary/official standard. |
 | Directly inspected? | **Yes**, fetched and quoted directly this session: *"1 green-top (sodium heparin) tube (minimum: 1.0 mL of heparinized whole blood)"*; *"Green-top (lithium heparin) IS NOT acceptable."* |
 | Narrow claim supported | Sodium heparin (green top) is the required/accepted anticoagulant for peripheral-blood chromosome analysis; lithium heparin is explicitly rejected by this specific laboratory's published requirements. |
 | Edition/jurisdiction sensitivity | Low for the anticoagulant *class* (sodium heparin is standard practice broadly, corroborated independently by OhioHealth's and Wake Forest Baptist's public test-menu pages found in the same search, not separately fetched in full); individual labs' exact acceptable-tube lists (e.g., whether a royal-blue-top sodium-heparin tube is also accepted) can vary by institution. |
@@ -569,7 +604,7 @@ answer.
 | 5 | Mutual distinguishability | appears satisfied | |
 | 6 | Grammar/stem-completion clues | appears satisfied | |
 | 7 | Repeated stem wording | appears satisfied | |
-| 8 | Conspicuously longer/more-qualified correct answer | possible concern | `uniquely-longest`, though only marginally (26 vs. 19/25/20) — Gate A/bank-level judgment, not flagged as a content defect |
+| 8 | Conspicuously longer/more-qualified correct answer | appears satisfied *(reviewed under Finding 5, no revision)* | `uniquely-longest`, though only marginally (26 vs. 19/25/20 chars) — a Gate A/bank-level signal, not a content defect; the extra length is the substantive tube-color qualifier, not padding, so no revision is proposed |
 | 9 | Absolute words | appears satisfied | |
 | 10 | Paired/opposite-option patterns | appears satisfied | |
 | 11 | "All/none," negative stems | not applicable | |
@@ -645,16 +680,17 @@ chromosome study can be trusted. Cognitive level: recall. Domain/topic
 
 | Field | Value |
 | --- | --- |
-| Title | National Patient Safety Goal NPSG.01.01.01 — "Use at least two patient identifiers" |
+| Title | *National Patient Safety Goals — Effective January 2026 for the Laboratory Program*, Goal 1, NPSG.01.01.01 |
 | Publisher | The Joint Commission |
-| Edition/date | Current standing goal; standards-interpretation FAQ pages consulted 2026-08-10 |
-| Locator | NPSG.01.01.01, specimen-labeling/collection application |
-| URL | `https://www.jointcommission.org/en-us/knowledge-library/support-center/standards-interpretation/standards-faqs/000001463` |
-| Retrieved | 2026-08-10 |
-| Directly inspected? | Reviewed via search-result summary of the official Joint Commission standards-FAQ page; the FAQ page itself was not separately re-fetched in full this session (summary quality is high and directly attributable to the named official page, but full independent re-fetch was not performed). |
-| Narrow claim supported | At least two patient identifiers are required when collecting a specimen, and specimen containers must be labeled with two identifiers in the patient's presence; room number/location is explicitly *not* an acceptable identifier. |
+| Edition/date | Effective January 2026; report dated August 11, 2025; © 2025 Joint Commission |
+| Locator | NPSG.01.01.01, "Use at least two patient identifiers when providing laboratory services"; Element of Performance (EP) 1 and EP 2 |
+| URL | `https://digitalassets.jointcommission.org/api/public/content/3c7a110c215943bc80d9ce87e9d9ee9d?v=aef80e14` |
+| Retrieved | 2026-08-10 (this correction round; the primary document, not a FAQ page, was fetched directly) |
+| Source status (taxonomy, § Finding 3) | **`directly-inspected-and-adequate`** — upgraded this round from a search-summary-only citation to a genuine direct fetch of the primary Joint Commission Laboratory Program NPSG document. |
+| Directly inspected? | **Yes, this round.** The prior round's citation ("reviewed via search-result summary... not separately re-fetched") is corrected: the actual primary PDF was fetched and quoted verbatim this round: EP 1 — *"Use at least two patient identifiers when administering blood or blood components; when collecting blood samples and other specimens for clinical testing; and when providing other treatments or procedures. The patient's room number or physical location is not used as an identifier."* EP 2 — *"Label containers used for blood and other specimens in the presence of the patient."* |
+| Narrow claim supported | At least two patient identifiers are required when collecting a specimen (EP 1); room number/location is explicitly *not* an acceptable identifier (EP 1); specimen containers must be labeled with two identifiers in the patient's presence (EP 2) — directly and exactly matching the item's stem and keyed answer. |
 | Edition/jurisdiction sensitivity | Applies to Joint Commission–accredited U.S. facilities; other accreditors/countries may phrase the requirement differently, though "at least two independent identifiers" is a broadly convergent international patient-safety norm (not independently verified outside the U.S. context this session). |
-| Unresolved problem | None material — this is a well-established, widely publicized safety standard; the specific "two independent identifiers" framing matches the question directly. |
+| Unresolved problem | None. This round closes the prior round's own honest gap (search-summary rather than direct inspection) — the primary document is now directly fetched and quoted. |
 
 ## 5.4 Scientific-analysis proposal
 
@@ -761,6 +797,7 @@ difficulty 1) are supportable for an entry-level procedural-sequence check.
 | Locator | "Culture Harvest" page, three-step sequence description |
 | URL | `https://cytogenetics.mlsascp.com/culture-harvest-1.html` |
 | Retrieved | 2026-08-10 |
+| Source status (taxonomy, § Finding 3) | **`directly-inspected-but-secondary-or-incomplete`** — fully and directly fetched, but an independently-authored specialist study aid, not an ASCP/AGT/peer-reviewed primary publication. |
 | Directly inspected? | **Yes**, fetched and quoted directly: mitotic arrest via colcemid/colchicine (spindle-fiber inhibition) → hypotonic treatment (e.g., 0.075M KCl, osmotic swelling) → fixation ("Carnoy's Fixative," 3:1 methanol:glacial acetic acid) — matching the keyed sequence exactly. |
 | Narrow claim supported | The standard chromosome-harvest chemical sequence is colcemid arrest, then hypotonic swelling, then fixation — corroborated independently by a second, unrelated general web search summarizing the same three-step order with matching rationale (spindle-fiber inhibition timing, osmotic mechanism, Carnoy's composition). |
 | Edition/jurisdiction sensitivity | Low — this is a stable, foundational technique, not a numeric SOP parameter (see `m1-q3` for why exact timings/molarities are treated differently from the *order* of steps, which is not lab-specific). |
@@ -878,6 +915,7 @@ single-fact recall item.
 | Locator | "Select, Count, & Analyze" page, metaphase-scanning description |
 | URL | `https://cytogenetics.mlsascp.com/select-count-analyze.html` |
 | Retrieved | 2026-08-10 |
+| Source status (taxonomy, § Finding 3) | **`directly-inspected-but-secondary-or-incomplete`** — fully and directly fetched, but an independently-authored specialist study aid corroborated only by domain-general microscopy convention, not a second cytogenetics-specific source. |
 | Directly inspected? | **Yes**, fetched and quoted directly: *"The laboratory scientist scans the slide using low power (10x) to identify candidates and then switches to high power (100x Oil) to verify quality."* |
 | Narrow claim supported | Low power is used to locate/scan for metaphase candidates; 100× oil immersion is used for detailed band-level analysis — matching the keyed answer's direction exactly. |
 | Edition/jurisdiction sensitivity | Low — this is a stable microscopy-workflow convention, not a numeric SOP value or regulation. |
@@ -908,9 +946,9 @@ would strengthen this before formal sign-off.
 | 5 | Mutual distinguishability | appears satisfied | |
 | 6 | Grammar/stem-completion clues | appears satisfied | |
 | 7 | Repeated stem wording | appears satisfied | |
-| 8 | Conspicuously longer/more-qualified correct answer | possible concern | `uniquely-longest` and by a wide margin (50 vs. 32/12/13 chars) — the key is nearly 4× the shortest distractor. This is the most pronounced length gap of any item in this pilot batch and merits explicit Gate B attention, though the extra length is substantive ("e.g., 10×" qualifier), not filler |
+| 8 | Conspicuously longer/more-qualified correct answer | appears satisfied *(reviewed under Finding 5, no revision)* | `uniquely-longest` and by a wide margin (50 vs. 32/12/13 chars) — the key is nearly 4× the shortest distractor. **Correction (this round): the prior text called this "the most pronounced length gap of any item in this pilot batch," which is inaccurate — `m16-q1` has both a larger absolute gap (62 vs. 10/21/16, a 52-character spread vs. this item's 38-character spread) and a larger ratio (~6.2× vs. ~4.2×); that superlative claim is retracted here.** The extra length here is substantive ("e.g., 10×" qualifier and the explicit dual-clause structure), not filler; no revision proposed |
 | 9 | Absolute words | appears satisfied | |
-| 10 | Paired/opposite-option patterns | possible concern | Options 2 and 3 are a clean "same power for both" pair (10× vs. 100×) — a plausible telegraph that "the answer differs between the two" once a learner notices 2 and 3 are a matched pair; worth Austin's eye |
+| 10 | Paired/opposite-option patterns | appears satisfied *(reviewed under Finding 5, no revision)* | Options 2 and 3 are a clean "same power for both" pair (10× vs. 100×) — reviewed and judged a deliberate, legitimate test of whether the learner knows the power level *must* differ between the two tasks, not an unintended telegraph; no revision proposed |
 | 11 | "All/none," negative stems | not applicable | |
 | 12 | Implausible padding | appears satisfied | |
 | 13 | Rationale/feedback alignment | appears satisfied | |
@@ -921,10 +959,12 @@ would strengthen this before formal sign-off.
 
 ## 7.6 Recommended disposition
 
-**Leave unchanged**, with the length gap (item 8) and paired-option pattern
-(item 10) explicitly flagged for Austin's Gate B judgment — this is
-precisely the kind of item-level call Gate B exists for, and this packet
-does not treat either observation as disqualifying on its own.
+**Leave unchanged.** Per Finding 5, the length gap (item 8) and
+paired-option pattern (item 10) have each been resolved this round to an
+explicit evidence-backed explanation rather than left as open flags — see
+the "reviewed under Finding 5" notes above. Austin's Gate B sign-off is
+still required (§ 7.8/7.9 remain pending), but this document no longer
+defers the *judgment call itself* on these two rows.
 
 ## 7.7 Proposed revision
 
@@ -1005,6 +1045,7 @@ judgment required — flagged for Austin below, not changed here.
 | Locator | "Enhance Images" page, acceptable-vs-unacceptable enhancement lists |
 | URL | `https://cytogenetics.mlsascp.com/enhance-images-1.html` |
 | Retrieved | 2026-08-10 |
+| Source status (taxonomy, § Finding 3) | **`directly-inspected-but-secondary-or-incomplete`** — fully and directly fetched, closely matching source, but an independently-authored specialist study aid, not an ASCP/CAP primary. |
 | Directly inspected? | **Yes**, fetched and quoted directly. Acceptable, quoted: contrast/brightness adjustment "to maximize the dynamic range of the image"; background removal "to remove debris, stain precipitate, or uneven lighting from the empty space." Not acceptable, quoted: "Deleting Signals: Using the 'eraser' tool to remove a FISH signal that 'looks like background'"; "Copy/Paste: Copying a normal chromosome from another cell to replace a blurry one"; "Band Drawing: Using a paintbrush tool to darken a band that 'should be there.'" Stated principle, quoted: *"Enhancement makes existing data clearer; manipulation creates false data."* |
 | Narrow claim supported | The specific boundary this item tests (adjust visualization vs. add/remove/move real chromosomal material) matches this source's stated acceptable/unacceptable lists closely, item for item. |
 | Edition/jurisdiction sensitivity | Low — this is a general image-integrity principle, reinforced by the same "never fabricate data" norm found broadly in scientific-image-integrity guidance (general search corroboration, not cytogenetics-specific, e.g. general biomedical-publication image-integrity practices). |
@@ -1038,7 +1079,7 @@ session — flagged, not filled by inference.
 | 8 | Conspicuously longer/more-qualified correct answer | appears satisfied | `not-longest`; option 3 is longest, not the key |
 | 9 | Absolute words | appears satisfied | "never" appears correctly in the rationale (not the stem/options) to describe a genuine bright-line rule |
 | 10 | Paired/opposite-option patterns | appears satisfied | |
-| 11 | "All/none," negative stems | possible concern | The stem is a **negatively phrased "does NOT include"** item. It is clearly marked (capitalized "NOT"), matching the rubric's own requirement that negative stems be "clearly marked as such" — appears to already satisfy the rubric's own stated bar, flagged here only so Austin explicitly confirms it, per the rubric's own emphasis on this exact pattern |
+| 11 | "All/none," negative stems | appears satisfied *(reviewed under Finding 5, no revision)* | The stem is a **negatively phrased "does NOT include"** item, clearly marked (capitalized "NOT"), matching the rubric's own requirement that negative stems be "clearly marked as such" — this item already satisfies the rubric's stated bar on its own terms; no revision proposed |
 | 12 | Implausible padding | appears satisfied | |
 | 13 | Rationale/feedback alignment | appears satisfied | |
 | 14 | Preserves assessed intent | requires Austin judgment | |
@@ -1129,6 +1170,7 @@ packet's single largest open item.
 | Locator | — |
 | URL | — |
 | Retrieved | Multiple searches performed 2026-08-10 |
+| Source status (taxonomy, § Finding 3) | **`source unresolved`** — no primary or secondary source directly confirms the exact three-term hierarchy; explicitly not filled by inference. |
 | Directly inspected? | **No source using exactly the terms "countable," "analyzable," and "karyotypable" together as a formal three-tier nested hierarchy was located and directly inspected this session**, despite specifically searching the same specialist study site used successfully for four other items in this batch (`cytogenetics.mlsascp.com/select-count-analyze.html`, directly fetched and re-checked specifically for this question — it uses "analyzable" once, in isolation, with no tiered comparison to "countable" or "karyotypable"). |
 | Narrow claim supported | *Adjacent, supporting* facts were found: a successful karyotype conventionally requires a minimum number of analyzable metaphases (a commonly cited convention is ≥10, per general search results, itself not independently verified against one primary counting-standard document this session); the general "count ~20, fully analyze a smaller subset (e.g., 5)" convention is well attested informally. These are consistent with, but do not by themselves prove, the *specific* strict three-way nesting this item states. |
 | Edition/jurisdiction sensitivity | Unknown until a source is found. |
@@ -1256,30 +1298,38 @@ Domain/topic (analysis/structural-2), difficulty 1, are supportable.
 
 | Field | Value |
 | --- | --- |
-| Title | Multiple converging sources on t(9;22)/BCR-ABL1 structural cytogenetics (no single title — see below) |
-| Publisher | PLOS Genetics; PMC (PubMed Central, NIH); ScienceDirect Topics (Elsevier) |
-| Edition/date | Peer-reviewed literature, various publication dates; consulted via search 2026-08-10 |
-| Locator | General overview statements on t(9;22)(q34;q11.2) reciprocal translocation products |
-| URL | e.g., `https://journals.plos.org/plosgenetics/article?id=10.1371%2Fjournal.pgen.1005144`; `https://www.sciencedirect.com/topics/biochemistry-genetics-and-molecular-biology/philadelphia-chromosome`; `https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4412790/` |
-| Retrieved | 2026-08-10 |
-| Directly inspected? | Reviewed via search-result summaries drawing directly from these named peer-reviewed/PMC sources; full-text of any single article was **not** separately opened and re-read in full this session — summary-level inspection only. |
-| Narrow claim supported | The Philadelphia chromosome is the derivative chromosome 22 (the smaller reciprocal product) carrying the BCR-ABL1 fusion, produced by t(9;22)(q34;q11.2); the reciprocal der(9) is the other, larger product. Multiple independent peer-reviewed-literature-derived summaries converge on this exactly. |
+| Title | Kang ZJ, Liu YF, Xu LZ, et al., "The Philadelphia chromosome in leukemogenesis" |
+| Publisher | *Chinese Journal of Cancer* (peer-reviewed), 2016 |
+| Edition/date | 2016; article directly re-fetched this correction round, 2026-08-10 |
+| Locator | Introduction — the article's opening definitional statement of the Philadelphia chromosome |
+| URL | `https://pmc.ncbi.nlm.nih.gov/articles/PMC4896164/` |
+| Retrieved | 2026-08-10 (this correction round; full article fetched, not a search snippet) |
+| Source status (taxonomy, § Finding 3) | **`directly-inspected-and-adequate`** — upgraded this round from search-result-summary-only to a genuine direct fetch of one specific, named, peer-reviewed article with an exact locator, per Finding 4. |
+| Directly inspected? | **Yes, this round.** Quoted verbatim: *"The truncated chromosome 22 that results from the reciprocal translocation t(9;22)(q34;q11) is known as the Philadelphia chromosome (Ph)."* This directly and specifically supports the keyed answer: Ph = der(22), the smaller/truncated reciprocal product of t(9;22), not der(9). |
+| Narrow claim supported | The Philadelphia chromosome is the derivative/truncated chromosome 22 produced by t(9;22)(q34;q11) — directly and exactly matching the keyed answer, now via one specific, directly-inspected, peer-reviewed locator rather than converging general-search summaries. |
 | Edition/jurisdiction sensitivity | None — this is a foundational, stable structural-cytogenetics fact (first described by Nowell and Hungerford, 1960; molecularly characterized by Rowley, 1973), not subject to edition/jurisdiction variation. |
-| Unresolved problem | Summary-level (not full-text) inspection only, as noted above — a stronger citation would name one specific peer-reviewed source with an exact locator (e.g., a specific review article and page/section) rather than converging general summaries. Low practical risk given how well-established and undisputed this specific fact is in the field. |
+| Unresolved problem | None material, after this round's re-sourcing. The prior round's general-search convergence (PLOS Genetics, ScienceDirect Topics, additional PMC articles) is retained as corroborating background but is no longer the primary citation; the single directly-inspected article above is now the primary locator. |
 
 ## 10.4 Scientific-analysis proposal
 
 Keyed answer is correct and well-established; not a disputed or
-edition-sensitive fact. Distractors are each wrong for a specific, correct
-reason. **One structural/authoring observation, not a scientific one:** the
-wrong-answer-feedback object carries an explicit but **empty string** keyed
-to index `1` — the correct answer's own index. Functionally harmless (the
-correct answer does not need "wrong" feedback and the UI does not display
-this), but it is untidy authored data that a rewrite or governance
-source-check pass should clean up (drop the stray `"1": ""` key entirely)
-per Gate B item 13's alignment concern. **Confidence: high** on the
-scientific content; this is a trivial housekeeping note, not a defensibility
-concern.
+edition-sensitive fact, now supported by one specific, directly-inspected
+peer-reviewed locator (§ 10.3). Distractors are each wrong for a specific,
+correct reason. **One structural/authoring observation, not a scientific
+one:** the wrong-answer-feedback object carries an explicit but **empty
+string** keyed to index `1` — the correct answer's own index. Functionally
+harmless (the correct answer does not need "wrong" feedback and the UI does
+not display this), but it is untidy authored data. **Confidence: high** on
+the scientific content.
+
+**Correction (this round, per Finding 5):** the prior round's disposition
+simultaneously "recommended cleanup" of the stray key (§ 10.4 above) and
+"Leave unchanged... no change is justified" (§ 10.6) — two incompatible
+positions left unresolved side by side. This round picks one explicitly:
+the stray `"1": ""` key is a zero-risk, zero-content-impact structural
+cleanup (it does not touch the stem, any option text, the rationale, the
+keyed answer, or any *displayed* feedback), so it is proposed as a minor
+**edit-in-place** (§ 10.7), not left as an unresolved dangling note.
 
 ## 10.5 Gate B preliminary worksheet
 
@@ -1297,7 +1347,7 @@ concern.
 | 10 | Paired/opposite-option patterns | possible concern | Options 0 and 1 are a clean der(9)/der(22) minimal pair ("Large der(9)" vs. "Small der(22)") — plausible as a deliberate, legitimate two-option contrast testing the exact right distinction, not a defect, but worth Austin's eye per the rubric's own item 10 |
 | 11 | "All/none," negative stems | not applicable | |
 | 12 | Implausible padding | appears satisfied | |
-| 13 | Rationale/feedback alignment | possible concern | Stray empty-string feedback entry keyed to the correct answer's own index (10.4) — minor housekeeping, not a content defect |
+| 13 | Rationale/feedback alignment | appears satisfied *(resolved this round — edit-in-place proposed)* | Stray empty-string feedback entry keyed to the correct answer's own index (10.4) — resolved per Finding 5 as a proposed minor edit-in-place (§ 10.7), not left as an open concern |
 | 14 | Preserves assessed intent | requires Austin judgment | |
 | 15 | Edit-in-place vs. supersede | requires Austin judgment | |
 | 16 | Quarantine when unsupportable | not applicable | |
@@ -1305,17 +1355,23 @@ concern.
 
 ## 10.6 Recommended disposition
 
-**Leave unchanged**, with the stray empty-string feedback key (10.4/item
-13) noted as a minor, low-priority cleanup item for whoever next edits this
-question's data — not a reason to change disposition on its own, and
-explicitly not proposed as a content rewrite here.
+**Edit in place (structural only)** — revised this round per Finding 5,
+replacing the prior round's self-contradictory "leave unchanged / recommend
+cleanup" pairing with one explicit decision. The scientific content (stem,
+options, rationale, keyed answer, and all three *displayed* distractor
+feedback strings) is unchanged and requires no revision. Only the stray
+`"1": ""` key in the feedback data object is proposed for removal.
 
 ## 10.7 Proposed revision
 
-None proposed for content. If Austin wants the stray `"1": ""` key removed
-as routine hygiene, that is a zero-content-impact structural cleanup, not a
-scientific revision, and can be done independently of this packet's review
-cycle.
+**Proposed (packet-only; not applied to `index.html` or
+`QUESTION_GOVERNANCE` by this document):** remove the stray `"1": ""` entry
+from this item's wrong-answer-feedback object. It is keyed to the correct
+answer's own index, is never read or displayed by the application (the UI
+only shows feedback for non-keyed options), and its removal changes no
+visible content, no rationale, no option text, and no stable-ID meaning —
+a pure data-hygiene fix, distinct in kind from every other proposed
+revision in this packet (which change learner-visible text).
 
 ## 10.8 Austin SME decision fields (pending)
 
@@ -1383,60 +1439,107 @@ real scope and limits, not just its stated advantage.
 
 | Field | Value |
 | --- | --- |
-| Title | "Guidance for Fluorescence in Situ Hybridization Testing in Hematologic Disorders" |
-| Publisher | *The Journal of Molecular Diagnostics* (official journal of the Association for Molecular Pathology, published by Elsevier) |
-| Edition/date | Peer-reviewed guidance article; exact publication year not independently re-confirmed this session |
-| Locator | General guidance content on interphase FISH's non-culture-dependent, rapid-enumeration use case, and its regulatory-context relationship to CLIA/ACMG/CAP |
-| URL | `https://www.jmdjournal.org/article/S1525-1578(10)60373-X/fulltext` |
-| Retrieved | 2026-08-10 |
-| Directly inspected? | Reviewed via search-result summary drawing from this named peer-reviewed guidance article; the full article was **not** separately opened and read in full this session. |
-| Narrow claim supported | Interphase FISH's major advantage is that it works on non-dividing/interphase cells without requiring cell culture, enabling faster, more numerous cell analysis than metaphase-dependent methods — directly matching the keyed answer and rationale. |
+| Title | Wolff DJ, et al., "Guidance for Fluorescence in Situ Hybridization Testing in Hematologic Disorders" |
+| Publisher | *The Journal of Molecular Diagnostics* (official journal of the Association for Molecular Pathology, published by Elsevier), 2007;9(2):134–143 |
+| Edition/date | 2007; full text directly re-fetched this correction round, 2026-08-10 |
+| Locator | Discussion of dual-fusion (D-FISH) *BCR/ABL1* probe detection of t(9;22)/variant/cryptic rearrangements; and the article's stated general limitation of interphase FISH |
+| URL | `https://pmc.ncbi.nlm.nih.gov/articles/PMC1867444/` (DOI 10.2353/jmoldx.2007.060128) |
+| Retrieved | 2026-08-10 (this correction round; full text fetched twice and quoted verbatim, not a search snippet) |
+| Source status (taxonomy, § Finding 3) | **`directly-inspected-and-adequate`** — upgraded this round from summary-level to genuine full-text direct inspection, per Finding 4. |
+| Directly inspected? | **Yes, this round, in full.** Two directly relevant passages, quoted verbatim: (1) *"The dual-color, dual-fusion BCR(green)/ABL1(red) probe (D-FISH) set allows for detection of all forms of the BCR/ABL1 fusion (yellow), ie, t(9;22), variant translocations, and cryptic translocations or insertions."* (2) *"Although interphase FISH analysis provides information only on specific probes used and generally does not substitute for complete karyotype analysis, it may, under some disease circumstances, be the preferred means of identifying an abnormal clone."* |
+| Narrow claim supported | Interphase FISH's major advantage is working on non-dividing cells without culture, enabling fast, targeted enumeration (quote 2, matching the keyed answer and rationale). **This round's correction:** quote (1) also shows that a *targeted* dual-fusion/break-apart FISH probe strategy genuinely does detect specific balanced translocations — including t(9;22) — directly in interphase nuclei. Quote (2) is the article's own stated boundary: FISH provides information **only on the specific probes used** and is not a substitute for complete (i.e., untargeted, genome-wide) karyotype analysis. Together, these two quotes are the basis for this round's Gate B and revision corrections below. |
 | Edition/jurisdiction sensitivity | Low for the core biological/technical claim; FISH panel-specific regulatory guidance can evolve, not directly relevant to this item's narrow claim. |
-| Unresolved problem | Summary-level inspection only (same limitation noted for `m12-q6`). This is nonetheless a genuinely authoritative, on-topic, official-society-journal source (AMP/JMD), a stronger citation tier than the independently-authored study-site sources used for several other items in this batch. A full-text re-read with an exact page/section locator would still strengthen the eventual formal `QUESTION_GOVERNANCE` citation. |
+| Unresolved problem | None material, after this round's full-text re-fetch. |
 
 ## 11.4 Scientific-analysis proposal
 
-Keyed answer is well-supported by an authoritative, on-topic peer-reviewed
-guidance source. Each distractor represents a real, common overclaim about
-FISH that the rationale/feedback correctly and specifically rejects (no
-morphology without metaphase; targeted, not general-screening, detection;
-complements rather than replaces karyotyping) — genuinely well-constructed
-distractors that test understanding of FISH's actual scope, not just its
-one advantage. No unsupported absolute wording ("replaces all karyotyping"
-appears in a *wrong* option, correctly flagged as false). **Confidence:
-high.**
+**Correction (this round, per Finding 1):** the prior round's analysis was
+wrong. It asserted that the "Detects balanced translocations directly"
+distractor (former option 2) was straightforwardly false and that Gate B
+item 1 (exactly one defensible best answer) "appears satisfied." Direct
+full-text inspection of Wolff et al. (§ 11.3, quote 1) shows this is not
+correct: a targeted dual-fusion/break-apart FISH probe strategy genuinely
+**does** detect specific balanced translocations — including t(9;22) — in
+interphase nuclei. The former distractor's own wording, "Detects balanced
+translocations directly," never claimed FISH *broadly screens* for
+balanced events; the prior round's feedback text rejected a claim ("broadly
+screen") the option itself never made, while the option's literal claim was
+true under a targeted-probe reading. That made the former option 2 a
+second, genuinely defensible answer, not a clean distractor — a real Gate B
+item 1/3/13 defect, not a preliminary-review false alarm.
+
+The keyed answer (option 0, no-culture/fast enumeration) remains correct
+and is not in question. Wolff et al.'s own stated limitation (§ 11.3, quote
+2 — FISH "provides information only on specific probes used and generally
+does not substitute for complete karyotype analysis") is the scientifically
+accurate basis for a replacement distractor: interphase FISH is targeted
+and rapid, but it is **not** an untargeted, genome-wide screen for unknown
+rearrangements — that is the real, unambiguously false overclaim this item
+should test, in place of the ambiguous former option 2. See § 11.7 for the
+full proposed revision. **Confidence: high**, now grounded in full-text
+inspection of an authoritative, on-topic, peer-reviewed guidance source.
 
 ## 11.5 Gate B preliminary worksheet
 
 | # | Criterion | Verdict | Note |
 | ---: | --- | --- | --- |
-| 1 | Exactly one defensible best answer | appears satisfied | |
+| 1 | Exactly one defensible best answer | **fails preliminary review — corrected this round** | The former option 2, "Detects balanced translocations directly," is a second defensible answer under a targeted-probe reading (§ 11.4); this round's revision (§ 11.7) replaces it to restore a single defensible best answer |
 | 2 | Scientific correctness is separate | not applicable | |
-| 3 | Distractor plausibility | appears satisfied | Each is a real, common misconception about FISH's scope |
-| 4 | Parallel construction | appears satisfied | All four complete "...because it:" as a verb-phrase claim |
+| 3 | Distractor plausibility | **fails preliminary review — corrected this round** | The former option 2 was not a clean distractor — its literal claim was true under Wolff et al. (§ 11.3/11.4); the prior round's feedback rejected a claim the option never made ("broadly screen"). Replaced this round with a distractor that is unambiguously false under the same source (§ 11.7) |
+| 4 | Parallel construction | appears satisfied | All four (three after revision, see § 11.7) complete "...because it:" as a verb-phrase claim |
 | 5 | Mutual distinguishability | appears satisfied | |
 | 6 | Grammar/stem-completion clues | appears satisfied | |
 | 7 | Repeated stem wording | appears satisfied | |
-| 8 | Conspicuously longer/more-qualified correct answer | possible concern | `uniquely-longest` (53 vs. 32/40/24 chars) — the key is the longest option by a clear margin; Gate A/Gate B judgment, the extra length reflects two genuine substantive claims (no culture + fast enumeration) rather than obvious padding |
+| 8 | Conspicuously longer/more-qualified correct answer | appears satisfied *(reviewed under Finding 5, no further revision)* | Original: `uniquely-longest` (53 vs. 32/40/24 chars). The § 11.7 revision's replacement option 2 is itself long (grounded in the same source's actual limitation, not padding), which incidentally reduces or removes the key's unique-longest status; exact post-revision lengths are Austin's to confirm at edit time, not re-measured by this document |
 | 9 | Absolute words | appears satisfied | "all" appears in a wrong option (3), correctly signaling implausibility |
 | 10 | Paired/opposite-option patterns | appears satisfied | |
 | 11 | "All/none," negative stems | not applicable | Option 3 uses "all" but is not an "all of the above"-style option |
-| 12 | Implausible padding | appears satisfied | Key's extra length is substantive, not filler |
-| 13 | Rationale/feedback alignment | appears satisfied | |
-| 14 | Preserves assessed intent | requires Austin judgment | |
-| 15 | Edit-in-place vs. supersede | requires Austin judgment | |
-| 16 | Quarantine when unsupportable | not applicable | |
+| 12 | Implausible padding | appears satisfied | Key's extra length, and the revised option 2's length, are both substantive, not filler |
+| 13 | Rationale/feedback alignment | **fails preliminary review — corrected this round** | The former option 2's feedback ("doesn't broadly screen... the way it might seem") did not actually rebut the option's literal claim; § 11.7's revised feedback is aligned to the revised option and grounded in a direct quote |
+| 14 | Preserves assessed intent | appears satisfied *(reviewed under Finding 5)* | The revision preserves the item's core teaching point (interphase FISH is targeted/rapid/no-culture, not a genome-wide screen, not a karyotyping replacement) exactly; only the previously-ambiguous option/feedback pair changes |
+| 15 | Edit-in-place vs. supersede | **Edit in place** *(decided this round)* | A targeted option/feedback correction preserving the stable ID, stem, rationale, and keyed answer — not a change in assessed intent, so supersession is not warranted |
+| 16 | Quarantine when unsupportable | not applicable | The item is not unsupportable; it is correctable, and this round proposes the correction |
 | 17 | Evidence before release-qualification | fails preliminary review | Expected at Draft |
 
 ## 11.6 Recommended disposition
 
-**Leave unchanged**, with the length gap (item 8) flagged for Austin's
-Gate B attention, consistent with this packet's general practice of not
-treating a single item's length signal as disqualifying on its own.
+**Edit in place** — corrected this round per Finding 1. The prior round's
+"Leave unchanged" disposition was wrong: it rested on the same mistaken
+belief (Gate B item 1 "appears satisfied") that direct full-text inspection
+of Wolff et al. now overturns (§ 11.3/11.4). The stem, rationale, keyed
+answer (option 0), and options 1/3 with their feedback are unchanged and
+remain correct. Only option 2 and its feedback are revised (§ 11.7), to
+remove the second defensible answer and restore a single, unambiguous
+distractor grounded in the same source's own stated limitation.
 
 ## 11.7 Proposed revision
 
-None proposed.
+**Proposed (packet-only; not applied to `index.html` or
+`QUESTION_GOVERNANCE` by this document — Austin's edit, if approved):**
+
+Option 2, current text: *"Detects balanced translocations directly"*
+
+Option 2, proposed replacement: *"Screens the whole genome for any
+rearrangement without a targeted probe"*
+
+Option-2 feedback, current text: *"FISH targets specific loci; it doesn't
+broadly screen for balanced events the way it might seem."*
+
+Option-2 feedback, proposed replacement: *"FISH detects only the specific
+probe target(s) chosen — it provides information only on those probes and
+is not a substitute for complete karyotype analysis (Wolff et al., J Mol
+Diagn 2007); an untargeted, genome-wide screen is not what interphase FISH
+does."*
+
+Rationale for the revision: the replacement option is unambiguously false
+under the same directly-inspected source (§ 11.3, quote 2) — interphase
+FISH is explicitly *not* an untargeted, whole-genome screen — so it no
+longer risks being a second defensible answer the way the former option's
+literal wording did. The revised feedback explains the correct boundary
+(targeted per-probe detection vs. untargeted genome-wide screening) instead
+of rejecting a claim the option never made. The stem, rationale, keyed
+answer, and options 1/3 are unchanged, preserving the item's stable ID and
+assessed intent exactly.
 
 ## 11.8 Austin SME decision fields (pending)
 
@@ -1495,26 +1598,35 @@ technologist handles it. Cognitive level: recall. Domain/topic
 
 | Field | Value |
 | --- | --- |
-| Title | Multiple safety-data/reference sources on Carnoy's/methanol:acetic-acid fixative composition and hazard classification |
-| Publisher | Various — a university teaching-lab fixative reference (Lewis University), a chemical-safety-data aggregator (LobaChemie MSDS), general chemical-hazard references | 
-| Edition/date | Various; consulted via search 2026-08-10 |
-| Locator | General fixative-composition and hazard-classification statements |
-| URL | e.g., `https://www.lewisu.edu/academics/biology/pdf/Carnoy%20Fixative.pdf`; `https://www.lobachemie.com/lab-chemical-msds/MSDS-carnoys-solution-02558-EN.aspx` |
-| Retrieved | 2026-08-10 |
-| Directly inspected? | Reviewed via search-result summaries; no single manufacturer/vendor Safety Data Sheet for methanol and glacial acetic acid specifically was opened and read in full this session — this claim rests on **converging general chemical-safety knowledge** (methanol: flammable, toxic; glacial acetic acid: corrosive) rather than one directly-inspected primary SDS. |
-| Narrow claim supported | Methanol is classified as flammable and toxic; glacial acetic acid is classified as corrosive — both are standard, well-established, uncontroversial hazard classifications for these two specific, widely used chemicals. |
-| Edition/jurisdiction sensitivity | Low — these are basic, stable chemical-hazard facts (GHS classification), not subject to meaningful regional/edition variation for the core claim (flammable/toxic/corrosive), though exact GHS hazard-statement codes were not looked up. |
-| Unresolved problem | No single, official, directly-inspected SDS was cited. **Recommend attaching a specific manufacturer SDS (e.g., Fisher Scientific or Sigma-Aldrich, for both methanol and glacial acetic acid) as the formal `QUESTION_GOVERNANCE` source** rather than the general references used for this preliminary pass — a low-risk, easy fix since these are basic, undisputed hazard facts. |
+| Title | Safety Data Sheets: Methanol (Product 34860) and Acetic acid, glacial (Product ARK2183) |
+| Publisher | Sigma-Aldrich / MilliporeSigma (Merck KGaA) — manufacturer/vendor primary SDS documents |
+| Edition/date | Methanol SDS Version 6.4, Revision Date 03/13/2015; Glacial acetic acid SDS Version 6.1, Revision Date 10/17/2019; both directly fetched and read this correction round, 2026-08-10 |
+| Locator | Section 2 (Hazards Identification) of each SDS |
+| URL | `https://www.sigmaaldrich.com/US/en/sds/sigma/m3641` (methanol, CAS 67-56-1); `https://www.sigmaaldrich.com/US/en/sds/sigald/a6283` (glacial acetic acid, CAS 64-19-7) |
+| Retrieved | 2026-08-10 (this correction round; both PDFs downloaded and read directly, page by page, not summarized from search results) |
+| Source status (taxonomy, § Finding 3) | **`directly-inspected-and-adequate`** — upgraded this round from general converging secondary references to two directly-inspected, primary manufacturer SDS documents, per Finding 4. |
+| Directly inspected? | **Yes, this round, in full (Section 2 of each).** Methanol: GHS Classification — Flammable liquids (Category 2), H225; Acute toxicity, Oral (Category 3), H301; Acute toxicity, Inhalation (Category 3), H331; Acute toxicity, Dermal (Category 3), H311; STOT SE (Category 1), H370. Hazard statements quoted: H225 "Highly flammable liquid and vapour"; H301+H311+H331 "Toxic if swallowed, in contact with skin or if inhaled"; H370 "Causes damage to organs." Signal word: Danger. Glacial acetic acid: GHS Classification — Flammable liquids (Category 3), H226; Skin corrosion (Category 1A), H314; Serious eye damage (Category 1), H318. Hazard statements quoted: H226 "Flammable liquid and vapour"; H314 "Causes severe skin burns and eye damage." Signal word: Danger. |
+| Narrow claim supported | Methanol is classified flammable **and** toxic (Category 2 flammable liquid, Category 3 acute toxicity by three routes) — matching the item's "flammable/toxic" descriptor exactly. Glacial acetic acid is classified corrosive (Category 1A skin corrosion, Category 1 serious eye damage) — matching the item's "corrosive" descriptor. **One nuance surfaced by direct inspection, noted for Austin, not requiring a content change:** glacial acetic acid is *also* independently classified flammable (Category 3, H226) per its own SDS — the item's implicit one-hazard-per-chemical framing is a simplification (each chemical's *most distinguishing* hazard, not its *only* hazard), accurate as commonly taught but worth Austin's awareness. |
+| Edition/jurisdiction sensitivity | Low — GHS classification under 29 CFR 1910 (OSHA HCS); both are stable, non-controversial classifications for these specific, long-studied chemicals. |
+| Unresolved problem | None material, after this round's direct SDS inspection. |
 
 ## 12.4 Scientific-analysis proposal
 
-Keyed answer is correct under basic, well-established chemical-safety
-knowledge; not a scientifically disputed claim. Distractors (inert; strong
-oxidizers; radioactive) are all clearly, unambiguously wrong — arguably the
-least subtle distractor set in this pilot batch, which is appropriate for a
-difficulty-1 safety-recall item. **Confidence: high** on content;
-**moderate** on citation formality (general knowledge converging across
-several secondary sources, not one directly-opened primary SDS).
+Keyed answer is correct, now confirmed against two directly-inspected
+primary manufacturer SDS documents (§ 12.3), not general converging
+secondary knowledge. Distractors (inert; strong oxidizers; radioactive) are
+all clearly, unambiguously wrong. **Correction (this round, per Finding
+5):** the prior round flagged this as the item with the least plausible
+distractor set in the pilot (Gate B item 3) and the largest length gap in
+the batch (Gate B item 8, 62 vs. 10/21/16 chars) but recommended "Leave
+unchanged" for both, deferring the actual judgment call to Austin without
+resolving it. This round resolves both: § 12.7 proposes a complete
+distractor revision using real, plausible hazard-*pairing* errors (drawn
+from the same directly-inspected SDS data) in place of the absurd
+inert/oxidizer/radioactive set, which simultaneously improves distractor
+plausibility and substantially closes the length gap as a natural
+consequence of using real, matched-length hazard phrases — not by padding.
+**Confidence: high**, now grounded in primary SDS documents.
 
 ## 12.5 Gate B preliminary worksheet
 
@@ -1522,12 +1634,12 @@ several secondary sources, not one directly-opened primary SDS).
 | ---: | --- | --- | --- |
 | 1 | Exactly one defensible best answer | appears satisfied | |
 | 2 | Scientific correctness is separate | not applicable | |
-| 3 | Distractor plausibility | possible concern | The three distractors (inert / oxidizers / radioactive) are all quite implausible relative to the correct, specific, real hazard description — a strong learner could likely eliminate all three without knowing the specific correct hazards, by elimination/absurdity alone rather than by recalling the actual fact. Worth Austin's judgment on whether one distractor should be more subtly wrong (e.g., a plausible-but-incorrect *hazard pairing*, such as swapping which component is flammable vs. corrosive) |
+| 3 | Distractor plausibility | **fails preliminary review — corrected this round** | The three distractors (inert / oxidizers / radioactive) were all too implausible relative to the correct, specific, real hazard description — eliminable by absurdity alone. § 12.7 replaces them with plausible mispaired-hazard distractors built from the same real SDS-derived terms, resolving this per Finding 5 rather than deferring it |
 | 4 | Parallel construction | appears satisfied | |
 | 5 | Mutual distinguishability | appears satisfied | |
 | 6 | Grammar/stem-completion clues | appears satisfied | |
 | 7 | Repeated stem wording | appears satisfied | |
-| 8 | Conspicuously longer/more-qualified correct answer | possible concern | `uniquely-longest`, and the largest absolute gap in this batch (62 vs. 10/21/16 chars) — the key is roughly 3–6× longer than each distractor. Gate A/Gate B judgment call; the extra length is substantive (naming both components and both hazard classes precisely) rather than obvious padding, but this is the item where the length signal is most pronounced |
+| 8 | Conspicuously longer/more-qualified correct answer | **fails preliminary review — corrected this round** | Original: `uniquely-longest`, the largest absolute gap in this batch (62 vs. 10/21/16 chars). § 12.7's revision reuses the same two real hazard-phrase tokens ("flammable/toxic," 15 characters; "corrosive," 9 characters) across all four options, which mechanically narrows the spread to roughly 56–68 characters and ties the key with one distractor for longest — a direct, non-padded consequence of testing the real pairing rather than four unrelated absurd claims |
 | 9 | Absolute words | appears satisfied | "Both" appears in two wrong options (0, 2) and is accurate scoping, not an unintended cue |
 | 10 | Paired/opposite-option patterns | appears satisfied | |
 | 11 | "All/none," negative stems | not applicable | |
@@ -1540,19 +1652,50 @@ several secondary sources, not one directly-opened primary SDS).
 
 ## 12.6 Recommended disposition
 
-**Leave unchanged**, with item 3 (distractor plausibility — all three are
-quite easy to eliminate by elimination alone) and item 8 (largest length
-gap in the batch) both flagged explicitly for Austin's Gate B judgment.
-Per the task's own instruction, this packet does **not** recommend editing
-to rebalance length — item 3's plausibility question is a genuinely
-separate, content-quality consideration Austin may want to weigh
-independently of the length observation.
+**Edit in place** — corrected this round per Finding 5. The prior round
+identified two real Gate B concerns (distractor plausibility, length gap)
+and then recommended "Leave unchanged" for both, explicitly deferring the
+judgment call rather than making one. This round makes it: the distractors
+are revised (§ 12.7) to real, plausible hazard-*pairing* errors, grounded
+in the same directly-inspected SDS data as the keyed answer (§ 12.3), not
+invented for the purpose of length-matching — the improved length balance
+is a side effect of using real hazard terms consistently, not the goal.
+The stem, rationale, and keyed answer (option 1) are unchanged.
 
 ## 12.7 Proposed revision
 
-None proposed. If Austin's Gate B review concludes the distractors should
-be made more subtly incorrect (item 3), that is a deliberate item-writing
-judgment call this packet defers to him rather than pre-empting.
+**Proposed (packet-only; not applied to `index.html` or
+`QUESTION_GOVERNANCE` by this document — Austin's edit, if approved):**
+
+| Option | Current | Proposed |
+| --- | --- | --- |
+| 0 | Both inert | Methanol (corrosive) and glacial acetic acid (flammable/toxic) |
+| 1 (keyed) | Methanol (flammable/toxic) and glacial acetic acid (corrosive) | *(unchanged)* |
+| 2 | Both strong oxidizers | Methanol (flammable/toxic) and glacial acetic acid (flammable/toxic) |
+| 3 | Both radioactive | Methanol (corrosive) and glacial acetic acid (corrosive) |
+
+Proposed distractor feedback:
+
+- 0 — "This reverses the pairing — methanol is the flammable/toxic
+  component (SDS: Flam. Liq. 2, Acute Tox. 3, H225/H301/H311/H331); glacial
+  acetic acid is the corrosive one (SDS: Skin Corr. 1A, H314)."
+- 2 — "Glacial acetic acid's defining, distinguishing hazard is corrosivity
+  (Skin Corr. 1A, H314) — assigning it methanol's flammable/toxic profile
+  instead misses that."
+- 3 — "Methanol's defining, distinguishing hazard is flammability/toxicity
+  (Flam. Liq. 2, Acute Tox. 3) — assigning it the acid's corrosive profile
+  instead misses that."
+
+Rationale for the revision: replacing the absurd inert/oxidizer/radioactive
+distractors with plausible *mispaired* hazard descriptions (built from the
+same two real, SDS-confirmed hazard phrases, swapped or duplicated across
+the two chemicals) requires the learner to know the actual pairing, not
+just recognize which claims are absurd — directly addressing Gate B item 3.
+Because all four options now reuse the same two hazard-phrase tokens, the
+length spread narrows from 62/10/21/16 to roughly 56–68 characters with the
+key no longer uniquely longest, addressing Gate B item 8 as a byproduct of
+accuracy, not padding. The rationale, stem, and keyed answer are unchanged,
+preserving the item's stable ID and assessed intent.
 
 ## 12.8 Austin SME decision fields (pending)
 
@@ -1620,6 +1763,7 @@ topic (molecular/fish), difficulty 1, are supportable.
 | Locator | ISCN FISH-nomenclature page, "nuc ish"/"ish" definitions |
 | URL | `https://cytogenetics.mlsascp.com/iscn.html` |
 | Retrieved | 2026-08-10 |
+| Source status (taxonomy, § Finding 3) | **`directly-inspected-but-secondary-or-incomplete`** — fully and directly fetched, but a secondary restatement of ISCN convention, not the ISCN primary text itself. |
 | Directly inspected? | **Yes**, fetched and quoted directly: *"FISH results have their own specific nomenclature, starting with `nuc ish` (Nuclear Interphase FISH) or `ish` (Metaphase FISH)."* |
 | Narrow claim supported | `nuc ish` denotes nuclear/interphase FISH; `ish` alone denotes metaphase FISH — matching the keyed answer exactly and directly. |
 | Edition/jurisdiction sensitivity | **High in principle** — this is literally ISCN (*International System for Human Cytogenomic Nomenclature*) notation, an internationally standardized, periodically revised nomenclature system (current edition: ISCN 2024). The *specific* `nuc ish`/`ish` convention tested here has been stable across recent editions to this document's knowledge, but that continuity was **not independently verified against the actual ISCN 2024 text**, which is a paid Karger publication and was not accessible this session. |
@@ -1648,7 +1792,7 @@ copy directly.
 | 1 | Exactly one defensible best answer | appears satisfied | |
 | 2 | Scientific correctness is separate | not applicable | |
 | 3 | Distractor plausibility | appears satisfied | Option 0 (the exact reversal) is a highly realistic learner error; 2/3 are plausible surface-level guesses |
-| 4 | Parallel construction | possible concern | Options 0/1 share the fill-in-the-blank format; options 2/3 break that format (2 supplies unrelated terms, 3 restates the pair as "two stains" rather than filling both blanks) — worth a look, though each remains clearly wrong regardless |
+| 4 | Parallel construction | appears satisfied *(reviewed under Finding 5, no revision)* | Options 0/1 share the fill-in-the-blank format; options 2/3 break that format (2 supplies unrelated terms, 3 restates the pair as "two stains" rather than filling both blanks) — reviewed and judged acceptable: each remains clearly and unambiguously wrong regardless of format, and 2/3 are correctly testing a different kind of misconception (wrong modality; wrong category) than the 0/1 reversal pair, not a construction defect; no revision proposed |
 | 5 | Mutual distinguishability | appears satisfied | |
 | 6 | Grammar/stem-completion clues | appears satisfied | |
 | 7 | Repeated stem wording | appears satisfied | "FISH" appears in the stem itself, applying equally to all options, not a one-sided clue |
@@ -1697,56 +1841,134 @@ declaration: **PENDING** · Findings: **PENDING** · Approval/rejection:
 
 # Packet-wide summaries
 
-## Disposition table (13 rows)
+## Independent-review correction round (2026-08-10, session 2)
 
-| ID | Preliminary disposition | Primary open item |
+This section, and every "corrected this round" / "revised this round" note
+throughout sections 1–13 above, was added in a second, independent-review
+correction pass over the original packet (session 1, 2026-08-10). That
+first pass is preserved as history everywhere it was still accurate; where
+it was wrong or incomplete, this pass says so explicitly rather than
+silently overwriting it. Seven specific findings drove this pass:
+`m15-q1` had a defensible second answer (Gate B item 1 defect, now fixed);
+`m1-q1`'s Molecular-percentage discrepancy needed resolving against the
+primary ASCP guideline; the original "5 of 13 unresolved" source count did
+not reconcile with its own summary; four items' source dossiers were
+incomplete (`m1-q3`, `m12-q6`, `m16-q1`, `m2-q3`); the "12 of 13 leave
+unchanged" disposition table was too permissive given the concerns already
+on record; the proposed Austin-review order had a factual error; and the
+committed packet had trailing whitespace with an inadequate diff-check.
+The corrected disposition table, source-status taxonomy, and all other
+packet-wide summaries below reflect the **current, corrected state** —
+mechanically recomputed from the 13 per-item sections above, not carried
+forward from session 1.
+
+## Source-status taxonomy (Finding 3)
+
+Every item now carries exactly one of four mutually exclusive labels,
+applied per-item in each item's own § *N*.3 "Source status (taxonomy)"
+row. A WebSearch result summary is never counted as "directly inspected" —
+only a genuine fetch-and-read of the actual source text counts.
+
+- **`directly-inspected-and-adequate`** — the actual source text was
+  fetched and read this correction round (or, for `m4-q1`/`m6-q1`/`m6-q4`,
+  in session 1, with the fetch quoted verbatim), and the source itself is a
+  primary/official/authoritative reference for the claim.
+- **`directly-inspected-but-secondary-or-incomplete`** — the actual source
+  text was fetched and read, but the source itself is a non-official,
+  independently-authored, or single-institution secondary reference, or
+  only partially covers the claim.
+- **`repository-source-appropriate`** — the claim is about this
+  application's own behavior; this repository's own docs/implementation
+  are the correct and sufficient source type.
+- **`source unresolved`** — no source adequate to the claim was directly
+  inspected this session; a real, named gap remains, not filled by
+  inference.
+
+| ID | Source status | Notes |
 | --- | --- | --- |
-| `m1-q1` | Leave unchanged | Blueprint-percentage source discrepancy (Molecular range) unresolved |
+| `m1-q1` | `source unresolved` | Content resolved via Austin-supplied primary-source citation (§ 1.3), not by this document's own inspection — see that section for the distinction |
+| `m1-q2` | `repository-source-appropriate` | This repository's own `README.md`/`docs/ARCHITECTURE.md` and implementation |
+| `m1-q3` | `directly-inspected-and-adequate` | 42 CFR § 493.1276, directly fetched this round (§ 3.3) |
+| `m2-q1` | `directly-inspected-but-secondary-or-incomplete` | Meadville Medical Center's own specimen-requirement page, directly fetched, but one hospital's local policy, not a national standard |
+| `m2-q3` | `directly-inspected-and-adequate` | Joint Commission NPSG.01.01.01, primary document directly fetched this round (§ 5.3) |
+| `m4-q1` | `directly-inspected-but-secondary-or-incomplete` | `cytogenetics.mlsascp.com`, directly fetched, independently-authored specialist supplement |
+| `m6-q1` | `directly-inspected-but-secondary-or-incomplete` | Same site, single source only |
+| `m6-q4` | `directly-inspected-but-secondary-or-incomplete` | Same site, closest one-to-one match found in the pilot |
+| `m7-q2` | `source unresolved` | No source located for the exact three-term hierarchy; quarantined |
+| `m12-q6` | `directly-inspected-and-adequate` | Kang et al. 2016, *Chin J Cancer*, PMC4896164, one specific peer-reviewed locator directly fetched this round (§ 10.3) |
+| `m15-q1` | `directly-inspected-and-adequate` | Wolff et al. 2007, *J Mol Diagn*, PMC1867444, full text directly fetched this round (§ 11.3) |
+| `m16-q1` | `directly-inspected-and-adequate` | Sigma-Aldrich SDS (methanol, glacial acetic acid), directly fetched this round (§ 12.3) |
+| `final-q33` | `directly-inspected-but-secondary-or-incomplete` | Same specialist site; ISCN primary text itself not accessed |
+
+**Mechanically recomputed totals: 5 of 13 `directly-inspected-and-adequate`
+(`m1-q3`, `m2-q3`, `m12-q6`, `m15-q1`, `m16-q1`); 5 of 13
+`directly-inspected-but-secondary-or-incomplete` (`m2-q1`, `m4-q1`,
+`m6-q1`, `m6-q4`, `final-q33`); 1 of 13 `repository-source-appropriate`
+(`m1-q2`); 2 of 13 `source unresolved` (`m1-q1`, `m7-q2`).** 5+5+1+2 = 13,
+matching `FROZEN_PILOT_MANIFEST` exactly, counted by distinct stable ID,
+not by numbered group. This retires the session-1 packet's internally
+inconsistent "5 of 13 items carry at least one honestly unresolved sourcing
+question" claim (which named nine-plus distinct IDs in its own supporting
+list) — **the correct, strict count of `source unresolved` items is 2, not
+5**; the session-1 "5" conflated `source unresolved` with the separate,
+non-disqualifying `directly-inspected-but-secondary-or-incomplete` category.
+
+## Disposition table (13 rows, recomputed this round)
+
+| ID | Disposition | Primary open item |
+| --- | --- | --- |
+| `m1-q1` | Leave unchanged | Resolved this round via Austin-supplied primary-source figures (§ 1.3/1.6); this document's own PDF fetch still fails (403) |
 | `m1-q2` | Leave unchanged | None material |
-| `m1-q3` | Leave unchanged | Cytogenetics-specific specialist citation not directly inspected (paywalled) |
+| `m1-q3` | **Edit in place** *(changed this round)* | Distractor-3 feedback revision proposed (§ 3.7), grounded in 42 CFR § 493.1276 |
 | `m2-q1` | Leave unchanged | None material |
 | `m2-q3` | Leave unchanged | None material |
 | `m4-q1` | Leave unchanged | None material |
-| `m6-q1` | Leave unchanged | Only one specialist source found; a second would strengthen |
-| `m6-q4` | Leave unchanged | No public official (e.g. CAP) citation located; specialist site is strong secondary |
+| `m6-q1` | Leave unchanged | Length/pairing concerns resolved this round with evidence-backed explanations (§ 7.5), no revision needed |
+| `m6-q4` | Leave unchanged | No public official (e.g. CAP) citation located; specialist site remains the closest match found |
 | `m7-q2` | **Quarantine pending evidence** | No source confirms the exact three-term nested hierarchy |
-| `m12-q6` | Leave unchanged | Trivial stray empty-feedback-key cleanup only |
-| `m15-q1` | Leave unchanged | Summary-level source inspection only, not full-text |
-| `m16-q1` | Leave unchanged | No primary SDS directly inspected; general chemical-safety knowledge only |
-| `final-q33` | Leave unchanged | ISCN primary text itself not directly inspected (paywalled) |
+| `m12-q6` | **Edit in place (structural only)** *(changed this round)* | Stray empty-feedback-key removal proposed (§ 10.7); zero learner-visible content change |
+| `m15-q1` | **Edit in place** *(changed this round)* | Option 2 and its feedback revised (§ 11.7) — former option had a second defensible answer (Finding 1) |
+| `m16-q1` | **Edit in place** *(changed this round)* | Distractors 0/2/3 and feedback revised (§ 12.7), grounded in directly-inspected SDS data |
+| `final-q33` | Leave unchanged | ISCN primary text itself not directly inspected (paywalled); secondary source adequate for now |
 
-**12 of 13 items: Leave unchanged (preliminary). 1 of 13 items
-(`m7-q2`): Quarantine pending evidence.** No item is recommended for
-"Edit in place," "Supersede with a new stable ID," or "Insufficient
-evidence to recommend" — the pilot batch's content, as currently authored,
-appears preliminarily well-constructed and scientifically defensible across
-every item this document could research. This is a narrower, more
-favorable finding than QL-033 itself might suggest, and is exactly why the
-distinction between item-level scientific defensibility (this document's
-subject) and bank/form-level statistical cueing (`docs/ASSESSMENT_VALIDITY.md`
-Gate A, unaffected by this document) matters: an item can be scientifically
-sound and still contribute to a bank-level cueing pattern, and Gate A's
-correction is separate, later work this document does not perform or
-substitute for.
+**Recomputed totals: 8 of 13 items Leave unchanged (`m1-q1`, `m1-q2`,
+`m2-q1`, `m2-q3`, `m4-q1`, `m6-q1`, `m6-q4`, `final-q33`). 4 of 13 items
+Edit in place (`m1-q3`, `m12-q6`, `m15-q1`, `m16-q1`), each with a complete
+proposed revision in its own § *N*.7. 1 of 13 items Quarantine pending
+evidence (`m7-q2`).** 8+4+1 = 13. This replaces the session-1 packet's "12
+of 13 Leave unchanged" claim, which this round's independent review found
+too permissive given the concerns already on record for four of those
+twelve items (Finding 5). No item is recommended for "Supersede with a new
+stable ID" or "Insufficient evidence to recommend" — every proposed
+revision preserves its item's stable ID, stem, rationale, and keyed answer,
+changing only a distractor, its feedback, or (for `m12-q6`) a
+non-displayed data key.
 
-## Sources used, grouped by authority level
+## Sources used, grouped by authority level (recomputed this round)
 
 **1. Current primary standards / official examination guidance:**
 - ASCP BOC *CG(ASCP) and CG(ASCPi) Examination Content Guideline*, rev.
-  2025-09-25 (`m1-q1` — existing repository citation relied upon; primary
-  PDF not directly re-fetched this session, 403)
-- The Joint Commission NPSG.01.01.01 (`m2-q3` — official standards-FAQ
-  summary reviewed)
+  2025-09-25 (`m1-q1` — Austin-supplied figure relied upon this round;
+  this document's own fetch still returns 403, three attempts)
+- The Joint Commission, *National Patient Safety Goals — Effective January
+  2026 for the Laboratory Program*, NPSG.01.01.01 (`m2-q3` — primary PDF
+  directly fetched and quoted this round)
 
-**2. Regulatory guidance:**
-- CMS/CLIA laboratory-developed-test validation framework, general
-  principle (`m1-q3`)
+**2. Primary federal/regulatory text, directly inspected:**
+- 42 CFR § 493.1276, "Standard: Clinical cytogenetics" (CLIA) (`m1-q3` —
+  full text directly fetched this round, cytogenetics-specific)
+- Manufacturer Safety Data Sheets, Sigma-Aldrich: methanol (Product 34860)
+  and glacial acetic acid (Product ARK2183) (`m16-q1` — both directly
+  fetched and read this round)
 
-**3. Peer-reviewed primary/secondary literature (summary-level review):**
-- PLOS Genetics, PMC/NIH, ScienceDirect Topics on t(9;22)/Philadelphia
-  chromosome structural cytogenetics (`m12-q6`)
-- *Journal of Molecular Diagnostics* (AMP) FISH testing guidance
-  (`m15-q1`)
+**3. Peer-reviewed primary literature, directly inspected:**
+- Kang ZJ, et al., "The Philadelphia chromosome in leukemogenesis,"
+  *Chinese Journal of Cancer*, 2016, PMC4896164 (`m12-q6` — full text
+  directly fetched this round, one specific locator)
+- Wolff DJ, et al., "Guidance for Fluorescence in Situ Hybridization
+  Testing in Hematologic Disorders," *J Mol Diagn* 2007;9(2):134–143,
+  PMC1867444, DOI 10.2353/jmoldx.2007.060128 (`m15-q1` — full text
+  directly fetched twice this round)
 
 **4. Established specialist references / this repository's own
 documentation:**
@@ -1756,89 +1978,94 @@ documentation:**
   by Brett M. Rice, explicitly a *supplement* to the official ASCP BOC
   reading list, not an ASCP publication) — the single most-used source in
   this packet (`m4-q1`, `m6-q1`, `m6-q4`, `final-q33`)
-- Public clinical-laboratory specimen-requirement pages (Meadville Medical
-  Center, directly fetched; OhioHealth/Wake Forest Baptist, corroborating
-  search snippets only) (`m2-q1`)
-- General chemical-safety/fixative-composition references (`m16-q1`)
+- Meadville Medical Center's own public specimen-requirement page, directly
+  fetched (`m2-q1`); OhioHealth/Wake Forest Baptist corroborating search
+  snippets only, not separately fetched
 
 **Not used / not locatable in accessible public form this session:** the
 *AGT Cytogenetics Laboratory Manual* (Wiley/Association of Genetic
 Technologists — subscription-gated); an official CAP Cytogenetics
 Checklist (member/subscriber-gated); the ISCN 2024 book itself (Karger,
-purchased publication).
+purchased publication); the ASCP BOC content-guideline PDF itself (403
+Forbidden on every direct-fetch attempt, both rounds).
 
-## Unresolved source questions
+## Unresolved source questions (recomputed this round, strict definition)
+
+Strictly the two items labeled `source unresolved` in the taxonomy above —
+this is the mechanically correct count; see that table for why the
+session-1 packet's "5 of 13" figure was wrong.
 
 1. **`m7-q2`** — no source located confirms the exact
    "countable > analyzable > karyotypable" three-term nested hierarchy.
-2. **`m1-q1`** — a genuine discrepancy between this repository's existing
-   Molecular-domain citation (15–25%) and a third-party site's figure
-   (15–20%) was found and is not resolved; the primary PDF could not be
-   directly re-fetched this session (403 Forbidden).
-3. **`final-q33`** — relies on a secondary description of ISCN convention,
-   not the ISCN text itself.
-4. **`m1-q3`, `m2-q1`, `m4-q1`, `m6-q1`** — the ideal cytogenetics-specific
-   specialist reference (*AGT Cytogenetics Laboratory Manual*) exists but
-   is subscription-gated and was not directly inspected; each of these
-   items currently rests on a corroborated but non-primary citation.
-5. **`m6-q4`, `m16-q1`** — an official CAP checklist item / a manufacturer
-   SDS respectively would be stronger formal citations than what was
-   located; neither was accessible in public form this session.
+   Quarantined pending evidence.
+2. **`m1-q1`** — this document's own tooling cannot directly fetch the
+   primary ASCP PDF (403 Forbidden, three attempts this round); the item's
+   content is treated as resolved this round only via Austin's directly
+   supplied primary-source figures (§ 1.3), a distinct and narrower
+   resolution than this document independently verifying the source
+   itself.
 
-**5 of 13 items carry at least one honestly unresolved sourcing question.**
-None of the five is treated as resolved by inference — each is stated
-plainly above and in the item's own section 3.
+**Separately, five items carry a directly-inspected but secondary/
+incomplete source** (`m2-q1`, `m4-q1`, `m6-q1`, `m6-q4`, `final-q33` — see
+the taxonomy table above) — each has adequate direct evidence for its
+narrow claim, and none is "unresolved" in the sense of the two items above;
+a stronger formal citation would still improve each for eventual
+`QUESTION_GOVERNANCE` entry.
 
-## Questions needing the most Austin judgment
+## Questions needing the most Austin judgment (recomputed this round)
 
-Ranked by this document's own assessment of judgment burden, not just
-sourcing gaps:
+Ranked by remaining judgment burden after this round's corrections — most
+prior judgment calls were resolved to a concrete revision or an
+evidence-backed explanation (Finding 5), so this list is shorter than
+session 1's:
 
-1. **`m7-q2`** — the quarantined item; needs Austin's direct domain
+1. **`m7-q2`** — still the quarantined item; needs Austin's direct domain
    knowledge to confirm or correct the terminology itself, likely faster
    than further literature search.
-2. **`m1-q3`** — the subtle "regulatory requirement" distractor nuance
-   (3.4) benefits from a working item-writer's judgment on whether it
-   reads as a fair test or a trick.
-3. **`m16-q1`** — whether the three current distractors are appropriately
-   plausible or too easily eliminated by elimination alone (12.5, item 3).
-4. **`m1-q1`** — resolving the blueprint-percentage discrepancy against
-   the primary guideline directly.
-5. **`m6-q1`, `m15-q1`, `m16-q1`** (length-gap items) — each flagged for a
-   Gate B judgment call on whether the correct answer's extra length is
-   substantive (this document's preliminary view) or should be tightened.
+2. **`m1-q3`, `m12-q6`, `m15-q1`, `m16-q1`** — each now carries a complete
+   proposed revision (§ *N*.7); Austin's judgment is accept / reject /
+   revise on specific proposed text, not an open-ended "is this okay"
+   question.
+3. **`m6-q4`** — the difficulty-tag question (§ 8.2, whether it should be
+   difficulty ≥2) remains open and unaffected by this round's sourcing
+   work.
 
-## Questions likely safe to leave unchanged
+## Questions likely safe to leave unchanged (recomputed this round)
 
-`m1-q2`, `m2-q1`, `m2-q3`, `m4-q1`, `m12-q6` — each has at least one
-directly-inspected or multiply-corroborated source, a single clearly
-defensible answer, and no material open question beyond routine formal
-source-checking. `m4-q1` in particular is a strong positive example
-(perfectly length-balanced across all four options, zero possible length
-cue, clean sourcing).
+`m1-q1`, `m1-q2`, `m2-q1`, `m2-q3`, `m4-q1`, `m6-q1`, `m6-q4`, `final-q33`
+— matching the disposition table's "Leave unchanged" rows exactly. Each has
+at least one directly-inspected or multiply-corroborated source, a single
+clearly defensible answer, and no open Gate B concern left unresolved to a
+concrete explanation. `m4-q1` remains the strongest positive example
+(perfectly length-balanced, zero possible length cue, clean sourcing).
 
-## Questions likely requiring revision
+## Questions likely requiring revision (recomputed this round)
 
-None, on this document's preliminary analysis — see the disposition table
-above. If Austin's actual review disagrees with any preliminary
-"appears satisfied" verdict above, that disagreement itself is valuable
-signal about where this document's AI-assisted analysis needs correction,
-not evidence the item is fine.
+**`m1-q3`, `m12-q6`, `m15-q1`, `m16-q1`** — matching the disposition
+table's "Edit in place" rows exactly, replacing session 1's "None, on this
+document's preliminary analysis" claim, which this round's independent
+review found too permissive (Finding 5). Each item's own § *N*.7 contains
+the complete proposed revision for Austin's accept/reject/revise decision;
+none of the four proposed revisions changes a stem, rationale, keyed
+answer, or stable ID.
 
 ## Questions potentially requiring supersession or quarantine
 
 - **`m7-q2`** — recommended **Quarantine pending evidence** (source gap,
-  not a suspected content error).
-- No item is recommended for supersession (a new stable ID) — nothing
-  found in this research suggests any item's assessed intent needs to
-  change, only (for one item) that its evidentiary support needs to be
-  established or (for several items) formally strengthened.
+  not a suspected content error). Unchanged this round.
+- No item is recommended for supersession (a new stable ID) — every
+  proposed revision this round preserves its item's assessed intent
+  exactly.
 
-## Proposed order for Austin's review
+## Proposed order for Austin's review (Finding 6 correction)
 
 Deliberately not easiest-first — starts with a small mix chosen to
 pressure-test the review process itself before committing to a fixed order
-for the rest:
+for the rest. **Correction (this round): the session-1 list wrongly
+labeled `m4-q1` "(already covered above)" among the remaining ten items —
+`m4-q1` was never among the first three. That incorrect note is removed
+below; all 13 stable IDs now appear exactly once, matching
+`FROZEN_PILOT_MANIFEST`.**
 
 1. `m2-q1` — simple, cleanly sourced, a good process warm-up.
 2. `m7-q2` — the hardest case, reviewed early rather than saved for last,
@@ -1847,51 +2074,65 @@ for the rest:
 3. `m6-q4` — the best-sourced, most complex item (negative stem, richest
    source match) — a good test of whether the packet's format holds up for
    a "everything mostly works" case, not just simple ones.
-4. Remaining 10 items in canonical frozen-pilot order (`m1-q1`, `m1-q2`,
-   `m1-q3`, `m2-q3`, `m4-q1` *(already covered above)*, `m6-q1`, `m12-q6`,
-   `m15-q1`, `m16-q1`, `final-q33`), so the rest of the pass is
-   predictable and easy to track against the table above.
+4. Remaining 10 items in canonical frozen-pilot order: `m1-q1`, `m1-q2`,
+   `m1-q3`, `m2-q3`, `m4-q1`, `m6-q1`, `m12-q6`, `m15-q1`, `m16-q1`,
+   `final-q33`. Several of these ten now carry a proposed revision
+   requiring an accept/reject/revise decision rather than just a source
+   sign-off — see "Questions needing the most Austin judgment" above for
+   which ones, so Austin can budget time accordingly without this list
+   reordering the canonical pass itself.
 
-## Estimated review burden per question
+## Estimated review burden per question (recomputed this round)
 
 **Planning estimates only — not measured, not a commitment, and likely to
-be wrong in either direction once Austin actually starts:**
+be wrong in either direction once Austin actually starts. Updated this
+round where sourcing work is now complete but a proposed revision now
+needs a decision instead:**
 
 | ID | Estimate | Basis |
 | --- | ---: | --- |
 | `m1-q2` | 5–10 min | Repo-behavior fact, already directly verifiable |
 | `m2-q1` | 10–15 min | Clean single-answer clinical fact |
-| `m2-q3` | 10–15 min | Clean single-answer safety standard |
+| `m2-q3` | 10–15 min | Primary NPSG document now directly inspected; clean single-answer safety standard |
 | `m4-q1` | 10–15 min | Clean, well-sourced, no flags |
-| `m12-q6` | 10–15 min | Clean content + trivial cleanup note |
-| `m1-q1` | 15–20 min | Needs primary-PDF re-verification |
-| `m6-q1` | 15–20 min | Needs a second corroborating source |
-| `m15-q1` | 15–20 min | Full-text re-check of one guidance article recommended |
-| `m16-q1` | 15–20 min | Distractor-plausibility judgment + SDS citation |
-| `final-q33` | 15–20 min | ISCN primary-text check recommended |
-| `m1-q3` | 20–25 min | Distractor-nuance judgment + specialist citation |
+| `m6-q1` | 10–15 min | Length/pairing concerns resolved this round with explanations, no revision to review |
+| `m1-q1` | 10–15 min | Resolved this round via Austin-supplied figure; confirm the § 1.3 caveat reads clearly |
+| `m12-q6` | 10–15 min | Peer-reviewed locator now in hand; review is a one-line structural-cleanup accept/reject |
+| `final-q33` | 15–20 min | ISCN primary-text check still recommended |
+| `m1-q3` | 15–20 min | Review the proposed distractor-3 feedback revision (§ 3.7) against 42 CFR § 493.1276 |
+| `m16-q1` | 15–20 min | Review the proposed distractor/feedback revision (§ 12.7) against the SDS data |
+| `m15-q1` | 20–25 min | Review the proposed option-2/feedback revision (§ 11.7) against Wolff et al.; this is the item with the corrected scientific error (Finding 1) |
 | `m6-q4` | 20–25 min | Richest item; difficulty-tag question; CAP citation search |
 | `m7-q2` | 40+ min | Source resolution likely requires Austin's own expertise or new research, not just review |
 
-**Total planning estimate: roughly 3.5–4.5 hours across all 13 items**,
+**Total planning estimate: roughly 3–4 hours across all 13 items**,
 excluding any time spent actually populating `QUESTION_GOVERNANCE` records
-once Austin's conclusions are final (a separate, later step).
+or applying accepted revisions once Austin's conclusions are final
+(separate, later steps).
 
-## Stop/go recommendation
+## Stop/go recommendation (recomputed this round)
 
 **Recommendation: proceed to Austin's question-by-question review of this
-packet. Do not proceed to actual content editing, `QUESTION_GOVERNANCE`
-population, or any lifecycle promotion until that review is complete for
-all 13 items**, and do not treat this document's "Leave unchanged"
-preliminary calls as authorization to skip Austin's review of those items
-— every one still needs his explicit sign-off per the pending fields in
-each item's sections 8–9.
+corrected packet, focusing first on the one still-quarantined item
+(`m7-q2`) and the four items now carrying a concrete proposed revision
+(`m1-q3`, `m12-q6`, `m15-q1`, `m16-q1`). Do not proceed to actual content
+editing, `QUESTION_GOVERNANCE` population, or any lifecycle promotion until
+that review is complete for all 13 items** — including the eight "Leave
+unchanged" items, which still need Austin's explicit sign-off per the
+pending fields in each item's sections 8–9, not just this document's
+preliminary analysis.
 
-This packet's own preliminary finding — that 12 of 13 pilot items appear
-scientifically defensible as currently written, with the 13th needing a
-sourcing answer rather than a content fix — is a **reason for cautious
-optimism about batched-remediation step 4 ("rewrite only where
-justified")**, not a signal to skip Gate B or independent review. The
-approved-independent-reviewer registry remains empty; **no item in this
-pack, however clean its preliminary analysis, can reach `release-qualified`
-until that separate, real second-person review exists.**
+This round's independent-review correction found one genuine scientific/
+item-validity error (`m15-q1`, Finding 1), one important primary-source
+resolution (`m1-q1`, Finding 2), a source-accounting error in the original
+packet's own counts (Finding 3), four incomplete source dossiers now
+closed with directly-inspected primary or peer-reviewed sources (Finding
+4), three items where a deferred judgment call is now a concrete decision
+(Finding 5), one review-order factual error (Finding 6), and one committed
+whitespace/diff-check defect (Finding 7, see the end of this document for
+the exact validation performed). **None of this constitutes SME review,
+independent review, or `QUESTION_GOVERNANCE` population — the
+approved-independent-reviewer registry remains empty, all 153 questions
+remain `draft`, and no item in this pack, however clean its analysis, can
+reach `release-qualified` until that separate, real second-person review
+exists.**
