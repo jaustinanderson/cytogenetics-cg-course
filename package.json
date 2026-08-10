@@ -5,11 +5,12 @@
   "description": "Validation tooling for the Cytogenetics CG(ASCP) Study Course.",
   "type": "module",
   "scripts": {
-    "test": "npm run validate && npm run test:behavior && npm run test:governance && npm run test:assessment-cues && npm run test:verify-deployed-revision",
+    "test": "npm run validate && npm run test:behavior && npm run test:governance && npm run test:assessment-cues && npm run test:public-safety && npm run test:verify-deployed-revision",
     "validate": "node tests/validate-course.mjs",
     "test:behavior": "node tests/dom-behavior.mjs",
     "test:governance": "node tests/question-governance.mjs",
     "test:assessment-cues": "node tests/assessment-cue-audit.mjs",
+    "test:public-safety": "node tests/public-safety.mjs",
     "test:verify-deployed-revision": "node tests/verify-deployed-revision.mjs",
     "test:e2e": "playwright test",
     "test:e2e:install": "playwright install --with-deps chromium",

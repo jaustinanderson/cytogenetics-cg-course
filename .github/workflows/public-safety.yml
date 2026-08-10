@@ -1,0 +1,36 @@
+name: Public safety
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  privacy-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the exact revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Scan files and new commit metadata
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          # Range resolution (validation, the zero-base branch-creation
+          # policy, a targeted fetch retry, and the fail-closed behavior
+          # when a nonzero base cannot be resolved) is delegated entirely
+          # to the scanner's own resolve_commit_range() -- the single,
+          # regression-tested implementation this workflow and
+          # tests/public-safety.mjs both exercise. This step no longer
+          # computes or narrows the range itself.
+          python3 scripts/check_public_safety.py --base "${BASE_SHA}" --head "${HEAD_SHA}"
