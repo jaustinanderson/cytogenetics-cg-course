@@ -1471,15 +1471,16 @@ single bulk rewrite of the bank.
   the question bank; advance question governance for at least the items any
   early diagnostic surface would use (B.2); design (not necessarily fully
   populate) the `diagnosticEligible` derivation model (B.2).
-- **Steps 1-3 proposed (Issue #24, draft PR, not yet merged):**
+- **Steps 1-3 delivered (Issue #24, merged via PR #26 as commit
+  `42a46d62b111ba11072059e40115972620b5f406`):**
   `docs/ASSESSMENT_VALIDITY.md` is the concrete implementation of this
   phase's first three steps — an independently reproduced, frozen
   baseline; the Gate A statistical thresholds (with cited, inspected
   sources) and the Gate B item-review rubric; and a deterministic
-  13-question pilot batch. See `docs/QUALITY_LOG.md` QL-036 for the full
-  delivery record. No question content changed; the bank still fails
-  Gate A; steps 4-9 (the actual pilot rewrite, review, and scale-up)
-  remain unstarted.
+  13-question pilot batch. See `docs/QUALITY_LOG.md` QL-036 through
+  QL-042 for the full delivery record. No question content changed; the
+  bank still fails Gate A; steps 4-9 (the actual pilot rewrite, review,
+  and scale-up) remain unstarted.
 - **Explicit exclusions:** no diagnostic/adaptive feature ships in this
   phase; this phase is entirely about the assessment bank itself. Concept
   mapping (Phase 2), independent-review-registry population beyond what a
@@ -1996,15 +1997,18 @@ themselves real, not-yet-done design work, required before the
 human/scientific item-rewriting judgment the task also needs. This task is
 **not begun** by this roadmap PR.
 
-**Update (Issue #24, draft PR, not yet merged):** Phase 0 steps 1-3 — the
+**Update (Issue #24, merged via PR #26 as commit
+`42a46d62b111ba11072059e40115972620b5f406`):** Phase 0 steps 1-3 — the
 design work this section identified as still needed — have since been
-proposed: `docs/ASSESSMENT_VALIDITY.md` and `scripts/assessment-cue-audit.mjs`
+delivered: `docs/ASSESSMENT_VALIDITY.md` and `scripts/assessment-cue-audit.mjs`
 independently reproduce the frozen baseline, define Gate A's thresholds
 (with cited sources) and the Gate B rubric, and select a deterministic
-pilot batch. See `docs/QUALITY_LOG.md` QL-036. **Phase 0 as a whole
-remains incomplete** — no question content has been rewritten, the bank
-still fails Gate A, and steps 4-9 are the next recommended task once this
-foundation is independently reviewed and merged.
+pilot batch. See `docs/QUALITY_LOG.md` QL-036 through QL-042. **Phase 0 as
+a whole remains incomplete** — no question content has been rewritten, the
+bank still fails Gate A, QL-033 is not marked corrected, and steps 4-9 are
+the next recommended task. `docs/PHASE_0_PILOT_REVIEW_PACKET.md` is
+AI-assisted preparatory research toward steps 4-5, not a completed
+rewrite, review, or lifecycle promotion.
 
 ---
 
