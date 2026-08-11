@@ -2105,19 +2105,21 @@ declaration: **PENDING** · Findings: **PENDING** · Approval/rejection:
 ## AI-assisted adversarial correction pass (2026-08-10, session 2)
 
 **Terminology note (added in session 4; applies retroactively to every
-heading and description below):** every correction pass described in this
-"Packet-wide summaries" section — sessions 2, 3, and 4 — was an
-**AI-assisted adversarial correction pass over this document's own prior
-output**, not the project's governance-defined independent human
-second-person review. Earlier session headings and prose in this section
-used phrases like "independent-review correction round" and "a third,
-independent... review" to describe these passes; that wording is corrected
-throughout this section (Finding 1, session 4) because it could be
-confused with the governance lifecycle's `Independent-review fields` and
-the approved-independent-reviewer registry, which remain entirely separate
-and still empty. Agreement between successive AI-assisted passes — or
-between different AI systems — is not scientific validation and is not
-governance-recognized independent review; it is one document's own,
+heading and description below, and — per session 8's own strictly minimal
+accounting correction — now covers every AI-assisted correction pass
+through session 8, not only sessions 2–4):** every correction pass
+described in this "Packet-wide summaries" section — sessions 2 through 8
+— was an **AI-assisted adversarial correction pass over this document's
+own prior output**, not the project's governance-defined independent
+human second-person review. Earlier session headings and prose in this
+section used phrases like "independent-review correction round" and "a
+third, independent... review" to describe these passes; that wording is
+corrected throughout this section (Finding 1, session 4) because it could
+be confused with the governance lifecycle's `Independent-review fields`
+and the approved-independent-reviewer registry, which remain entirely
+separate and still empty. Agreement between successive AI-assisted passes
+— or between different AI systems — is not scientific validation and is
+not governance-recognized independent review; it is one document's own,
 repeated, adversarial self-audit, which is useful but categorically
 different from a human second-person review.
 
@@ -2585,8 +2587,8 @@ Do not proceed to actual content editing, `QUESTION_GOVERNANCE`
 population, or any lifecycle promotion until Austin's SME review (step 3)
 is complete for all 13 items.
 
-This document has now been through five AI-assisted adversarial
-correction passes (sessions 2 through this session). **Terminology
+This document has now been through seven AI-assisted adversarial
+correction passes (sessions 2 through 8). **Terminology
 correction (an earlier session's Finding 1): earlier sessions' headings and prose
 in this "Packet-wide summaries" section described these passes as
 "independent-review correction rounds" and "independent... review." That
@@ -2621,20 +2623,49 @@ throughout; and two smaller documentation defects in `m1-q2` and `m15-q1`.
 Session 5 found that `m16-q1`'s GHS-scoped stem (session 4's own fix)
 implied an exhaustive classification list, silently omitting methanol's
 STOT SE 1 classification — corrected by narrowing the stem to "principal"
-classifications; and fixed a stale Gate B length note. **This session
-(the sixth pass) found session 5's own "principal" fix inadequate: it
-supplied no objective rule for what counts as "principal," so it did not
-actually resolve the completeness concern it was meant to fix — corrected
-by replacing the scoping word entirely with an explicitly non-exhaustive
-"one additional classification" question. This session also found that
-session 5's own Gate B note contained a mathematical error — it claimed
-the 99/99/88/110-character proposal's key was "tied for longest," when
-option 3 (110 characters) was in fact uniquely longest — corrected and
-explicitly acknowledged rather than silently dropped. Finally, this
-session found that an earlier session's "final read-only verification...
-complete" claim was premature, since this session's own independent check
-of that exact commit found the two defects just described; this session
-does not repeat that claim about its own commit either.**
+classifications; and fixed a stale Gate B length note. **Session 6 (the
+sixth pass) found session 5's own "principal" fix inadequate: it supplied
+no objective rule for what counts as "principal," so it did not actually
+resolve the completeness concern it was meant to fix — corrected by
+replacing the scoping word entirely with an explicitly non-exhaustive "one
+additional classification" question. Session 6 also found that session
+5's own Gate B note contained a mathematical error — it claimed the
+99/99/88/110-character proposal's key was "tied for longest," when option
+3 (110 characters) was in fact uniquely longest — corrected and explicitly
+acknowledged rather than silently dropped. Finally, session 6 found that
+an earlier session's "final read-only verification... complete" claim was
+premature, since session 6's own independent check of that exact commit
+found the two defects just described; session 6 did not repeat that claim
+about its own commit either.**
+
+**Session 7 found that session 6's own § 12.4 wording had gone stale: a
+sentence describing flammability as "stated explicitly in every option"
+was accurate only for the superseded 99/99/88/110-character proposal, not
+for session 6's own 63-character proposal, where flammability appears
+once, in the stem, and is deliberately absent from every option —
+corrected to describe the current wording accurately. Session 7 also found
+that § 12.3's source dossier contained a genuine Markdown defect: a stray
+trailing pipe ended the currency-discussion prose, and four fields
+(Source status, Narrow claim supported, Edition/jurisdiction sensitivity,
+Unresolved problem) were orphaned pipe-delimited rows with no table header
+and a mismatched column count relative to the table above them — not
+valid Markdown. Corrected by removing the stray pipe and wrapping the four
+fields in a proper two-column table, with their substantive wording
+unchanged.**
+
+**Session 8 (this session) found no scientific, item-level, or Gate B
+defect. It found only that this document's own running correction history
+had itself gone stale exactly the way it repeatedly warns readers to
+expect: this section's pass count still said "five" after seven passes had
+occurred, the terminology note's session enumeration still stopped at
+"sessions 2, 3, and 4," the sixth pass was still described as "this
+session" after two further sessions had passed, and session 7's own two
+corrections were never added to this running history at all. Session 8
+corrects only this accounting — the pass count, the terminology note's
+enumeration, "this session" → "Session 6," and the missing session 7
+entry above — and changes no scientific conclusion, item analysis, source
+status, disposition, proposed revision, or Gate B judgment anywhere in
+this packet.**
 
 **This repeated pattern — each AI-assisted pass finding defects in the
 previous pass's own "corrected" output — is itself worth noting for
