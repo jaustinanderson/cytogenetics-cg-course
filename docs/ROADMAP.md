@@ -477,7 +477,8 @@ review status stable before adding 46 questions.
   not assumed here. Preserve the beta disclosure until this is resolved
   and independently verified.
   **Foundation delivered (Issue #24, Phase 0 steps 1-3, `docs/QUALITY_LOG.md`
-  QL-036 through QL-042, draft PR open, not yet merged):**
+  QL-036 through QL-042, merged via PR #26 as commit
+  `42a46d62b111ba11072059e40115972620b5f406`):**
   `docs/ASSESSMENT_VALIDITY.md` independently reproduces the baseline
   above, defines the Gate A bank/form-level statistical thresholds (with
   a directly-inspected, cited primary source; a secondary source is
@@ -719,7 +720,8 @@ source-checked. All 153 questions currently remain Draft. See
 `docs/LEARNING_PLATFORM_ROADMAP.md` section B for the full corrected model,
 and `docs/ASSESSMENT_VALIDITY.md` for the concrete Gate A/Gate B
 definitions, baseline reproduction, and pilot batch (Issue #24, Phase 0
-steps 1-3, draft PR open).
+steps 1-3, merged via PR #26 as commit
+`42a46d62b111ba11072059e40115972620b5f406`).
 
 **Phase sequence** (full detail in section N of the linked document):
 
@@ -757,10 +759,15 @@ a controlled, batched remediation program correcting the QL-033
 assessment-cueing defect (`docs/LEARNING_PLATFORM_ROADMAP.md` Phase 0 for
 the full nine-step batched protocol). **Steps 1-3 (freeze/reproduce the
 baseline, define the Gate A/Gate B rules, select a deterministic pilot
-batch) are proposed in a draft PR** — see `docs/QUALITY_LOG.md` QL-036
-and `docs/ASSESSMENT_VALIDITY.md` — pending independent review and merge.
-Steps 4-9 (the actual pilot-batch rewrite, review, and scale-up) remain
-unstarted and are the next task after this foundation lands.
+batch) are merged** via PR #26, commit
+`42a46d62b111ba11072059e40115972620b5f406` — see `docs/QUALITY_LOG.md`
+QL-036 through QL-042 and `docs/ASSESSMENT_VALIDITY.md`. Steps 4-9 (the
+actual pilot-batch rewrite, review, and scale-up) remain unstarted.
+`docs/PHASE_0_PILOT_REVIEW_PACKET.md` is AI-assisted preparatory research
+toward steps 4-5 for the 13-question pilot batch — not Austin's SME
+review, not independent review, and not a completed rewrite — and awaits
+Austin's question-by-question evaluation before any pilot content changes
+are made.
 
 ## Quality gates
 
