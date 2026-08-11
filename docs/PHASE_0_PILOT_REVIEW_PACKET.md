@@ -1686,7 +1686,16 @@ as exactly what they are: the specific, reproducible documents directly
 inspected, dated as shown, with no confirmation in any round of whether
 their classification content has since changed in the newer revision named
 by task input. Current-source verification remains a pending requirement
-before any `QUESTION_GOVERNANCE` population. |
+before any `QUESTION_GOVERNANCE` population.
+
+**Correction (this session, per Finding 2): the four fields below were
+previously formatted as orphaned pipe-delimited rows following the prose
+above, with no table header and a mismatched column count relative to the
+three-column source table (§ 12.3 top). That did not render as valid
+Markdown. Corrected into a proper two-column table:**
+
+| Field | Value |
+| --- | --- |
 | Source status (taxonomy, § Finding 3) | **`directly-inspected-but-secondary-or-incomplete`** — unchanged this round. The documents genuinely inspected are real, primary manufacturer SDS content (not a search snippet, not a non-official specialist site) and their metadata reproducibly matches the exact records actually read — but they are third-party-mirrored, dated (2015/2019) copies, not confirmed against the current manufacturer page in any round despite ten direct-fetch attempts, and a newer official ARK2183 revision is named in task input (not independently confirmed by this document) to exist. That currency gap is real and unresolved, not merely a formatting nicety, so `directly-inspected-and-adequate` is not used. |
 | Narrow claim supported | Per the exact documents inspected: methanol is classified flammable **and** acutely toxic (Category 2 flammable liquid; Category 3 acute toxicity by three routes: oral, dermal, inhalation) — matching the item's "flammable/toxic" descriptor. Glacial acetic acid is classified corrosive (Category 1A skin corrosion, Category 1 serious eye damage) — matching the item's "corrosive" descriptor. **Explicitly acknowledged, and material to § 12.7's revised feedback below: glacial acetic acid is *also* independently classified flammable (Category 3, H226).** "Flammable/toxic" and "corrosive" are not being treated as mutually exclusive, exhaustive categories — methanol and glacial acetic acid share the flammable classification; what distinguishes them, per the exact SDS text quoted above, is that methanol carries a GHS **acute-toxicity** classification (Acute Tox. 3, three routes) that glacial acetic acid's SDS does **not** carry, while glacial acetic acid carries a GHS **corrosion/eye-damage** classification that methanol's SDS does **not** carry. **Additional classification, named explicitly here, not silently omitted: methanol's SDS also lists Specific Target Organ Toxicity – Single Exposure, Category 1 (STOT SE 1, H370, "Causes damage to organs").** This is a real, separately-quoted classification (§ 12.3 table above) beyond the flammable/acute-toxicity pair the proposed revision (§ 12.7) uses. **Corrected this session (Finding 2): an earlier session's fix scoped the stem to "principal" classifications, but "principal" supplies no objective selection rule — a reader could reasonably judge STOT SE 1 at least as safety-relevant as acute toxicity, so that wording did not actually make the omission defensible.** § 12.7 now instead asks explicitly for *"one additional GHS hazard classification"* per component (not the complete, or even the most important, classification set), which sidesteps any importance judgment entirely rather than resting on one; see § 12.4 for the full reasoning. |
 | Edition/jurisdiction sensitivity | GHS classification under 29 CFR 1910 (OSHA HCS). The underlying hazard classes for these two long-studied chemicals are stable and not expected to have changed in substance between the 2015/2019 documents inspected and the current revision, but this document does not assert that as confirmed — it is a plausibility judgment, not a verified fact, given the currency gap above. |
@@ -1722,9 +1731,16 @@ stem itself to formal GHS classifications, so every option's descriptor is
 unambiguously a claim about a specific, named classification category
 (acute toxicity vs. skin corrosion/serious eye damage), not an
 ordinary-language word whose scope is left for the reader to infer. Both
-chemicals' independent flammability classification is stated explicitly in
-every option, so it can never function as a distinguishing (or misleading)
-cue.
+chemicals' independent flammability classification is stated once, in the
+stem itself, and does not need to be repeated in any option; because it
+applies equally to every option through the stem, it cannot function as an
+option-level distinguishing (or misleading) cue. **Correction (this
+session, per Finding 1): this description is accurate for the current
+§ 12.7 proposal (flammability stated in the stem, deliberately absent from
+all four options) but does not describe the intervening 99/99/88/110-
+character proposal, which stated flammability inline in every option's
+text — that intervening wording has since been fully superseded, and no
+version of this sentence claims otherwise.**
 
 **Correction (an earlier session, per that session's Finding 1): that
 revision itself was incomplete as written.** Its stem read "...their GHS
