@@ -1688,7 +1688,7 @@ their classification content has since changed in the newer revision named
 by task input. Current-source verification remains a pending requirement
 before any `QUESTION_GOVERNANCE` population. |
 | Source status (taxonomy, § Finding 3) | **`directly-inspected-but-secondary-or-incomplete`** — unchanged this round. The documents genuinely inspected are real, primary manufacturer SDS content (not a search snippet, not a non-official specialist site) and their metadata reproducibly matches the exact records actually read — but they are third-party-mirrored, dated (2015/2019) copies, not confirmed against the current manufacturer page in any round despite ten direct-fetch attempts, and a newer official ARK2183 revision is named in task input (not independently confirmed by this document) to exist. That currency gap is real and unresolved, not merely a formatting nicety, so `directly-inspected-and-adequate` is not used. |
-| Narrow claim supported | Per the exact documents inspected: methanol is classified flammable **and** acutely toxic (Category 2 flammable liquid; Category 3 acute toxicity by three routes: oral, dermal, inhalation) — matching the item's "flammable/toxic" descriptor. Glacial acetic acid is classified corrosive (Category 1A skin corrosion, Category 1 serious eye damage) — matching the item's "corrosive" descriptor. **Explicitly acknowledged, and material to § 12.7's revised feedback below: glacial acetic acid is *also* independently classified flammable (Category 3, H226).** "Flammable/toxic" and "corrosive" are not being treated as mutually exclusive, exhaustive categories — methanol and glacial acetic acid share the flammable classification; what distinguishes them, per the exact SDS text quoted above, is that methanol carries a GHS **acute-toxicity** classification (Acute Tox. 3, three routes) that glacial acetic acid's SDS does **not** carry, while glacial acetic acid carries a GHS **corrosion/eye-damage** classification that methanol's SDS does **not** carry. **Additional classification, named explicitly here per this session's Finding 1, not silently omitted: methanol's SDS also lists Specific Target Organ Toxicity – Single Exposure, Category 1 (STOT SE 1, H370, "Causes damage to organs").** This is a real, separately-quoted classification (§ 12.3 table above) beyond the flammable/acute-toxicity pair the proposed revision (§ 12.7) uses. The proposed revision's stem is scoped to *principal* classifications precisely so that featuring flammable/acute-toxicity for methanol is not an implicit claim that STOT SE 1 doesn't exist — see § 12.7 for the exact scoping language and § 12.4 for why this resolves the completeness concern without transcribing every SDS classification into the option text. |
+| Narrow claim supported | Per the exact documents inspected: methanol is classified flammable **and** acutely toxic (Category 2 flammable liquid; Category 3 acute toxicity by three routes: oral, dermal, inhalation) — matching the item's "flammable/toxic" descriptor. Glacial acetic acid is classified corrosive (Category 1A skin corrosion, Category 1 serious eye damage) — matching the item's "corrosive" descriptor. **Explicitly acknowledged, and material to § 12.7's revised feedback below: glacial acetic acid is *also* independently classified flammable (Category 3, H226).** "Flammable/toxic" and "corrosive" are not being treated as mutually exclusive, exhaustive categories — methanol and glacial acetic acid share the flammable classification; what distinguishes them, per the exact SDS text quoted above, is that methanol carries a GHS **acute-toxicity** classification (Acute Tox. 3, three routes) that glacial acetic acid's SDS does **not** carry, while glacial acetic acid carries a GHS **corrosion/eye-damage** classification that methanol's SDS does **not** carry. **Additional classification, named explicitly here, not silently omitted: methanol's SDS also lists Specific Target Organ Toxicity – Single Exposure, Category 1 (STOT SE 1, H370, "Causes damage to organs").** This is a real, separately-quoted classification (§ 12.3 table above) beyond the flammable/acute-toxicity pair the proposed revision (§ 12.7) uses. **Corrected this session (Finding 2): an earlier session's fix scoped the stem to "principal" classifications, but "principal" supplies no objective selection rule — a reader could reasonably judge STOT SE 1 at least as safety-relevant as acute toxicity, so that wording did not actually make the omission defensible.** § 12.7 now instead asks explicitly for *"one additional GHS hazard classification"* per component (not the complete, or even the most important, classification set), which sidesteps any importance judgment entirely rather than resting on one; see § 12.4 for the full reasoning. |
 | Edition/jurisdiction sensitivity | GHS classification under 29 CFR 1910 (OSHA HCS). The underlying hazard classes for these two long-studied chemicals are stable and not expected to have changed in substance between the 2015/2019 documents inspected and the current revision, but this document does not assert that as confirmed — it is a plausibility judgment, not a verified fact, given the currency gap above. |
 | Unresolved problem | **A genuine, honestly unresolved currency gap, persisting across rounds.** This document could not confirm in any round whether the current official Sigma-Aldrich SDS revisions for products 34860 and ARK2183 (the latter named in task input as version 7.1, revised 2026-03-05 — not independently confirmed by this document) carry identical Section 2 classification data to the 2015/2019 documents actually inspected. Recommended next step: re-fetch `sigmaaldrich.com/US/en/sds/sigald/34860` and `sigmaaldrich.com/US/en/sds/sial/ark2183` directly when tooling/network access allows, and confirm the classification data is unchanged (or update it if it has changed) before this dossier is used to populate `QUESTION_GOVERNANCE`. |
 
@@ -1726,75 +1726,105 @@ chemicals' independent flammability classification is stated explicitly in
 every option, so it can never function as a distinguishing (or misleading)
 cue.
 
-**Correction (this session, per Finding 1): that revision itself was
-incomplete as written.** Its stem read "...their GHS hazard classifications
-are:" — worded as if the options present an *exhaustive* classification
-list. But methanol's directly-inspected SDS (§ 12.3) also carries a Specific
-Target Organ Toxicity – Single Exposure classification (STOT SE Category 1,
-H370), which the keyed option ("flammable, acute toxicity") does not
-mention. Presented as a complete classification list, the keyed option
-would be incomplete, and the packet's claim that it is "fully supported"
-and the single fully-correct answer would not yet be supportable.
+**Correction (an earlier session, per that session's Finding 1): that
+revision itself was incomplete as written.** Its stem read "...their GHS
+hazard classifications are:" — worded as if the options present an
+*exhaustive* classification list. But methanol's directly-inspected SDS
+(§ 12.3) also carries a Specific Target Organ Toxicity – Single Exposure
+classification (STOT SE Category 1, H370), which the keyed option
+("flammable, acute toxicity") does not mention. Presented as a complete
+classification list, the keyed option would be incomplete, and the
+packet's claim that it is "fully supported" and the single fully-correct
+answer would not yet be supportable. That session's fix narrowed the stem
+to "...their **principal** GHS hazard classifications are:", reasoning
+that "principal" signals a non-exhaustive, distinguishing-pair scope.
 
-This is fixed, not by transcribing every SDS classification into every
-option (which would produce an unwieldy, four-or-five-classification
-option set testing transcription rather than the intended concept), but by
-narrowing the stem's own stated scope: the proposed stem now reads
-"...their **principal** GHS hazard classifications are:" (§ 12.7). "Principal"
-signals explicitly that the options feature the primary, distinguishing
-classification pair for each chemical, not a complete SDS Section 2
-transcription — so the keyed option is complete *within that stated scope*,
-and STOT SE 1 is not silently omitted, since this document now names it
-explicitly (§ 12.3) rather than leaving it undiscussed. This preserves the
-item's actual teaching point — correctly pairing each chemical with its
-defining hazard class — without turning the item into an exhaustive-recall
-exercise the difficulty-1, recall-level educational purpose (§ 12.2) does
-not call for. **Confidence: moderate-high** on the underlying GHS
-classification content itself (well-supported by genuine primary SDS
+**Correction (this session, per Finding 2): "principal" did not actually
+solve the completeness problem.** "Principal" was defined only informally
+("primary/most-safety-relevant"), with no objective selection rule
+supplied anywhere in this packet. A reader could reasonably judge that
+methanol's STOT SE 1 classification (organ damage from a single exposure)
+is at *least* as safety-relevant as its acute-toxicity classification —
+nothing in the source dossier or the item establishes an objective
+ranking between them. So the keyed option's completeness still depended on
+an undefended, subjective importance judgment, and Gate B criteria 1, 6,
+and 13 could not be marked satisfied on that basis alone, contrary to the
+prior session's own conclusion.
+
+This is fixed by replacing the subjective "principal" scope with an
+explicitly non-exhaustive question, rather than any claim about relative
+importance: the proposed stem (§ 12.7) now reads *"Both methanol and
+glacial acetic acid are classified as flammable. Which option correctly
+identifies **one additional** GHS hazard classification for each
+component in the inspected SDS records?"* Asking for *one additional*
+supported classification — not the principal one, not a complete
+inventory — requires no importance ranking at all: methanol's
+acute-toxicity classification is *a* real, SDS-documented classification
+regardless of whether it outranks STOT SE 1 in some undefined sense, and
+the stem never claims otherwise. STOT SE 1 remains named explicitly in the
+source dossier (§ 12.3) rather than silently omitted, and its omission
+from the option text is not implied to be an error, since the stem
+explicitly asks for only one additional classification per component,
+not an exhaustive or ranked list. This still preserves the item's actual
+teaching point — correctly pairing each chemical with a real, documented
+hazard classification beyond shared flammability — without resting on any
+undefined judgment call. **Confidence: moderate-high** on the underlying
+GHS classification content itself (well-supported by genuine primary SDS
 content and internally consistent), but not "high" pending re-confirmation
 against the current manufacturer revision (§ 12.3) and pending Austin's
-review of the wording-precision revision proposed below.
+review of the revision proposed below.
 
 ## 12.5 Gate B preliminary worksheet
 
 | # | Criterion | Verdict | Note |
 | ---: | --- | --- | --- |
-| 1 | Exactly one defensible best answer | **appears satisfied — re-verified this session, per Finding 1** | For the live item (inert/oxidizers/radioactive distractors) exactly one answer is defensible. For the *proposed* revision, an earlier session's "toxic" wording was ambiguous under plain-language reading — fixed by scoping the stem to formal GHS classifications. This session found the GHS-scoped revision was itself incomplete (the keyed option omitted methanol's STOT SE 1 classification while the stem implied an exhaustive list, § 12.4) — fixed by narrowing the stem to "principal" classifications, so the keyed option is now complete within its own stated scope and remains the single defensible answer |
+| 1 | Exactly one defensible best answer | **appears satisfied — re-verified this session, per Finding 2** | For the live item (inert/oxidizers/radioactive distractors) exactly one answer is defensible. The proposed revision's prior "principal"-scoped wording (an earlier session's fix) was found this session to rest on an undefended subjective importance judgment (§ 12.4) and could not actually support this criterion. The current proposed wording asks explicitly for "one additional" supported classification per component, not the principal or complete set — a criterion each option can be checked against directly, without any importance ranking — and exactly one option (1, keyed) has both assignments supported by the inspected SDS records |
 | 2 | Scientific correctness is separate | not applicable | |
-| 3 | Distractor plausibility | **fails preliminary review on the live item; appears satisfied on the proposed revision — re-verified this session** | The three live distractors (inert / oxidizers / radioactive) were all too implausible relative to the correct, specific, real hazard description — eliminable by absurdity alone. The proposed revision's mispaired-classification distractors, built on unambiguous, explicitly-scoped GHS category names, are unaffected by this session's stem-scoping change (the falsity of each distractor rests on assigning a classification a chemical does not carry, not on completeness), and remain plausible, non-absurd errors |
-| 4 | Parallel construction | appears satisfied | |
+| 3 | Distractor plausibility | **fails preliminary review on the live item; appears satisfied on the proposed revision — re-verified this session** | The three live distractors (inert / oxidizers / radioactive) were all too implausible relative to the correct, specific, real hazard description — eliminable by absurdity alone. The proposed revision's mispaired-classification distractors are unaffected in substance by this session's stem rewrite (the falsity of each still rests on assigning a classification a chemical does not carry, per the inspected SDS records, not on any completeness or importance claim), and remain plausible, non-absurd errors |
+| 4 | Parallel construction | **appears satisfied — reassessed this session** | All four proposed options now share an identical "Methanol — X; glacial acetic acid — Y" structure, using only the two same classification-name tokens ("acute toxicity," "skin corrosion") in different arrangements — a stricter, more literally parallel construction than the earlier prose-sentence options |
 | 5 | Mutual distinguishability | appears satisfied | |
-| 6 | Grammar/stem-completion clues | **appears satisfied — re-verified this session** | The proposed stem, "...their principal GHS (Globally Harmonized System) hazard classifications are:", completes grammatically and naturally into each of the four proposed options; "principal" reads as ordinary modifying usage (a technologist correctly understands "principal hazards" as the primary/most-safety-relevant classifications, not literally every SDS entry), not as an awkward or confusing insertion |
+| 6 | Grammar/stem-completion clues | **appears satisfied — reassessed this session, per Finding 2** | The proposed stem is now phrased as a complete, self-contained question ("Which option correctly identifies one additional GHS hazard classification for each component...?") rather than a fill-in-the-blank completion, so this criterion's usual concern (an option grammatically or contextually cued by how it completes the stem) does not apply in its original form; each option is read as a standalone answer to an explicit question, and no option is grammatically favored over another |
 | 7 | Repeated stem wording | appears satisfied | |
-| 8 | Conspicuously longer/more-qualified correct answer | **appears satisfied — stale analysis corrected this session, per Finding 2** | **The prior note here described a superseded proposal** (the "flammable/toxic"/"corrosive" token version narrowed to roughly 56–68 characters) that no longer reflects the current proposed wording. Corrected: the current proposed option lengths, recalculated by direct character count, are **99 (option 0), 99 (option 1, keyed), 88 (option 2), 110 (option 3)**. The key (99) is tied with option 0 for longest — not uniquely longest — a fact directly verified against the current wording, not assumed. No padding was added to reach this pattern; the tie is a natural consequence of options 0/1 both pairing one "acute toxicity" classification with one "skin corrosion/eye damage" classification (same token lengths in different chemical order), while option 2 (both "acute toxicity," the shorter category name) and option 3 (both "skin corrosion/eye damage," the longer category name) are shorter and longer respectively by the same mechanism, not by design |
-| 9 | Absolute words | appears satisfied | "Both" appears in two wrong options (0, 2) and is accurate scoping, not an unintended cue |
-| 10 | Paired/opposite-option patterns | appears satisfied | |
+| 8 | Conspicuously longer/more-qualified correct answer | **appears satisfied — corrected this session, per Finding 1** | **Two successive inaccurate claims about this criterion are corrected here.** An earlier note described a since-superseded "flammable/toxic"/"corrosive" proposal narrowed to roughly 56–68 characters — no longer accurate. The note that replaced it then claimed the 99/99/88/110-character proposal's key (99) was "tied with option 0 for longest" — **this was also incorrect: option 3, at 110 characters, is uniquely longest; the key merely ties option 0, neither of which is the longest option.** Both errors are superseded by this session's rewrite: the current proposed options are **63/63/63/63 characters — exactly equal across all four options** (mechanically verified by direct character count). No option is uniquely or jointly longest; the length-cue concern this criterion checks for is fully eliminated, not merely reduced |
+| 9 | Absolute words | appears satisfied | "Both" appears in the stem itself (applying equally to all options as shared context, not a one-sided option cue) |
+| 10 | Paired/opposite-option patterns | appears satisfied | Options 0/1 are an exact-reversal pair, as are (in effect) 2/3 relative to each other and to 0/1 — a deliberate, legitimate 2×2 structure testing the one real distinguishing fact (which classification goes with which chemical), not a stray unintended telegraph |
 | 11 | "All/none," negative stems | not applicable | |
-| 12 | Implausible padding | appears satisfied | Re-verified this session (Finding 2): no token was added or altered to force a length pattern; see item 8 |
-| 13 | Rationale/feedback alignment | **appears satisfied — re-verified this session** | The proposed feedback (§ 12.7) rebuts each option by naming the specific classification it wrongly assigns, evaluated against the same "principal classification" scope the stem now states explicitly; no feedback string relies on a narrower technical reading the option's own wording doesn't support, and none needs to address STOT SE 1 specifically since the stem's "principal" scoping already makes clear the options are not an exhaustive list |
-| 14 | Preserves assessed intent | **appears satisfied, with an explicit judgment call for Austin — reassessed this session** | The proposed revision changes the *wording* of the stem (adding "principal," per Finding 1) and all four options (including the keyed option's display text, from "toxic" to "acute toxicity," per an earlier session), to explicitly name and scope GHS classification categories. The underlying real-world facts tested (which chemical carries which hazard classification) are unchanged, and this document judges the assessed intent preserved — a terminology-precision and scope-clarity fix, not a new objective — but continues to flag this explicitly for Austin because it changes the keyed option's own text and, now, the stem |
-| 15 | Edit-in-place vs. supersede | **Edit in place recommended, not supersede — reaffirmed this session** | This document judges the cumulative change (stem scoping + option wording) to be wording precision, not a new assessed intent (item 14), so edit-in-place is recommended over supersession. Austin may reasonably disagree given the scope of the wording change; if he judges the assessed intent has materially shifted, supersession (a new stable ID) rather than silent retention is the documented fallback |
+| 12 | Implausible padding | appears satisfied | The four options are equal length as a direct, non-padded consequence of using the same two classification-name tokens in different arrangements — not because filler was added to force a match |
+| 13 | Rationale/feedback alignment | **appears satisfied — reassessed this session, per Finding 2** | The proposed feedback (§ 12.7) rebuts each option by naming exactly which classification it wrongly assigns to which chemical, evaluated against the stem's own explicit "one additional classification" scope — no feedback string relies on an importance judgment or a narrower technical reading unsupported by the option's own wording |
+| 14 | Preserves assessed intent | **appears satisfied, with an explicit judgment call for Austin — reassessed this session** | The proposed revision restructures the stem (from a fill-in-the-blank completion to an explicit question) and all four options (from prose-sentence descriptors to a literal "X — Y" pairing format), a larger wording change than earlier sessions' fixes. The underlying real-world facts tested (which chemical carries which hazard classification, both independently flammable) are unchanged, and this document judges the assessed intent preserved — the same concept, now asked without resting on an undefended importance judgment — but continues to flag this explicitly for Austin given the cumulative scope of the wording change across sessions |
+| 15 | Edit-in-place vs. supersede | **Edit in place recommended, not supersede — reaffirmed this session** | This document judges the restructured wording to still test the same underlying concept, not a new assessed intent (item 14), so edit-in-place is recommended over supersession. Austin may reasonably disagree given the cumulative scope of the wording change; if he judges the assessed intent has materially shifted, supersession (a new stable ID) rather than silent retention is the documented fallback |
 | 16 | Quarantine when unsupportable | not applicable | The live item's content is not unsupportable; the *previously proposed revision's* wording defect is corrected rather than the item being quarantined |
 | 17 | Evidence before release-qualification | fails preliminary review | Expected at Draft; additionally, the SDS currency gap (§ 12.3) must be closed before any source-check |
 
 ## 12.6 Recommended disposition
 
-**Edit in place.** The distractor/feedback revision is retained across
-sessions in substance, but its specific *wording* has now been corrected
-twice: first (an earlier session) to resolve an ambiguous ordinary-language
-"toxic" distractor by scoping the stem to formal GHS classifications;
-second (this session, Finding 1) to fix that GHS-scoped stem's own
-implicit exhaustiveness claim, which omitted methanol's real STOT SE 1
-classification, by narrowing the stem to "principal" GHS classifications.
-Every one of this document's own successive corrections to this single
-item's proposed wording is itself a small reminder that a proposed
-revision should be re-verified, not assumed correct because it superseded
-an earlier draft (see the packet-wide stop/go recommendation for the
-general version of this point). The live stem, options, rationale, and
-keyed answer are **unchanged** — this section proposes a replacement for
-all of them, still pending Austin's acceptance; nothing in `index.html`
-has been edited by this document. The disposition itself does not depend
-on resolving the SDS currency gap (§ 12.3) — the classification facts used
+**Edit in place.** The proposed revision's underlying substance (real,
+SDS-grounded mispaired-classification distractors, in place of the live
+item's absurd inert/oxidizer/radioactive set) is retained across sessions,
+but its specific *wording* has now been corrected three times: first (an
+earlier session) to resolve an ambiguous ordinary-language "toxic"
+distractor by scoping the stem to formal GHS classifications; second (a
+later session) to fix that GHS-scoped stem's own implicit exhaustiveness
+claim by narrowing to "principal" GHS classifications; third (this
+session, Finding 2) to fix "principal" itself, which supplied no objective
+selection rule and so did not actually resolve the completeness concern —
+replaced with an explicitly non-exhaustive "one additional classification"
+question that requires no importance judgment at all. **This session also
+corrects a factual error in the prior session's own Gate B note (Finding
+1): that note claimed the previous 99/99/88/110-character proposal's key
+was "tied for longest," which was mathematically false (option 3, at 110
+characters, was uniquely longest) — an error this document did not catch
+before committing it, and now names explicitly rather than quietly
+dropping.** Every one of this document's own successive corrections to
+this single item's proposed wording is itself a reminder that a proposed
+revision — and this document's own analysis of it — should be
+independently re-verified, not assumed correct because it is the most
+recent version (see the packet-wide stop/go recommendation for the general
+version of this point). The live stem, options, rationale, and keyed
+answer are **unchanged** — this section proposes a replacement for all of
+them, still pending Austin's acceptance; nothing in `index.html` has been
+edited by this document. The disposition itself does not depend on
+resolving the SDS currency gap (§ 12.3) — the classification facts used
 are internally consistent and grounded in genuine primary SDS content —
 but Austin's final sign-off should note that gap before formal
 `QUESTION_GOVERNANCE` entry.
@@ -1803,114 +1833,111 @@ but Austin's final sign-off should note that gap before formal
 
 **Proposed (packet-only; not applied to `index.html` or
 `QUESTION_GOVERNANCE` by this document — Austin's edit, if approved).
-Re-revised this session per Finding 1, narrowing an earlier session's
-GHS-scoped stem to fix an incompleteness defect (§ 12.4):**
+Re-revised this session per Finding 2, replacing an earlier session's
+undefended "principal"-classification scoping with an explicitly
+non-exhaustive question structure (§ 12.4):**
 
 Stem, current (live): *"The cytogenetic fixative components and their
 hazards are:"*
 
-Stem, proposed: *"The cytogenetic fixative components and their
-**principal** GHS (Globally Harmonized System) hazard classifications
-are:"* — the GHS-scoping clause (added in an earlier session) is what makes
-every option's descriptor an unambiguous claim about a specific, named
-classification category rather than an ordinary-language word a learner
-could read more broadly; **"principal" (added this session) is what makes
-clear the options feature the primary, distinguishing classification pair
-for each chemical, not an exhaustive transcription of every classification
-on file** — resolving the concern that the keyed option, without that
-scoping word, would silently omit methanol's real STOT SE Category 1
-(H370) classification while a stem implying completeness stood unqualified.
+Stem, proposed: *"Both methanol and glacial acetic acid are classified as
+flammable. Which option correctly identifies one additional GHS hazard
+classification for each component in the inspected SDS records?"* — this
+states the one classification both chemicals share (flammable) directly
+in the stem itself, then asks for exactly *one additional* classification
+per component, not the principal one and not a complete inventory. This
+requires no importance ranking between methanol's acute-toxicity and STOT
+SE 1 classifications (§ 12.3/12.4) — either the option's assignment is a
+real, SDS-documented classification or it is not, which is a directly
+checkable fact, not a judgment call.
 
 | Option | Current (live) | Proposed | Length (chars) |
 | --- | --- | --- | ---: |
-| 0 | Both inert (10) | Methanol (flammable, skin corrosion/eye damage) and glacial acetic acid (flammable, acute toxicity) | 99 |
-| 1 (keyed) | Methanol (flammable/toxic) and glacial acetic acid (corrosive) (62) | Methanol (flammable, acute toxicity) and glacial acetic acid (flammable, skin corrosion/eye damage) | 99 |
-| 2 | Both strong oxidizers (21) | Methanol (flammable, acute toxicity) and glacial acetic acid (flammable, acute toxicity) | 88 |
-| 3 | Both radioactive (16) | Methanol (flammable, skin corrosion/eye damage) and glacial acetic acid (flammable, skin corrosion/eye damage) | 110 |
+| 0 | Both inert (10) | Methanol — skin corrosion; glacial acetic acid — acute toxicity | 63 |
+| 1 (keyed) | Methanol (flammable/toxic) and glacial acetic acid (corrosive) (62) | Methanol — acute toxicity; glacial acetic acid — skin corrosion | 63 |
+| 2 | Both strong oxidizers (21) | Methanol — acute toxicity; glacial acetic acid — acute toxicity | 63 |
+| 3 | Both radioactive (16) | Methanol — skin corrosion; glacial acetic acid — skin corrosion | 63 |
 
-Lengths, recalculated by direct character count and re-confirmed this
-session (unchanged, since this session's fix touches only the stem, not
-the option text): 99/99/88/110 — the key (99) is tied with option 0 for
-longest, not uniquely longest.
-**"Flammable" now appears in every option** (both chemicals are
-independently flammable, per § 12.3), so its presence can never function
-as a distinguishing cue; only the acute-toxicity-vs-corrosion assignment
-varies across options.
+Lengths recalculated by direct character count this session: **63 / 63 /
+63 / 63 — all four options are exactly equal length.** No option is
+uniquely or jointly "longest": there is no longest option to identify,
+since none differs from any other by even one character. This mechanically
+and completely eliminates the length-cue concern that earlier sessions'
+proposals (10/62/21/16 live; 99/99/88/110 an earlier proposed revision)
+each carried in some form, rather than merely narrowing it.
 
-Proposed rationale: *"3:1 methanol:glacial acetic acid — both components
-are independently classified flammable; methanol additionally carries an
-acute-toxicity classification, and glacial acetic acid additionally
-carries a skin-corrosion/serious-eye-damage classification — handle in a
-fume hood, store flammable."*
+Proposed rationale: *"Both components are classified as flammable. In the
+inspected SDS records, methanol also carries an acute-toxicity
+classification, while glacial acetic acid carries a skin-corrosion
+classification. The question asks for one supported additional
+classification for each component, not a complete Section 2 inventory."*
 
-Proposed distractor feedback — revised this round to name the specific
-classification category each option's claim gets wrong, without relying on
-an unstated narrowing of an ordinary word:
+Proposed distractor feedback:
 
-- 0 — "This swaps which chemical carries which classification. Methanol's
-  SDS carries no skin-corrosion/eye-damage classification; glacial acetic
-  acid's does (Skin Corr. 1A, H314). Glacial acetic acid's SDS carries no
-  acute-toxicity classification; methanol's does (Acute Tox. 3,
-  H301/H311/H331). Both are independently classified flammable."
-- 2 — "Glacial acetic acid's SDS carries no acute-toxicity classification.
-  Its distinguishing classification, beyond the flammability it shares
-  with methanol, is skin corrosion/serious eye damage (Skin Corr. 1A,
-  H314)."
-- 3 — "Methanol's SDS carries no skin-corrosion/eye-damage classification.
-  Its distinguishing classification, beyond the flammability it shares
-  with glacial acetic acid, is acute toxicity (Acute Tox. 3,
-  H301/H311/H331)."
+- 0 — "This reverses the supported assignments. In the inspected SDS
+  records, methanol carries the acute-toxicity classification and glacial
+  acetic acid carries the skin-corrosion classification — not the
+  reverse."
+- 2 — "The inspected glacial acetic acid SDS carries no acute-toxicity
+  classification. Its supported additional classification is skin
+  corrosion (Skin Corr. 1A, H314)."
+- 3 — "The inspected methanol SDS carries no skin-corrosion classification.
+  Its supported additional classification is acute toxicity (Acute Tox.
+  3, H301/H311/H331)."
 
 **Falsity, single-answer, completeness, and alignment check, re-verified
-this session against Finding 1's explicit requirements:**
-- *The proposed option wording is not ambiguous.* With the stem scoped to
-  "GHS hazard classifications," every option's parenthetical names a
-  specific classification category, not an ordinary-language word whose
-  formal scope is left implicit.
-- *The keyed option is complete within the stem's own stated scope, and
-  the stem's scope is now explicit rather than implicitly exhaustive
-  (Finding 1, this session).* "Principal" makes clear the options feature
-  the primary, distinguishing classification pair, not a transcription of
-  every SDS classification — so methanol's real STOT SE 1 classification
-  (§ 12.3/12.4) being absent from the option text is not an omission
-  relative to the stem's actual claim.
-- *Every distractor remains scientifically false as a complete pairing
-  claim, evaluated against the exact same classification vocabulary its
-  wording now uses.* Options 0 and 3 assign methanol a skin-corrosion/
-  eye-damage classification it does not carry; options 0 and 2 assign
-  glacial acetic acid an acute-toxicity classification it does not carry.
-  No option's falsity depends on treating "flammable" as exclusive to one
-  chemical — it is stated, correctly, for both in every option. This
-  falsity logic is unaffected by the "principal" scoping change, since it
-  never depended on the list being exhaustive.
+this session against Finding 2's explicit requirements:**
+- *The stem is explicitly non-exhaustive, not dependent on any importance
+  judgment.* "One additional GHS hazard classification" asks for a single
+  supported classification, not the principal one and not a complete
+  Section 2 inventory — sidestepping the undefended "principal" ranking an
+  earlier session's wording rested on.
+- *Every distractor remains scientifically false under the inspected SDS
+  records.* Options 0 and 3 assign methanol the skin-corrosion
+  classification, which its inspected SDS does not carry; options 0 and 2
+  assign glacial acetic acid the acute-toxicity classification, which its
+  inspected SDS does not carry. Falsity here rests on the SDS records not
+  supporting the stated assignment, not on any completeness or importance
+  claim.
 - *Exactly one defensible best answer remains.* Option 1 is the only
-  option where both assigned classifications are fully supported by the
-  inspected SDS documents, within the stem's stated "principal" scope.
-- *Each feedback statement rebuts the literal option wording*, using the
-  same classification vocabulary the option itself now uses, not a
-  narrower technical substitution introduced only in the feedback. No
-  feedback string needs to address STOT SE 1, since the "principal"
-  scoping already makes clear the options are not presented as exhaustive.
+  option whose two assignments are both directly supported by the
+  inspected SDS records.
+- *Each feedback statement rebuts the literal option wording*, naming the
+  specific classification the option wrongly assigns and the classification
+  the record actually supports instead.
+- *Methanol's STOT SE 1 (H370) classification is acknowledged (§ 12.3),
+  not silently omitted, and its absence from the option text is not
+  implied to be an error* — the stem never claims to name every
+  classification, only one additional supported one.
+
+**Currency limitation, retained and unchanged by this session's wording
+fix:** the inspected records remain the specific, dated third-party
+mirrors of manufacturer SDS documents described in § 12.3 (methanol v6.4,
+2015-03-13; glacial acetic acid v6.1, 2019-10-17). Verification against
+the current official manufacturer revision remains pending — ten
+direct-fetch attempts against `sigmaaldrich.com` across three sessions
+have all failed. Source status remains
+`directly-inspected-but-secondary-or-incomplete`. This document does not
+imply that current-source verification or formal governance source-
+checking is complete.
 
 Rationale for the revision, updated this session: an earlier session's
 proposed revision correctly replaced the absurd inert/oxidizer/radioactive
 distractors with plausible mispaired-classification errors, addressing
-Gate B item 3, and correctly narrowed the length spread, addressing Gate B
-item 8 — both of those corrections are retained. A later session's
-additional fix closed a wording-ambiguity gap in that revision (Gate B
-items 1/3/13) by scoping the stem to GHS classifications and revising
-every option (including the keyed option's display text) to name explicit
-classification categories. **This session's fix (Finding 1) narrows that
-GHS-scoped stem to "principal" GHS classifications**, closing a
-completeness gap the GHS-scoping fix itself introduced (the keyed option,
-under an unqualified "GHS hazard classifications" stem, silently omitted
-methanol's real STOT SE 1 classification). This document judges the
-underlying assessed intent preserved across all of these wording
-corrections (Gate B item 14) — the same two chemicals, the same real
-hazard facts, only more precise and more accurately scoped vocabulary —
-and recommends edit-in-place over supersession (Gate B item 15), while
-flagging this explicitly for Austin's own judgment given
-the keyed-text change.
+Gate B item 3 — that correction is retained in substance. Two later
+sessions each attempted to fix a wording defect in how the classifications
+were scoped (first an ambiguous "toxic," then an undefended "principal")
+without fully succeeding; this session's fix removes the need for any
+scoping-word judgment call by asking directly for one additional supported
+classification per component. This document judges the underlying assessed
+intent preserved (Gate B item 14) — the same two chemicals, the same real,
+SDS-documented hazard facts, now asked about without resting on an
+undefended importance judgment — and recommends edit-in-place over
+supersession (Gate B item 15), while flagging this explicitly for Austin's
+own judgment given the cumulative scope of the wording change across
+sessions (stem restructured from a fill-in-the-blank completion to an
+explicit question; all four options restructured to a literal "X — Y"
+pairing format).
 
 ## 12.8 Austin SME decision fields (pending)
 
@@ -2223,7 +2250,7 @@ superseded by the totals above.
 | `m7-q2` | **Quarantine pending evidence** | No source confirms the exact three-term nested hierarchy |
 | `m12-q6` | **Edit in place (structural only)** | Stray empty-feedback-key removal proposed (§ 10.7); zero learner-visible content change |
 | `m15-q1` | **Edit in place** | Option 2 and its feedback revised (§ 11.7) — former option had a second defensible answer (Finding 1, session 2); exact post-revision option lengths now recorded (53/32/71/24, § 11.5/11.7) |
-| `m16-q1` | **Edit in place** *(re-revised again this session, per this session's Finding 1)* | An earlier session found the proposed option 2's "toxic" wording ambiguous under plain-language reading and scoped the stem to formal GHS classifications; this session found that GHS-scoped stem itself implied an exhaustive classification list, silently omitting methanol's real STOT SE 1 (H370) classification (§ 12.3/12.4) — corrected by narrowing the stem to "principal" GHS classifications (§ 12.7) |
+| `m16-q1` | **Edit in place** *(re-revised again this session, per this session's Finding 2; a stale "tied for longest" claim also corrected per this session's Finding 1)* | Across sessions: ambiguous "toxic" wording fixed by GHS-scoping the stem; the GHS-scoped stem's implicit exhaustiveness (silently omitting methanol's STOT SE 1/H370) fixed by narrowing to "principal" classifications; **this session found "principal" itself undefended (no objective selection rule) and replaced it with an explicitly non-exhaustive "one additional classification" question** (§ 12.3/12.4/12.7) — final proposed option lengths are 63/63/63/63 (exactly equal, mechanically verified), correcting a prior session's own inaccurate "tied for longest" Gate B note |
 | `final-q33` | Leave unchanged | ISCN primary text itself not directly inspected (paywalled); secondary source adequate for now |
 
 **Recomputed totals: 8 of 13 items Leave unchanged (`m1-q1`, `m1-q2`,
@@ -2504,14 +2531,27 @@ item-logic review — the sequence below replaces every earlier version's
 framing, which wrongly suggested the still-unavailable human independent
 reviewer was the next step ahead of Austin's own SME review:**
 
-1. **Final read-only verification of this corrected packet** — the pass
-   this document itself represents: confirming structure, mechanical count
-   reconciliation, and validation (see "Required validation" in this
-   session's own completion report), with no further content edits.
-2. **Austin decides whether PR #28 is ready to leave draft status and be
-   merged** — a repository/workflow decision distinct from SME content
-   review; the packet's own analysis (this document) is preparatory input
-   to that decision, not a substitute for it.
+1. **Independent final read-only verification of the current exact head**
+   — this document's own AI-assisted passes (see the running history
+   below) have repeatedly found defects, including factual errors, in
+   their own immediately preceding "final" or "corrected" output; this
+   document's own self-checks are validation input, not a substitute for
+   an independent read-only pass over the exact current commit before
+   anyone treats the packet as settled. **Corrected this session, per
+   Finding 3: an earlier session's completion materials described "final
+   read-only verification... complete" as of that session's own commit —
+   that claim was premature, since this session's own independent
+   verification of that exact commit found two further defects (a
+   mathematically false "tied for longest" claim, and an undefended
+   "principal" scoping that did not actually resolve a completeness
+   concern). This document does not repeat that premature claim about its
+   own current commit either.**
+2. **Only if that independent read-only pass is clean, Austin decides
+   whether PR #28 is ready to leave draft status and be merged** — a
+   repository/workflow decision distinct from SME content review; the
+   packet's own analysis (this document) is preparatory input to that
+   decision, not a substitute for it, and not a self-certification that
+   the packet is finally clean.
 3. **Austin performs the question-by-question SME review** described
    throughout this packet: `m7-q2` (quarantined), `m1-q3` (insufficient
    evidence to recommend — see below), `m12-q6`/`m15-q1`/`m16-q1` (each
@@ -2529,9 +2569,9 @@ Do not proceed to actual content editing, `QUESTION_GOVERNANCE`
 population, or any lifecycle promotion until Austin's SME review (step 3)
 is complete for all 13 items.
 
-This document has now been through three AI-assisted adversarial
-correction passes (sessions 2, 3, and this session). **Terminology
-correction (Finding 1, this session): earlier sessions' headings and prose
+This document has now been through five AI-assisted adversarial
+correction passes (sessions 2 through this session). **Terminology
+correction (an earlier session's Finding 1): earlier sessions' headings and prose
 in this "Packet-wide summaries" section described these passes as
 "independent-review correction rounds" and "independent... review." That
 was a mislabel, corrected throughout this section and every affected
@@ -2551,17 +2591,34 @@ one committed whitespace/diff-check defect (Finding 7). Session 3 found
 that two of session 2's own "closed" source dossiers were themselves
 flawed: `m16-q1`'s SDS citation mixed the URLs of one pair of products
 with the metadata of a different pair, and `m1-q3`'s CLIA citation was
-invoked for a specific claim its cited sections do not actually make. This
-session (the fourth pass) found: the "independent review" mislabeling
-corrected above; that `m1-q3`'s disposition ("Leave unchanged") was itself
-an unwarranted affirmative claim given its live feedback's unsupported
-factual absolutes — corrected to `Insufficient evidence to recommend`;
-that `m16-q1`'s proposed revision still had a wording-ambiguity defect
-("toxic" read as ordinary language vs. a specific GHS classification) —
-corrected by scoping the stem to GHS classifications explicitly; that
-several "Austin supplied" / "Austin observed" / "ground truth" attributions
-wrongly implied personal Austin review of task-supplied input — corrected
+invoked for a specific claim its cited sections do not actually make.
+Session 4 found: the "independent review" mislabeling corrected above;
+that `m1-q3`'s disposition ("Leave unchanged") was itself an unwarranted
+affirmative claim given its live feedback's unsupported factual absolutes
+— corrected to `Insufficient evidence to recommend`; that `m16-q1`'s
+proposed revision still had a wording-ambiguity defect ("toxic" read as
+ordinary language vs. a specific GHS classification) — corrected by
+scoping the stem to GHS classifications explicitly; that several "Austin
+supplied" / "Austin observed" / "ground truth" attributions wrongly
+implied personal Austin review of task-supplied input — corrected
 throughout; and two smaller documentation defects in `m1-q2` and `m15-q1`.
+Session 5 found that `m16-q1`'s GHS-scoped stem (session 4's own fix)
+implied an exhaustive classification list, silently omitting methanol's
+STOT SE 1 classification — corrected by narrowing the stem to "principal"
+classifications; and fixed a stale Gate B length note. **This session
+(the sixth pass) found session 5's own "principal" fix inadequate: it
+supplied no objective rule for what counts as "principal," so it did not
+actually resolve the completeness concern it was meant to fix — corrected
+by replacing the scoping word entirely with an explicitly non-exhaustive
+"one additional classification" question. This session also found that
+session 5's own Gate B note contained a mathematical error — it claimed
+the 99/99/88/110-character proposal's key was "tied for longest," when
+option 3 (110 characters) was in fact uniquely longest — corrected and
+explicitly acknowledged rather than silently dropped. Finally, this
+session found that an earlier session's "final read-only verification...
+complete" claim was premature, since this session's own independent check
+of that exact commit found the two defects just described; this session
+does not repeat that claim about its own commit either.**
 
 **This repeated pattern — each AI-assisted pass finding defects in the
 previous pass's own "corrected" output — is itself worth noting for
