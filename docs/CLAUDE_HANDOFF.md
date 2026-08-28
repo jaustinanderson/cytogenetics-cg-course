@@ -13,6 +13,19 @@ Use this document as the durable handoff for the next Claude session.
 - Course API version: `1.1.1`
 - Progress schema: v2
 
+## Current checkpoint — 2026-08-28
+
+This checkpoint controls session start when older chronological notes below describe a branch or pull request as still open.
+
+- `main` is at `2a405dd8365bd3cd86e78ae225112dcd2777a276`, the merge of PR #28 on 2026-08-11.
+- Phase 0 assessment-validity steps 1–3 are merged through PR #26 (`42a46d62b111ba11072059e40115972620b5f406`): the QL-033 baseline is frozen and reproducible, Gate A and Gate B are defined, and the deterministic 13-question pilot is selected.
+- `docs/PHASE_0_PILOT_REVIEW_PACKET.md`, merged through PR #28, is AI-assisted preparatory research only. It is not Austin's question-by-question SME review, an independent review, a completed rewrite, or authority to change course content.
+- No question content changed in PR #26 or PR #28. All 153 authored questions remain `draft`; the bank and all 17 learner-facing forms remain ineligible for diagnostic or release-qualified use under the recorded gates.
+- The next controlled product step is Austin's item-by-item evaluation of the 13-question pilot packet. Do not begin a pilot rewrite, scale-up, adaptive feature, or 46-question expansion from the packet alone.
+- No pull request is open. The remaining non-`main` branches correspond to already merged PRs #26, #27, and #28; their retained refs are not active work in progress.
+- The four workflows for the current `main` head completed successfully: [Validate course](https://github.com/jaustinanderson/cytogenetics-cg-course/actions/runs/31501679148), [Public safety](https://github.com/jaustinanderson/cytogenetics-cg-course/actions/runs/31501678832), [Pages build and deployment](https://github.com/jaustinanderson/cytogenetics-cg-course/actions/runs/31501674446), and [Deployed Pages smoke test](https://github.com/jaustinanderson/cytogenetics-cg-course/actions/runs/31501722346).
+- Still open: representative screen-reader and physical touch-hardware review (Issue #1), remaining provenance/rights evidence (Issue #3), Phase 0 steps 4–9 (Issue #24), and the gated question-bank expansion (Issue #4).
+
 ## What this project is
 
 This is an independent, browser-based CG(ASCP)/CG(ASCPi) cytogenetics study
