@@ -1,12 +1,8 @@
 # Learning Platform Roadmap
 
-**Status: planning document. Nothing in this file is implemented.** It
-describes a long-term direction, not a committed schedule, and it does not by
-itself authorize building any of the capabilities it describes. See
-`docs/ROADMAP.md` for the concise summary and the actual, currently
-committed work items; this document is the durable detail behind that
-summary. Tracked by
-[Issue #24](https://github.com/jaustinanderson/cytogenetics-cg-course/issues/24).
+**Status: long-term planning document; the adaptive-platform capabilities remain unimplemented.** Phase 0's assessment-validity foundation is the narrow exception: steps 1–3 (freeze and reproduce the QL-033 baseline, define Gate A and Gate B, and select the deterministic 13-question pilot) were implemented and merged through PR #26 as commit `42a46d62b111ba11072059e40115972620b5f406`. PR #28, merged as commit `2a405dd8365bd3cd86e78ae225112dcd2777a276`, added `docs/PHASE_0_PILOT_REVIEW_PACKET.md` as AI-assisted preparatory research for that pilot. It is not a question rewrite, Austin's SME review, independent review, or release qualification. Phase 0 steps 4–9 and every adaptive-platform capability described below remain unstarted and require separate scope, evidence, review, and authorization.
+
+See `docs/ROADMAP.md` for the concise current summary and the actually committed work items; this document is the durable long-term design behind that summary. Progress is tracked in [Issue #24](https://github.com/jaustinanderson/cytogenetics-cg-course/issues/24).
 
 ## How to read this document
 
